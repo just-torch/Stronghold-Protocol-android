@@ -115,6 +115,13 @@ const copyGrid = (g) => (Array.isArray(g) && g.length ? g.map((p) => [p[0], p[1]
 const NINE = [[1, -1], [1, 0], [1, 1], [0, -1], [0, 0], [0, 1], [-1, -1], [-1, 0], [-1, 1]];
 /** 琳琅诗怀雅 S3's coin range (PRTS 备注 "前方范围2-4"; range_table "2-4", facing right). */
 const SWIRE2_COIN_GRID = Object.freeze([[1, 1], [0, 0], [0, 1], [0, 2], [-1, 1]]);
+/**
+ * 琳琅诗怀雅 S2's 香槟炸弹 placement range: the 5-tile cross around her — PRTS 琳琅诗怀雅 备注 "※香槟炸弹放置范围"
+ * (the official range_table's `x-6`, which this snapshot's generated data does not carry), GitHub issue #116 item 2.
+ * Until this it used the skill's own attack range grid (`1-1` = the single tile ahead), so she could not drop a bomb
+ * beside or behind her, and never dropped one without an enemy to attack.
+ */
+const SWIRE2_BOMB_GRID = Object.freeze([[1, 0], [0, -1], [0, 0], [0, 1], [-1, 0]]);
 /** Two enemy bodies touch within this distance (tiles) — 见行者 collision stun. */
 const COLLIDE = 0.6;
 /** 忍冬 S3's 迷彩 (until her next cast): its own buff key, never merged with another unit status. */
@@ -552,21 +559,32 @@ const KITS = {
         if (sel === S3) { installS3(battle, unit); return; }
         if (sel !== S2 && sel != null) return;
         const switchT = num(battle.tokenDef(tokenId, unit)?.skill?.bb?.duration_switch, 3);
-        battle.on('attack', (ctx) => {
-          if (ctx.attacker !== unit || !alive(unit) || (unit.mem.coins ?? 0) < coinCost) return;
-          const tiles = [];
-          for (const k of gridKeys(skillGrid ?? unit.rangeGrid, unit)) {
+        // PRTS 备注 + the owner's 0.2.0 note for GitHub #116 item 2: "按技能范围 x-6，有敌人时丢在敌人所在格，没有敌人也
+        // 会丢". The placement range is the cross (SWIRE2_BOMB_GRID); a ground enemy standing on one of its tiles is
+        // preferred (the bomb explodes on contact, so dropping it under an enemy is the point of the skill), otherwise
+        // any free tile of the range. The trigger is her attack cycle — as with S1's coin heal, when her last attack
+        // attempt found no target she throws on her own timer (her attack interval, ASPD included) instead of never.
+        let nextAt = -Infinity;
+        const tryBomb = () => {
+          if (!alive(unit) || (unit.mem.coins ?? 0) < coinCost || battle.time < nextAt - 1e-9) return;
+          const free = [], armed = [];
+          for (const k of gridKeys(SWIRE2_BOMB_GRID, unit)) {
             const r = (k / COLS) | 0, c = k % COLS;
             // (never on the home tile of a dead operator: it could not redeploy until an enemy triggers the bomb)
-            if (freeTile(battle, r, c) && groundTile(battle, r, c)) tiles.push([r, c]);
+            if (!freeTile(battle, r, c) || !groundTile(battle, r, c)) continue;
+            free.push([r, c]);
+            if (battle.enemies.some((e) => e.alive && !e.hidden && !e.isFlying && !e.s.flags.untargetable && bodyOnTile(e, r, c))) armed.push([r, c]);
           }
-          const tile = battle.rng.pick(tiles);
+          const tile = battle.rng.pick(armed.length ? armed : free);
           if (!tile) return;
           const bomb = battle.spawnToken(unit, tokenId, tile[0], tile[1], { untargetable: true, kit: bombKit(unit, switchT) });
           if (!bomb) return;
           unit.mem.coins -= coinCost;
+          nextAt = battle.time + unit.s.interval;
           fx(battle, 'summon', bomb, { src: unit.id, token: tokenId, coins: unit.mem.coins });
-        }, { owner: unit, priority: -10 });
+        };
+        battle.on('attack', (ctx) => { if (ctx.attacker === unit) tryBomb(); }, { owner: unit, priority: -10 });
+        battle.on('tick', () => { if (alive(unit) && unit.canAct && !unit.trait?.hadTarget) tryBomb(); }, { owner: unit });
       },
       talents: [
         { install(battle, unit) { // 大买家: "开启技能时获得1枚金币" (a passive starts at every deployment, S3 when cast)

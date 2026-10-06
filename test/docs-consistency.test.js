@@ -20,11 +20,22 @@
 // fenced tiles, knocked-out bodies, the dispatcher snapshot and the manifest shrink guard credited to PR #2 / PR #7) and
 // the 突变细胞 bench rule (§21.1: the carrier destroyed, its new operator gained into the 整备区 — official footage, PR #2),
 // the closing additions §21.26–§21.28 (GitHub issues #1 / #5 / #8), the owner's deliberate trigger deviation for six
-// 重装 skills (§21.29, GitHub issue #4 / PR #12) and the operator battle voice the user asked for the same day (§21.30,
-// battle only — the 休整期 is silent).
+// 重装 skills (§21.29, GitHub issue #4 / PR #12), the operator battle voice the user asked for the same day (§21.30,
+// battle only — the 休整期 is silent) and the local fork's reports: "变形同构体的效果有问题" (§21.31: the granted bond
+// counts for operator talents / tokens too — the owner's decision, 2026-10-04) and 拉普兰德's refresh timing (§21.32: only
+// a refresh the effect can pay out counts as her first) and the shop bar's row (§21.33: one box in every state, so a prep
+// is framed once, plus the C fold) and the owner's test tool, the debug console (§21.34: any operator / item, 资金,
+// 盟约层数 and the 调度中心 level, for a connection the server granted it — loopback, or SP_CONSOLE=1) and the four
+// player reports of the round after that (§21.35 拉普兰德's promoted elite fires again; §21.36 the bond strip's discs;
+// §21.37 a bounty enemy's content-spawned child carries no bounty; §21.38 准备就绪 asks twice) and the discs' follow-up
+// (§21.39: the member-count badge rides above the tier ring) and the 2026-10-06 sweep (§21.40 a 本局禁用 disc keeps its
+// layers; §21.41 the rotate hint follows the primary pointer; §21.42 突袭 counts a passive skill as 技能就绪; §21.43 a
+// talent's "【X】干员 / 势力" is the bond's membership, not the character's nation — the 谢拉格 / 灵巧 deep audit) and
+// the local issue list (ISSUES.md holds only the unfixed issues; docs/ISSUES-FIXLOG.md holds the settled ones —
+// together with the two "pending upstream" items the three groups partition all 110 captured issues).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GameData } from '../server/match/gamedata.js';
@@ -35,7 +46,7 @@ import { moduleTypeIconUrl } from '../public/js/ui/assetUrls.js';
 import { validateC2S } from '../shared/protocol.js';
 import { ERR, PHASE } from '../shared/constants.js';
 import { PROJECTILE_SPEEDS, BOOMERANG_RETURN_SPEED, ELEMENT, ELEMENT_ORDER, DOWN_STATE, BLOCK_RADIUS, FORCED_EXIT, ASPD_MIN, BOSS_POOL_MIN_HP, AUTO_OP_COOLDOWN, ALLY_COLLIDER_RADIUS } from '../server/sim/constants.js';
-import { SKILL_SUMMON_START_DEPLOY, BOND_LAYER_CAP, BOSS_HIT_LIMIT, layerGainRoom } from '../shared/constants.js';
+import { SKILL_SUMMON_START_DEPLOY, BOND_LAYER_CAP, BOSS_HIT_LIMIT, CONSOLE_LIMITS, layerGainRoom } from '../shared/constants.js';
 import * as SIM_CONST from '../server/sim/constants.js';
 import { MULTI_ROUND_BOUNTY_BATTLES } from '../server/match/choices.js';
 import { SELF_BOUND, PART_TRANSFER, BLADE_TRANSFER, DRONE_LINK_BASE } from '../server/sim/content/bosses.js';
@@ -638,7 +649,7 @@ test('player feedback after 0.1.0 (DESIGN §21, v0.1.1): every report mapped, th
   const sec = (n) => DESIGN.slice(DESIGN.indexOf(`## ${n}.`), DESIGN.indexOf(`## ${n + 1}.`) > 0 ? DESIGN.indexOf(`## ${n + 1}.`) : undefined);
   const S21 = sec(21);
   assert.match(DESIGN, /## 21\. Player feedback after 0\.1\.0 \(v0\.1\.1\)/);
-  for (let i = 1; i <= 29; i++) assert.match(S21, new RegExp(`### 21\\.${i} `), `§21.${i}`);
+  for (let i = 1; i <= 40; i++) assert.match(S21, new RegExp(`### 21\\.${i} `), `§21.${i}`);
   // every subsection number is used once (three closing branches had each added a "§21.26")
   const nums = [...S21.matchAll(/^### 21\.(\d+) /gm)].map((m) => +m[1]);
   assert.deepEqual(nums, Array.from({ length: nums.length }, (_, i) => i + 1), 'consecutive §21 subsections');
@@ -899,4 +910,301 @@ test('干员战斗语音 (DESIGN §21.30): the manifest data, the official prior
   assert.match(panel, /const selectKey = voice && detail\?\.type === 'chess'/);
   assert.match(game, /voice=\$\{combat\}/);
   assert.match(game, /audio\.voice\(charId, resultVoiceSlot\(/);
+});
+
+test('the 变形同构体 grant reaches operator talents and tokens (DESIGN §21.31): the four sites read unitBonds, the doc records it', () => {
+  const sub = DESIGN.slice(DESIGN.indexOf('### 21.31 '));
+  for (const re of [/视为特定盟约成员/, /the owner, 2026-10-04/, /kits\/tier1\.js/, /kits\/tier5\.js/, /kits\/tier6\.js/, /tokens\.js/, /unitBonds\(u\)\.includes\(bond\)/, /test\/content\/morph-talents\.test\.js/]) assert.match(sub, re);
+  // §21.11's assumption is resolved and §6.3 names the talents / tokens
+  assert.match(DESIGN, /Resolved after 0\.1\.1 \(§21\.31, the owner, 2026-10-04\)/);
+  assert.match(DESIGN, /in the operator talents \/ tokens that test "【X】干员" \(§21\.31\)/);
+  assert.match(DESIGN, /§21\.11: operator talents \/ tokens reading the record's bonds for "【X】干员" — \*\*resolved by the owner after 0\.1\.1 \(§21\.31\)\*\*/);
+  // the code: the four sites, and the record-bonds reads that were there before
+  const src = (p) => doc(p);
+  assert.match(src('server/sim/content/kits/tier1.js'), /unitBonds\(a\)\.includes\('lateranoShip'\)/);
+  assert.match(src('server/sim/content/kits/tier5.js'), /const inFaction = \(u, bond, nations\) => !!u\?\.def && \(unitBonds\(u\)\.includes\(bond\)/);
+  assert.match(src('server/sim/content/kits/tier6.js'), /const hasBond = \(u, id\) => !!u && unitBonds\(u\)\.includes\(id\);/);
+  assert.match(src('server/sim/content/tokens.js'), /const kaz = !!\(last && unitBonds\(last\)\.includes\('kazimierzShip'\)\);/);
+  assert.ok(!/a\.def\.bonds \|\| \[\]\)\.includes\('lateranoShip'\)/.test(src('server/sim/content/kits/tier1.js')), 'tier1: the record-bonds read is gone');
+  assert.ok(!/\(u\.def\.bonds \|\| \[\]\)\.includes\(bond\)/.test(src('server/sim/content/kits/tier5.js')), 'tier5: the record-bonds read is gone');
+  assert.ok(!/Array\.isArray\(u\.def\.bonds\)/.test(src('server/sim/content/kits/tier6.js')), 'tier6: the record-bonds read is gone');
+  assert.ok(!/\(last\.def\?\.bonds \|\| \[\]\)\.includes\('kazimierzShip'\)/.test(src('server/sim/content/tokens.js')), 'tokens: the record-bonds read is gone');
+  // §21.43: the last four sites of the same rule (tier4's "【X】干员 / 【X】势力的干员" read the nation only)
+  const t4 = src('server/sim/content/kits/tier4.js');
+  assert.match(t4, /import \{ unitBonds \} from '\.\.\/support\/index\.js';/);
+  assert.match(t4, /const inFaction = \(u, bond, nations\) => !!u\?\.def && \(unitBonds\(u\)\.includes\(bond\) \|\| nations\.includes\(nationOf\(u\)\)\);/);
+  for (const [helper, bond] of [['isLaterano', 'lateranoShip'], ['isKazimierz', 'kazimierzShip'], ['isKjerag', 'kjeragShip']]) {
+    assert.match(t4, new RegExp(`const ${helper} = \\(u\\) => inFaction\\(u, '${bond}', \\[`), helper);
+  }
+  assert.ok(!/nationOf\(a\) === '(laterano|kazimierz|kjerag)'/.test(t4), 'tier4: no nation-only faction test is left');
+});
+
+test('a talent\'s "【X】干员 / 【X】势力的干员" is the bond membership, not the character\'s nation (DESIGN §21.43): the tier4 sites and the three operators', () => {
+  const sub = DESIGN.slice(DESIGN.indexOf('### 21.43 '), DESIGN.indexOf('## 22. GitHub issues after 0.1.1'));
+  for (const re of [/哈洛德/, /锏/, /新约能天使/, /inFaction/, /kits\/tier4\.js/, /§21\.31/, /test\/content\/morph-talents\.test\.js/, /Audited clean/]) assert.match(sub, re);
+  const t4 = doc('server/sim/content/kits/tier4.js');
+  // the four call sites: 信仰搅拌机's two reloads, 灵知's 殊途同归 aura, 焰尾's 红松骑士团团长 aura
+  assert.match(t4, /\.filter\(\(a\) => a !== unit && a\.kind === 'op' && isLaterano\(a\) && a\.skill && a\.skill\.active && a\.skill\.kind === 'ammo'\)/);
+  assert.match(t4, /if \(a === unit \|\| a\.kind !== 'op' \|\| !isLaterano\(a\)\) continue;/);
+  assert.match(t4, /for \(const a of battle\.allies\(unit\.ownerId\)\) if \(a\.kind === 'op' && isKjerag\(a\)\) battle\.applyStatus\(a, 'resist'/);
+  assert.match(t4, /for \(const a of battle\.allies\(unit\.ownerId\)\) if \(isKazimierz\(a\)\) pulse\(battle, a, 'flamtl:dodge'/);
+  // the regression tests name the three real members with the "wrong" nation and assert the converted wearer's membership
+  const t = doc('test/content/morph-talents.test.js');
+  for (const re of [/'chess_char_2_05_a'/, /'chess_char_6_19_a'/, /'chess_char_6_13_a'/, /KJ_ICE/, /unitBonds\(h\.unit\(mate\)\)\.includes\('kjeragShip'\)/, /unitBonds\(h\.unit\(mate\)\)\.includes\('kazimierzShip'\)/, /unitBonds\(ally\)\.includes\('lateranoShip'\)/]) assert.match(t, re);
+});
+
+test('拉普兰德\'s first refresh must be one that can pay out (DESIGN §21.32): the handler guards the counter, the docs record it', () => {
+  const sub = DESIGN.slice(DESIGN.indexOf('### 21.32 '));
+  for (const re of [/拉普兰德的效果期望是获得后第一次刷新生效/, /next prep's first refresh/, /SERVER_GAIN_BOND_LAYER_BY_REFRESH_CNT/, /computeBonds/, /docs\/PLAYING\.md/, /test\/match\/feedback1-meta\.test\.js/]) assert.match(sub, re);
+  // §21.1's rule points at it; §21.20's [ASSUMED] list carries the cap caveat
+  assert.match(DESIGN, /does not count either: it is not her first refresh \(§21\.32, players' report after 0\.1\.1\)/);
+  assert.match(DESIGN, /a refresh the 999-layer cap turns into a no-op still counts \(§21\.32\)/);
+  // the code: the payable gate runs BEFORE the counter, and the counter still decides which refresh fires
+  const src = doc('server/sim/content/garrisons/meta.js');
+  const guard = src.indexOf('if (requireActive && !bonds.some((b) => ctx.bondActive(b))) return;');
+  const inc = src.indexOf('if (ctx.incPieceCounter(piece.uid, REFRESH_CNT_KEY) !== num(bb.refresh_cnt, 1)) return;');
+  assert.ok(guard > 0 && inc > 0 && guard < inc, 'the payable gate runs before the counter');
+  assert.match(src, /addAll\(ctx, bonds, num\(bb\.layer\), requireActive\)/);
+  // the player-facing rule and the module reference
+  assert.match(PLAYING, /只有真正能加层的那种刷新才算数/);
+  assert.match(META, /only a refresh whose effect can pay out \(its bond active\) counts \(DESIGN §21\.32\)/);
+});
+
+test('the shop bar is one constant row and C folds it (DESIGN §21.33): the CSS, the band, the re-fit and the fold agree', async () => {
+  const sub = DESIGN.slice(DESIGN.indexOf('### 21.33 '));
+  for (const re of [/让休整阶段的商店可收起/, /有人反映有时商店会阻挡场地有时不会/, /--shopbar-row/, /ResizeObserver/, /public issue #5 \/ §21\.27/, /test\/ui\/playtest5-ui\.e2e\.test\.js/]) assert.match(sub, re);
+  // the normative line of the band model mentions both halves of the fix
+  assert.match(DESIGN, /The bar's bottom band is one constant row in every state it can show/);
+  assert.match(DESIGN, /observes the bar and the bond strip → the view's `resize\(\)` re-measures the band/);
+  // the CSS: one row height, shared by the cards, with the banner clamped to it
+  const shop = doc('public/css/screens/game-shop.css');
+  const row = Number(/--shopbar-row: ([\d.]+)rem;/.exec(shop)?.[1]);
+  assert.ok(row > 0, `--shopbar-row: ${row}`);
+  assert.match(shop, /\.shopbar__row \{\n {2}position: relative;[^}]*min-height: calc\(var\(--shopbar-row\) \+ \.2rem \+ 3px\);/);
+  for (const sel of ['lvcard', 'scard']) assert.match(shop, new RegExp(`\\.${sel} \\{\\n(?:[^}]*\\n)* {2}position: relative;[^}]*height: var\\(--shopbar-row\\);`), sel);
+  assert.match(shop, /\.rwtag \{\n(?:[^}]*\n)* {2}min-height: 0; max-height: var\(--shopbar-row\); overflow: hidden;/);
+  assert.match(shop, /\.rwtag__later \{[^}]*flex: none; margin-top: auto;/);
+  // the reserved band: HUD_REM's row content is that variable (the padding and borders are its own terms), so the
+  // camera and the bar cannot drift apart
+  const { HUD_REM } = await import('../public/js/ui/fieldHost.js');
+  assert.equal(HUD_REM.shopBarTop, 0.2 + 0.1 * 2 + row);
+  assert.equal(HUD_REM.shopBarBorderPx, 3);
+  // the re-fit safety net: the game observes the HUD boxes that decide the band and re-measures through the view
+  const game = doc('public/js/screens/game.js');
+  assert.match(game, /new ResizeObserver\(\(\) => \{\n {6}if \(raf\) return; \/\/ one re-fit per frame\n {6}raf = requestAnimationFrame\(\(\) => \{ raf = 0; view\.resize\(\); \}\);/);
+  assert.match(game, /const els = \[barRef\.current, document\.querySelector\('\.gm__bonds'\)\]\.filter\(Boolean\);/);
+  // the fold: C is a shortcut, the two buttons announce it
+  assert.match(doc('public/js/ui/gameLogic.js'), /if \(code === 'KeyC' \|\| key === 'c'\) return 'collapse';/);
+  assert.match(doc('public/js/ui/shopBar.js'), /title="收起商店，露出整备区与场地 · C"[\s\S]{0,120}aria-keyshortcuts="C"/);
+  assert.match(doc('public/js/ui/shopBar.js'), /title="展开商店 · C"[\s\S]{0,120}aria-keyshortcuts="C"/);
+  // the player-facing rule
+  assert.match(PLAYING, /\*\*收起商店\*\*（按 `C`/);
+  assert.match(PLAYING, /休整期的场地大小是固定的/);
+});
+
+test('the debug console (DESIGN §21.34): the five intents, the loopback grant and the panel agree with the doc', async () => {
+  const sub = DESIGN.slice(DESIGN.indexOf('### 21.34 '));
+  for (const re of [/添加一个控制台，让我在测试时能获取任意干员和道具/, /g\.dbgChess/, /g\.dbgItem/, /g\.dbgFunds/, /g\.dbgLayers/, /g\.dbgLevel/, /ERR\.NO_CONSOLE/, /isLoopbackIp/, /SP_CONSOLE/, /test\/ui\/console\.e2e\.test\.js/, /test\/match\/console\.test\.js/]) assert.match(sub, re);
+  // the protocol table, the limits and the error code the doc names
+  const P = await import('../shared/protocol.js');
+  for (const t of ['g.dbgChess', 'g.dbgItem', 'g.dbgFunds', 'g.dbgLayers', 'g.dbgLevel']) assert.ok(Object.hasOwn(P.C2S, t), `C2S.${t}`);
+  assert.equal(P.validateC2S({ t: 'g.dbgFunds', funds: CONSOLE_LIMITS.funds }), null);
+  assert.equal(P.validateC2S({ t: 'g.dbgLayers', bondId: 'yanShip', layers: CONSOLE_LIMITS.layers }), null);
+  assert.equal(CONSOLE_LIMITS.layers, BOND_LAYER_CAP, 'the layer setter shares the official cap');
+  assert.equal(ERR.NO_CONSOLE, 'NO_CONSOLE');
+  assert.match(doc('shared/constants.js'), new RegExp(`NO_CONSOLE: 'NO_CONSOLE'`));
+  // the server: the guard, the module the dispatch reaches, the per-seat flag the lobby decides
+  const consoleSrv = doc('server/match/console.js');
+  for (const t of ['g.dbgChess', 'g.dbgItem', 'g.dbgFunds', 'g.dbgLayers', 'g.dbgLevel']) assert.ok(consoleSrv.includes(`'${t}'`), t);
+  assert.match(consoleSrv, /if \(!ps \|\| !ps\.console\) return fail\(ERR\.NO_CONSOLE\);/);
+  assert.match(consoleSrv, /if \(m\.ended \|\| m\.disposed\) return fail\(ERR\.WRONG_PHASE/);
+  assert.match(doc('server/match/Match.js'), /if \(isConsoleType\(msg\.t\)\) return runConsole\(this, ps, msg\);/);
+  assert.match(doc('server/match/PlayerState.js'), /this\.console = seat\.console === true;/);
+  assert.match(doc('server/match/PlayerState.js'), /console: this\.console,/);
+  const lobby = doc('server/lobby.js');
+  assert.match(lobby, /console: !s\.isBot && consoleAllowed\(this\.opts\.console, this\.registry\.byId\(s\.playerId\)\?\.addr\)/);
+  assert.match(lobby, /export function consoleAllowed\(mode, addr\)/);
+  assert.match(lobby, /return isLoopbackIp\(typeof addr === 'string' \? addr : ''\);/);
+  // …and the client: the panel is offered only on the server's word, and every op goes through the shared `act()`
+  const game = doc('public/js/screens/game.js');
+  assert.match(game, /priv\?\.console \? html`<button type="button" class="gm__gear gm__dbg" aria-label="调试控制台"/);
+  assert.match(game, /\$\{priv\?\.console \? html`<\$\{ConsolePanel\} open=\$\{consoleOpen\}/);
+  assert.match(game, /if \(act === 'console'\) \{/);
+  assert.match(doc('public/js/ui/gameActions.js'), /dbg: \(t, fields\) => act\(t, fields\),/);
+  const panel = doc('public/js/ui/console.js');
+  assert.match(panel, /export const CONSOLE_KEY = '`';/);
+  assert.match(panel, /export function parseConsoleCommand\(text, \{ gd, priv \} = \{\}\)/);
+  assert.match(panel, /export const clampLayers = \(n\) => Math\.max\(0, Math\.min\(Math\.round\(Number\(n\) \|\| 0\), CONSOLE_LIMITS\.layers\)\);/);
+  // the panel's own light overlay: still a `.modal` (the game's keys stay blocked), no shared-modal blur
+  assert.match(panel, /<div class="modal dbgwrap" role="presentation"/);
+  assert.match(panel, /<div class="modal__box brackets dbgbox" role="dialog" aria-modal="true" aria-label="调试控制台"/);
+  assert.match(panel, /if \(!open \|\| document\.documentElement\.classList\.contains\('sp-touch'\)\) return;/, 'no keyboard-popping autofocus on touch');
+  // the shortcut and the stylesheet (index.html and the dev harness both link it)
+  assert.match(doc('public/js/ui/gameLogic.js'), /if \(code === 'Backquote' \|\| key === '`' \|\| key === '~'\) return 'console';/);
+  const css = doc('public/css/screens/game-console.css');
+  assert.match(css, /\.dbg \{ display: flex; flex-direction: column; gap: \.1rem; height: min\(6\.1rem, 66vh\); min-height: 0; \}/);
+  for (const f of ['public/index.html', 'public/dev/game-mock.html']) assert.match(doc(f), /<link rel="stylesheet" href="\/css\/screens\/game-console\.css" \/>/, f);
+  // the player-facing text and the environment switch
+  assert.match(PLAYING, /## 11\. 调试控制台（测试用）/);
+  assert.match(PLAYING, /按 `` ` `` 键也能开关/);
+  assert.match(PLAYING, /\*\*服务器认为可以用的玩家\*\*/);
+  assert.match(PLAYING, /`SP_CONSOLE`/);
+  assert.match(doc('README.md'), /\| `SP_CONSOLE` \| `auto` \|/);
+  assert.match(doc('server/index.js'), /lobbyOptions\.console = opts\.console != null \? parseConsoleMode\(opts\.console\) : parseConsoleMode\(process\.env\.SP_CONSOLE\);/);
+  // the model the panel renders from is the one the tests drive
+  const model = await import('../public/js/ui/console.js');
+  assert.deepEqual(model.CONSOLE_TABS.map((t) => t.id), ['chess', 'items', 'res', 'bonds']);
+  assert.equal(typeof model.consoleRows, 'function');
+  assert.equal(typeof model.parseConsoleCommand, 'function');
+  // the mock harness can drive the panel too (its own g.dbg* cases and the console private flag)
+  const mock = doc('public/dev/game-mock.js');
+  for (const t of ['g.dbgChess', 'g.dbgItem', 'g.dbgFunds', 'g.dbgLayers', 'g.dbgLevel']) assert.ok(mock.includes(`case '${t}'`), t);
+  assert.match(mock, /console: true,/);
+});
+
+test('the four reports of the round after 0.1.1 (DESIGN §21.35–§21.38): the promotion, the discs, the bounty spawns and the ready confirm agree with the code', async () => {
+  const at = (n) => DESIGN.slice(DESIGN.indexOf(`### 21.${n} `));
+  const s34 = at(35).slice(0, at(35).indexOf('### 21.36 '));
+  const s35 = at(36).slice(0, at(36).indexOf('### 21.37 '));
+  const s36 = at(37).slice(0, at(37).indexOf('### 21.38 '));
+  const s37 = at(38);
+  // §21.35 — the quotes, the code, the normative lines
+  for (const re of [/参与进阶后的拉普兰德的效果期望是仍能触发/, /发送1名【精锐】状态的该干员至手牌区/, /_mergeChess/, /pieceRoundCount/, /test\/match\/feedback1-meta\.test\.js/]) assert.match(s34, re);
+  const ps = doc('server/match/PlayerState.js');
+  assert.ok(!/this\.bumpPieceRoundCount\(elite, k, Math\.max\(0, v - this\.pieceRoundCount\(elite, k\)\)\)/.test(ps), 'PlayerState: the merge no longer carries the counters');
+  assert.match(ps, /every newly gained piece \(bought, granted,\n {3}\* transformed, merged into an elite\) starts at 0/);
+  assert.match(doc('server/match/effectsMeta.js'), /for every newly gained piece, an elite merged this\n\s*\* +round included — PlayerState\.pieceRoundCount/);
+  assert.match(doc('docs/META.md'), /Every newly gained piece starts its per-piece round counters at 0/);
+  assert.match(PLAYING, /用已经生效过的拉普兰德「晋级」出来的精锐/);
+  assert.ok(!/合成的精锐，本回合不再生效/.test(PLAYING), 'PLAYING: the old "the elite stays silent" rule is gone');
+  assert.ok(!/an elite merged this round keeps the highest count of its copies/.test(doc('server/sim/content/garrisons/meta.js')));
+  // §21.36 — the strip's shape and the band it must keep
+  for (const re of [/盟约图标过小，数字和图标叠在一起影响阅读/, /--bslot-disc/, /HUD_REM\.bondStripBottom/, /122 px per bench tile/]) assert.match(s35, re);
+  const game = doc('public/css/screens/game.css');
+  const disc = Number(/--bslot-disc: ([\d.]+)rem;/.exec(game)?.[1]);
+  const gap = Number(/\.bslot \.bond \{ --disc: var\(--bslot-disc\); gap: ([\d.]+)rem; \}/.exec(game)?.[1]);
+  const name = Number(/\.bslot \.bond__name \{ font-size: ([\d.]+)rem; font-weight: 500; line-height: ([\d.]+);/.exec(game)?.[2]);
+  const font = Number(/\.bslot \.bond__name \{ font-size: ([\d.]+)rem;/.exec(game)?.[1]);
+  assert.ok(disc > 0.52 && gap >= 0 && font > 0 && name > 0, `${disc} ${gap} ${font} ${name}`);
+  // §21.36 kept the strip's own box at the .52rem disc's `.52 + .05 + 1.5 × .14` = .78rem, so the band the camera
+  // measures could not grow. §21.39 spends exactly that height on the bigger discs — the box is pinned against its own
+  // arithmetic now (`--bslot-disc + gap + font × line-height`), and the e2e measures what the camera does with it
+  const box = disc + gap + font * name;
+  assert.ok(Math.abs(box - 0.865) < 0.005, `the strip's box ${box}rem is the .68 + .02 + .15 × 1.1 of §21.39`);
+  assert.match(game, /\.bslot__count \{\n {2}position: absolute; bottom: calc\(100% \+ var\(--bslot-disc\) \* \.12\); right: calc\(\(100% - var\(--bslot-disc\)\) \/ 2\);/);
+  assert.ok(!/\.bslot__count \{\n {2}position: absolute; top: -\.04rem; right: \.02rem;/.test(game), 'the chip left the disc');
+  assert.match(PLAYING, /圆盘\*\*上方\*\*的小方块（悬在圆盘外圈之上，不会挡住图标）里的 `在场\/下一档`/);
+  // §21.37 — the payout rule: the card's own key, code and docs
+  for (const re of [/这些新敌人不应有赏金/, /planUnite/, /spawnChildren/, /enemyKey === card\.enemyKey/, /test\/match\/feedback1-bounty\.test\.js/]) assert.match(s36, re);
+  // the merged code: upstream's stricter shape (§23.25 — spawnChildren clears the kill-bounty mods; the planner still
+  // tests the key as the second guard), kept and noted by the local fork's §21.37
+  assert.match(doc('server/match/unite.js'), /let bounty = card && card\.payout !== 'perfect' && Number\(card\.coin\) > 0 && l\.enemyKey === card\.enemyKey/);
+  assert.match(doc('server/sim/content/enemies.js'), /const mods = modsWithoutBounty\(opts\.mods \?\? parent\.mods \?\? null\);/);
+  assert.match(doc('server/match/fields.js'), /unite\.js pays the bounty only for it \(§21\.37/);
+  assert.match(doc('docs/META.md'), /a unit content spawned from it \(its declared offspring/);
+  assert.match(PLAYING, /由它死亡或技能生成出来的新敌人[\s\S]{0,80}\*\*没有赏金\*\*/);
+  // §21.38 — the two-press confirm: the state, the key path, the look and the harness
+  for (const re of [/准备就绪/, /易误触|误触/, /READY_CONFIRM_MS/, /is-armed/, /test\/ui\/mock\.e2e\.test\.js/]) assert.match(s37, re);
+  const g = doc('public/js/screens/game.js');
+  assert.match(g, /const READY_CONFIRM_MS = 4000;/);
+  assert.match(g, /if \(r === true && !readyArmedRef\.current\) \{ armReady\(true\); return; \}/);
+  assert.match(g, /toggleReadyRef\.current\(!L\.priv\.ready\); \/\/ readying asks twice/);
+  assert.match(g, /readyBusy=\$\{readyBusy\} readyArmed=\$\{readyArmed\}/);
+  const hud = doc('public/js/ui/hud.js');
+  assert.match(hud, /export function ReadyToggle\(\{ priv, onToggle, busy, readyCount, total, armed = false \}\)/);
+  assert.match(hud, /\$\{ready \? '取消准备' : confirm \? '再点一次确认' : '准备就绪'\}/);
+  assert.match(hud, /export function TopBar\(\{ pub, priv, conn, hud, total, drawer, onExit, onDrawer, onReady, readyBusy, readyArmed = false,/);
+  assert.match(hud, /armed=\$\{readyArmed\} readyCount=\$\{readyCount\}/);
+  assert.match(game, /\.readybtn\.is-armed \{ border-color: var\(--amber\);/, 'the armed look is in the stylesheet the game loads');
+  assert.match(doc('public/css/screens/game.css'), /\.readybtn\.is-armed \{ border-color: var\(--amber\);/);
+  assert.match(doc('test/e2e/client.mjs'), /async ready\(\{ timeout = 30000 \} = \{\}\) \{/);
+  assert.match(doc('test/ui/mock.e2e.test.js'), /the first Space only arms/);
+  assert.match(PLAYING, /准备就绪需要点两次确认/);
+  assert.match(PLAYING, /\*\*准备就绪要点两次\*\*/);
+});
+
+test('the after-0.1.1 follow-up report (DESIGN §21.39): the member-count badge leaves the disc alone, code and docs agree', async () => {
+  const s38 = DESIGN.slice(DESIGN.indexOf('### 21.39 '));
+  for (const re of [/图标仍被激活人数挡住/, /--bslot-disc/, /\.bslot__count/, /1\.30rem/, /2\.05rem/, /test\/ui\/playtest5-ui\.e2e\.test\.js/]) assert.match(s38, re);
+  const game = doc('public/css/screens/game.css');
+  // the discs grew again and the badge is anchored ABOVE them: `bottom: 100% + the ring's clearance`, its right edge on
+  // the disc's right edge (the slot's margin) — never the old top-right corner over the glyph
+  assert.match(game, /\.bslot \{ position: relative; display: flex; flex-direction: column; align-items: center; width: \.86rem; --bslot-disc: \.68rem; \}/);
+  assert.match(game, /\.bslot \.bond__name \{ font-size: \.15rem; font-weight: 500; line-height: 1\.1;/);
+  assert.match(game, /\.bslot__count \{\n {2}position: absolute; bottom: calc\(100% \+ var\(--bslot-disc\) \* \.12\); right: calc\(\(100% - var\(--bslot-disc\)\) \/ 2\);/);
+  assert.ok(!/\.bslot__count \{[^}]*top: -\.06rem/.test(game), 'the badge no longer hangs over the disc');
+  // the lift is larger than the tier ring's own overhang (.bond__ring: r = 46 of a 100-unit viewBox scaled to 120 % of the
+  // disc → its outer edge sits .082 of the disc above the disc's top, i.e. the badge clears ring, face and glyph)
+  assert.match(doc('public/css/components.css'), /\.bond__ring \{\n {2}position: absolute;\n {2}inset: calc\(var\(--disc\) \* -\.1\);\n {2}width: calc\(var\(--disc\) \* 1\.2\);/);
+  // the strip starts .09rem higher so the band the cameras measure does not move (measured 2.14rem, constant 2.16rem)
+  assert.match(game, /\.gm__bonds \{ position: absolute; left: 1\.56rem; top: 1\.27rem;/);
+  // phones: the discs grow too, the badge is the same shape, and the strip starts low enough (1.30rem) for the badge to
+  // clear the top bar's painted panel (40 px at 1rem = 40 px) while the fill camera still leaves every bench pad free —
+  // the band it makes is 2.05rem there, measured off the page by hudBands
+  const devices = doc('public/css/devices.css');
+  assert.match(devices, /\.gm__bonds \{ top: 1\.30rem; \}/);
+  assert.match(devices, /\.bslot \{ width: \.78rem; --bslot-disc: \.62rem; \}/);
+  assert.match(devices, /\.bslot__count \{ font-size: \.12rem; line-height: 1\.2; bottom: calc\(100% \+ var\(--bslot-disc\) \* \.12\); right: calc\(\(100% - var\(--bslot-disc\)\) \/ 2\); \}/);
+  assert.match(devices, /1\.30 \+ \.62 \+ \.12 × 1\.1 = 2\.05rem/);
+  // the prep camera's fallback band still covers the deeper strip boxes (the measured desktop band is the 2.14rem it was)
+  assert.match(doc('public/js/ui/fieldHost.js'), /bondStripBottom: 2\.16,/);
+  assert.match(PLAYING, /圆盘\*\*上方\*\*的小方块/);
+  // the browser regression that measures it: face, glyph and ring uncovered, no top-bar overlap, the band and the camera
+  assert.match(doc('test/ui/playtest5-ui.e2e.test.js'), /the count badge leaves the disc, the glyph and the tier ring alone/);
+});
+
+test('a 本局禁用 disc keeps the layers it holds (DESIGN §21.40): code, doc and the sources agree', async () => {
+  const s = DESIGN.slice(DESIGN.indexOf('### 21.40 '), DESIGN.indexOf('## 22. '));
+  for (const re of [/灵知/, /谢拉格.*灵巧/, /随身身份牌/, /offBondCounts/, /test\/match\/layer-sources\.test\.js/, /test\/ui\/feedback1b-bonds\.test\.js/]) assert.match(s, re);
+  const strip = doc('public/js/ui/bondStrip.js');
+  assert.match(strip, /if \(b\.off\) \{/);
+  assert.match(strip, /const layers = !rec\?\.noStack && Number\.isFinite\(b\.layers\) && b\.layers > 0 \? b\.layers : undefined;/);
+  assert.match(strip, /layers=\$\{layers\} tier=\$\{0\}/);
+  assert.match(strip, /<span class="bslot__count bslot__off">本局禁用<\/span>/);
+  assert.match(strip, /\$\{layers \? ` · \$\{layers\} 层` : ''\}/);
+  // the popup already showed them (`层数 N`) — the strip is the one that hid the number
+  assert.match(strip, /层数 <b class="num t-mint">\$\{layers\}<\/b>/);
+  // and the sources are pinned by their own suite
+  const src = doc('test/match/layer-sources.test.js');
+  for (const re of [/chess_char_4_13_a/, /chess_char_6_19_a/, /chess_char_6_16_a/, /chess_item_1_04_e_a/]) assert.match(src, re);
+});
+
+test('the local issue list holds only unfixed issues (ISSUES.md ⇄ docs/ISSUES-FIXLOG.md): the settled / pending / live groups partition every captured issue', () => {
+  const LIST = doc('ISSUES.md');
+  const FIXLOG = doc('docs/ISSUES-FIXLOG.md');
+  const group = (name) => {
+    const m = FIXLOG.match(new RegExp(`<!-- ${name}: ([\\d\\s]+) -->`));
+    assert.ok(m, `the fix log declares "${name}"`);
+    return m[1].trim().split(/\s+/).map(Number);
+  };
+  const settled = group('settled');   // fixed / judged not-a-bug / closed: must never be listed again
+  const pending = group('pending');   // upstream already closed or scheduled, not re-verified here
+  const total = +FIXLOG.match(/<!-- issue-total: (\d+) -->/)[1];
+  // the live list: one row per unfixed issue, `| P1 | [#96](…) 标题 | … |`
+  const live = [...LIST.matchAll(/\| P[0-3] \| \[#(\d+)\]/g)].map((m) => +m[1]);
+  assert.ok(live.length > 0, 'the list has rows');
+  assert.equal(new Set(live).size, live.length, 'no issue is listed twice');
+  assert.equal(live.length, +LIST.match(/条目数：\*\*(\d+)\*\*/)[1], 'the declared 条目数 matches the rows');
+  // the three groups never overlap and together they are every captured issue (a moved row must move its number too)
+  const all = [...settled, ...pending, ...live];
+  assert.equal(new Set(all).size, all.length, 'settled / pending / live are disjoint');
+  assert.equal(all.length, total, `the partition covers all ${total} captured issues`);
+  // a settled issue never comes back: not as a row, and not in the prose around the tables either
+  const back = [...new Set([...LIST.matchAll(/issues\/(\d+)\)/g)].map((m) => +m[1]).filter((n) => !live.includes(n)))];
+  assert.deepEqual(back, [], 'ISSUES.md refers to the issues it lists and to no other');
+  // every settled / pending issue is explained in the fix log, which itself points at the capture archive
+  for (const n of [...settled, ...pending]) assert.ok(FIXLOG.includes(`issues/${n})`), `docs/ISSUES-FIXLOG.md names #${n}`);
+  assert.match(FIXLOG, /docs\/ISSUES-ARCHIVE\.md/);
+  assert.match(LIST, /docs\/ISSUES-FIXLOG\.md/);
+  assert.match(LIST, /docs\/ISSUES-ARCHIVE\.md/);
+  assert.match(doc('docs/ISSUES-ARCHIVE.md'), /这是抓取归档，不是待办清单/);
+  // the generated capture report is the archive: the pipeline must never overwrite the two hand-kept lists
+  const render = join(ROOT, '.scratch', 'render-report.cjs');
+  if (existsSync(render)) {
+    const src = readFileSync(render, 'utf8');
+    assert.match(src, /'\.\.', 'docs', 'ISSUES-ARCHIVE\.md'\)/, 'render-report writes docs/ISSUES-ARCHIVE.md');
+    assert.ok(!/path\.join\(__dirname, '\.\.', 'ISSUES\.md'\)/.test(src), 'render-report never writes ISSUES.md');
+  }
+  const pipeline = join(ROOT, '.scratch', 'check-paths.cjs');
+  if (existsSync(pipeline)) assert.match(readFileSync(pipeline, 'utf8'), /'ISSUES\.md', 'docs\/ISSUES-FIXLOG\.md', 'docs\/ISSUES-ARCHIVE\.md'/);
 });

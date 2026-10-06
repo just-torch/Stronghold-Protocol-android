@@ -1644,6 +1644,13 @@ export async function createFieldView(host, options = {}) {
   let downSeq = 0;             // syncBattle pass counter: a view still marked down after a pass left the `down` list
   function syncBattle(renderT) {
     if (renderT0Battle == null) renderT0Battle = renderT;
+    // The down list of the NEWEST snapshot is authoritative for "is this unit on the field" (interp.downAt): the sample
+    // above interpolates the PREVIOUS snapshot, so for one frame a unit can be `alive, hp > 0` there while the new
+    // snapshot already lists it as a 倒地干员. Reviving it in that frame made it stand again and `setDown` (below) lay it
+    // down once more — every frame: GitHub #100 (a stunned operator loops 倒地/起身, its DIE clip restarting each time).
+    // The revival below therefore yields to the down list; the next frame, whose sample has the redeploy, brings it back.
+    const down = interp.downAt(renderT);
+    const downIds = down ? new Set(down.map((d) => d[0])) : null;
     interp.sample(renderT, sample);
     for (const [id, s] of sample) {
       let v = views.get(id);
@@ -1656,12 +1663,11 @@ export async function createFieldView(host, options = {}) {
       if (!v._seen) { v._seen = true; v.fadeIn = 0; }
       if (v.alive || v.info?.kind === 'device') v.sync(s, renderT);
       else if (v.dying > 0) { v.x = s.x; v.y = s.y; }
-      else if (s.anim !== ANIM.DIE && s.hp > 0) { v.revive?.(); v.sync(s, renderT); }
+      else if (s.anim !== ANIM.DIE && s.hp > 0 && !(downIds && downIds.has(id))) { v.revive?.(); v.sync(s, renderT); }
     }
     // knocked-out operators waiting to redeploy (b.snap `down`, user playtest #4 item 9): their view stays on the
     // field knocked down under a redeploy ring (UnitView.setDown) — made on the spot for one already down when this
     // field was entered; one that leaves the list without a redeploy fades out
-    const down = interp.downAt(renderT);
     downSeq++;
     if (down) {
       for (const d of down) {

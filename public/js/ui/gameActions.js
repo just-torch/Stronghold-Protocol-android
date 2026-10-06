@@ -11,6 +11,8 @@ const SUCCESS_SFX = {
   'g.buy': 'buy', 'g.sell': 'sell', 'g.refresh': 'refresh', 'g.freeze': 'freeze', 'g.levelUp': 'levelup',
   'g.move': 'drop', 'g.equip': 'equip', 'g.art': 'artPlace', 'g.reward': 'pick', 'g.choice': 'pick',
   'g.band': 'confirm', 'g.bandSkip': 'back', 'g.infoReady': 'ready', 'g.emote': 'emote', 'g.destroy': 'back',
+  // debug console (DESIGN §21.33): a granted operator / item sounds like a pickup, the setters like their game action
+  'g.dbgChess': 'pick', 'g.dbgItem': 'equip', 'g.dbgFunds': 'click', 'g.dbgLayers': 'freeze', 'g.dbgLevel': 'levelup',
 };
 
 let inflight = 0;
@@ -71,4 +73,7 @@ export const actions = {
   autoplay: (on) => act('g.autoplay', { on }),
   // solo battles only (ui/matchStatus.js pauseAvailable): m.public.paused follows
   pause: (on) => act('g.pause', { on: !!on }, { sfx: on ? 'click' : 'confirm' }),
+  // debug console (DESIGN §21.33, ui/console.js): one entry point for the five `g.dbg*` test intents — the panel builds
+  // the type and its fields, everything else (the sound, the error toast) is `act`'s as for any other intent
+  dbg: (t, fields) => act(t, fields),
 };

@@ -68,14 +68,16 @@ print(json.dumps([e.material_info(mat), e.material_info(bg)]))`);
 
   test('dep_bundles: the shader bundles load beside jobs that export Materials only', () => {
     const out = py(`
-import tempfile, pathlib
+import tempfile, pathlib, shutil
 d = pathlib.Path(tempfile.mkdtemp())
 (d / 'shaders').mkdir()
 for n in ('standarddirectional.ab', 'other.ab', 'notes.txt'): (d / 'shaders' / n).write_bytes(b'')
 (d / 'shaders' / 'sub.ab').mkdir()
 rel = lambda ps: [p.relative_to(d).as_posix() for p in ps]
-print(json.dumps({'mat': rel(e.dep_bundles(d, {'Texture2D', 'Material'})), 'sprite': rel(e.dep_bundles(d, {'Sprite'})),
-                  'none': rel(e.dep_bundles(d / 'missing', {'Material'}))}))`);
+out = {'mat': rel(e.dep_bundles(d, {'Texture2D', 'Material'})), 'sprite': rel(e.dep_bundles(d, {'Sprite'})),
+       'none': rel(e.dep_bundles(d / 'missing', {'Material'}))}
+shutil.rmtree(d, ignore_errors=True)  # a relative TEMP would drop it into the repo root — never leave it behind
+print(json.dumps(out))`);
     assert.deepEqual(out, { mat: ['shaders/other.ab', 'shaders/standarddirectional.ab'], sprite: [], none: [] });
   });
 

@@ -82,6 +82,12 @@ function computeBonds(priv) {
     for (const b of c?.bonds || []) if (!inactive.has(b)) counts.set(b, (counts.get(b) || 0) + 1);
   }
   const harmony = counts.get('maniShip') > 0;
+  // bonds the console set layers on without members still show (the server's bondList: count > 0 || layers > 0).
+  // Only the console's own writes (S.consoleLayers), never the rolled cache in S.layers: a bond that lost its members
+  // and was never touched by the console disappears from the strip, as it does on the server (bond-collapse test).
+  for (const id of Object.keys(S?.consoleLayers || {})) {
+    if (!counts.has(id) && (S.consoleLayers[id] || 0) > 0 && data.lookup('bonds', id)) counts.set(id, 0);
+  }
   const out = [];
   for (const [bondId, raw] of counts) {
     const b = data.lookup('bonds', bondId);
@@ -179,6 +185,9 @@ function buildState() {
 
   const priv = {
     playerId: ME, seat: 0, alive: !VARIANTS.has('dead'), lp: 24, funds: 13, bandId: 'band_bldsk', ready: false, canReady: true,
+    // the debug console (DESIGN §21.33): the real server sets this per seat from the connection (loopback, or
+    // SP_CONSOLE=1); the harness grants it so the panel and its g.dbg* intents can be driven here too
+    console: true,
     shop: { level, maxLevel: 6, upgradePrice: 9, refreshPrice: 1, freeRefreshes: 0, frozen: VARIANTS.has('frozen'), slots, rewardOffer: null },
     hand, temp, board, deployCap: 8, deployCount: 0, bonds: [],
     effects: [
@@ -190,6 +199,8 @@ function buildState() {
     stats: { dmgDealt: 184230, kills: 96, leaks: 3, gold: 58, refreshes: 11, merges: 3 },
   };
   if (VARIANTS.has('loadout')) priv.loadout = mockLoadout(board, slots);
+  // the debug console without a grant (a hosted server, or a non-loopback client): the panel is not offered at all
+  if (VARIANTS.has('noconsole')) priv.console = false;
   if (VARIANTS.has('reward')) {
     priv.shop.rewardOffer = { tier: 5, slots: shuffle(visibleChess(5)).slice(0, 3).map((c) => ({ kind: 'chess', id: c.chessId, price: 0, sold: false })) };
   }
@@ -372,9 +383,11 @@ function startCombat(phase) {
   const pub = S.pub;
   const boss = phase === PHASE.FINAL_ASSAULT || phase === PHASE.HIDDEN_CORE;
   pub.round = boss ? (phase === PHASE.HIDDEN_CORE ? 15 : 14) : 6;
-  pub.deadline = boss ? Date.now() + 95000 : Date.now() + 40000;
+  pub.deadline = boss ? Date.now() + 88000 : Date.now() + 40000;
   // boss rounds (server Match: deadline = the level's 120 s countdown, overtimeAt = the drain start at 150 s):
-  // `overtime` = the level time ran out, the drain starts in 18 s; `drain` = draining for 7 s
+  // `overtime` = the level time ran out, the drain starts in 18 s; `drain` = draining for 7 s.
+  // The plain case sits at 88 s of 120 — the middle of the 4-bar band (72–95 s; 5 bars is 96 s and up) — rather than 95 s: 95 left only
+  // the 4-bar boundary, so a slow page load read 3 bars (test/ui/leftovers.e2e.test.js case 2 was flaky).
   if (boss) {
     const now = Date.now();
     if (VARIANTS.has('drain')) { pub.deadline = now - 37000; pub.overtimeAt = now - 7000; }
@@ -689,6 +702,55 @@ async function mockRequest(t, f = {}) {
       return {};
     }
     case 'g.autoplay': case 'g.leave': case 'room.leave': return {};
+    // ---- debug console (DESIGN §21.33): the same five intents the server handles (server/match/console.js), simplified
+    // (no pool, no merge: they land in the first free 整备区 slot — enough for the panel's own e2e)
+    case 'g.dbgChess': {
+      const rec = data.lookup('chess', f.chessId);
+      if (!rec) fail('BAD_TARGET');
+      const idx = freeHandIdx();
+      if (idx < 0) fail('HAND_FULL');
+      const golden = !!rec.isGolden;
+      p.hand[idx] = chessPiece(golden ? { ...rec, goldenId: rec.chessId } : rec, golden);
+      toast(`获得干员 ${rec.name || rec.chessId}`, 'success');
+      refreshPrivate(); return {};
+    }
+    case 'g.dbgItem': {
+      const rec = data.lookup('items', f.itemId);
+      if (!rec) fail('BAD_TARGET');
+      const idx = freeHandIdx();
+      if (idx < 0) fail('HAND_FULL');
+      p.hand[idx] = itemPiece(rec);
+      toast(`获得装备 ${rec.name || rec.id}`, 'success');
+      refreshPrivate(); return {};
+    }
+    case 'g.dbgFunds': { p.funds = Math.max(0, Math.round(f.funds)); refreshPrivate(); return {}; }
+    case 'g.dbgLayers': {
+      const rec = data.lookup('bonds', f.bondId);
+      if (!rec) fail('BAD_TARGET');
+      S.layers[f.bondId] = Math.max(0, Math.min(999, Math.round(f.layers)));
+      // layers a TESTER set: the strip keeps showing a member-less bond for them (the server's bondList: count > 0 ||
+      // layers > 0). The mock's own rolled layers are a cache in S.layers and must NOT keep a lost bond's disc alive —
+      // clearing the board has to reach the empty strip (test/ui/bond-collapse.e2e.test.js) as it does on the server,
+      // where a bond without members and without console layers is not listed.
+      S.consoleLayers = S.consoleLayers || {};
+      if (S.layers[f.bondId] > 0) S.consoleLayers[f.bondId] = S.layers[f.bondId];
+      else delete S.consoleLayers[f.bondId];
+      refreshPrivate(); return {};
+    }
+    case 'g.dbgLevel': {
+      const lv = Math.max(1, Math.min(6, Math.round(f.level)));
+      p.shop.level = lv;
+      p.shop.upgradePrice = [5, 8, 11, 12, 13][lv - 1] ?? 0;
+      const n = lv >= 4 ? 5 : 4;
+      const chessSlots = () => p.shop.slots.filter((s) => s.kind !== 'item').length;
+      while (chessSlots() < n) p.shop.slots.splice(Math.max(0, p.shop.slots.length - 1), 0, makeSlot(lv));
+      while (chessSlots() > n) {
+        const i = p.shop.slots.map((s) => s.kind).lastIndexOf('chess');
+        if (i < 0) break;
+        p.shop.slots.splice(i, 1);
+      }
+      refreshPrivate(); return {};
+    }
     default: return {};
   }
 }
@@ -717,6 +779,7 @@ function applyUiVariants() {
     }, 300);
   }
   if (VARIANTS.has('settings')) clickSel('.gm__gear', 400);
+  if (VARIANTS.has('console')) clickSel('.gm__dbg', 500);
   if (VARIANTS.has('collapsed')) clickSel('.funds__collapse', 400);
   // the first tap on a shop card selects it and opens its detail (there is no ⓘ corner)
   if (VARIANTS.has('detail')) clickSel('.shopbar__cards .scard:not(.scard--sold)', 500);

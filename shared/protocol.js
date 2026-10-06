@@ -1,7 +1,7 @@
 // Normative message catalogue (DESIGN §8). Used by server (validation) and client (building requests).
 // Every client→server message is `{ t, rid?, ...fields }`. Unknown `t` or invalid fields ⇒ ERR.BAD_MSG.
 
-import { DIFFICULTIES, NAME_MAX_LEN, ROOM_CODE_LEN, MAX_SEATS, EMOTES, GEO } from './constants.js';
+import { DIFFICULTIES, NAME_MAX_LEN, ROOM_CODE_LEN, MAX_SEATS, EMOTES, GEO, CONSOLE_LIMITS } from './constants.js';
 
 // ---- tiny validators -------------------------------------------------------
 const isInt = (v, lo = -Infinity, hi = Infinity) => Number.isInteger(v) && v >= lo && v <= hi;
@@ -291,6 +291,16 @@ export const C2S = {
   // the push m.unitStats { seq, round, units: [unitStatsEntry] }; `seq` is echoed so the client keeps the newest answer
   'g.unitStats': { seq: (v) => isInt(v, 0, 2 ** 31), $optional: ['seq'] },
   'g.leave': {},
+
+  // debug console (DESIGN §21.34) — the test tool of §21.34: grant any chess / item, set 资金 / 盟约层数 /
+  // 调度中心等级 outright. Structural checks only; the handlers (server/match/console.js) resolve the ids against the
+  // match's data and refuse everything from a player whose seat was not granted the console (ERR.NO_CONSOLE: the seat
+  // flag comes from the connection — loopback, or SP_CONSOLE=1, server/lobby.js consoleAllowed).
+  'g.dbgChess': { chessId: isId },
+  'g.dbgItem': { itemId: isId },
+  'g.dbgFunds': { funds: (v) => isInt(v, 0, CONSOLE_LIMITS.funds) },
+  'g.dbgLayers': { bondId: isId, layers: (v) => isInt(v, 0, CONSOLE_LIMITS.layers) },
+  'g.dbgLevel': { level: (v) => isInt(v, 1, CONSOLE_LIMITS.level) },
 
   // client-side combat (DESIGN §14): the authoritative client of a field reports its battle; a 联防 field adds
   // `left` = { [leakerId]: its enemies still standing (unspawned, alive, or through again) } (server/sim/spec.js

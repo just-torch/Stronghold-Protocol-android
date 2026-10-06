@@ -893,6 +893,8 @@ export class Battle {
     u.atkCd = 0;
     u.lastAttackAt = -Infinity;
     u.elem.burn = u.elem.neural = u.elem.necrosis = u.elem.apoptosis = u.elem.erosion = 0;
+    // any deployment spends a banked 「下次部署的再部署时间和费用归零」 (不屈, GitHub #108 — _checkRedeploys honours it)
+    u.freeRedeploy = false;
     u.ground = this.grid.isLow(R0, C0) && !this._elevated?.has(k);
     u.markDirty();
     u.hp = u.s.maxHp;
@@ -1074,16 +1076,18 @@ export class Battle {
     for (const u of this.allyUnits) {
       if (u.alive || u.removed || u.kind !== 'op') continue;
       if (this.time + 1e-9 < u.respawnAt) continue;
-      // the DP first: an operator past its timer mostly waits for DP, and the tile checks scan every ally
+      // 不屈's 「令受益者下次部署的再部署时间和费用归零」 (PRTS, GitHub #108): a banked free redeployment spends no DP — the
+      // timer is already zero, so this is the deployment itself
+      const free = !!u.freeRedeploy;
+      const cost = free ? 0 : u.base.cost;
       const ps = this.getPlayer(u.ownerId);
-      const cost = u.base.cost;
       if (!ps || ps.dp + 1e-9 < cost) continue;
       const [r, c] = this.restTile(u);
       const occ = this._occ[r * COLS + c];
       if (occ && occ.alive && occ !== u) continue;
       if (this.downOn(r, c, u)) continue;
       ps.dp = Math.max(0, ps.dp - cost);
-      this._deploy(u, { initial: false, tile: r === u.homeR && c === u.homeC ? null : [r, c] });
+      if (!this._deploy(u, { initial: false, tile: r === u.homeR && c === u.homeC ? null : [r, c] }) && free) u.freeRedeploy = true;
     }
   }
 

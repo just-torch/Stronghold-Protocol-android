@@ -390,6 +390,15 @@ const HUD_TOLERANCE = 0.5;
 const HUD_GAP = 1;
 
 /**
+ * Viewport height (CSS px) at or below which the prep camera fills the space the HUD leaves (`clearHud` `fill`).
+ * css/theme.css floors the root font size at 40 px, so on a phone in landscape the HUD is relatively taller than in
+ * the 1080p composition the official camera params were fitted to, and the same phone rules that shorten the HUD
+ * (css/devices.css, section 5) apply below this height: the two thresholds are one decision, and
+ * test/render/phone-camera-fill.test.js reads the CSS to keep them equal.
+ */
+export const PHONE_FILL_MAX_H = 460;
+
+/**
  * Keep a band of the board clear of the HUD (see the header). `hud` = { top, bottom }: CSS px the HUD covers along
  * the viewport's top edge (top bar + bond strip) and bottom edge (the shop bar); `keep` = { near, zNear?, far, zFar? }:
  * world rows (y) of the band's near and far edge, at the heights zNear / zFar. Returns `cam` itself when the band
@@ -397,31 +406,58 @@ const HUD_GAP = 1;
  * the HUD (by up to HUD_GAP where there is room) or — only when the band is taller than the space between — zoomed
  * out about the viewport's centre so it fills that space less HUD_GAP at both ends. The screen y of a horizontal
  * world line is the same at every x (the camera has no roll), so one point per edge decides.
+ * `opts.fill` (phones, `PHONE_FILL_MAX_H`) turns that into a two-way fit: the band then also fills the space when
+ * the official framing left it slack, so the board is as large as the HUD allows instead of the size the 1080p
+ * composition gives. `opts.cols` [c0, c1] + `opts.bounds` { left, right } cap the zoom so the band's near edge —
+ * the widest row of the board — stays between those HUD claims: the fill can never make the board wider than the
+ * screen, and it never zooms out (a narrow viewport keeps the official framing).
  * @param {Camera} cam
  * @param {{ top?: number, bottom?: number }|null} hud
  * @param {{ near: number, zNear?: number, far: number, zFar?: number }|null} keep
  * @param {{ width: number, height: number }} viewport CSS px
+ * @param {{ fill?: boolean, cols?: number[], bounds?: { left?: number, right?: number } }} [opts]
  * @returns {Camera}
  */
-export function clearHud(cam, hud, keep, viewport) {
+export function clearHud(cam, hud, keep, viewport, opts) {
   if (!cam || !hud || typeof hud !== 'object' || !keep) return cam;
+  const o = opts && typeof opts === 'object' ? opts : {};
+  const fill = !!o.fill;
   const W = Math.max(1, finite(viewport?.width, 1)), H = Math.max(1, finite(viewport?.height, 1));
   const top = Math.max(0, finite(hud.top, 0)), bottom = H - Math.max(0, finite(hud.bottom, 0));
   if (!(bottom - top > 16)) return cam; // no usable space: keep the official framing
   const yNear = cam.project(cam.tx, keep.near, finite(keep.zNear, 0)).y;
   const yFar = cam.project(cam.tx, keep.far, finite(keep.zFar, 0)).y;
   if (!Number.isFinite(yNear) || !Number.isFinite(yFar) || !(yNear > yFar)) return cam;
-  if (yNear <= bottom + HUD_TOLERANCE && yFar >= top - HUD_TOLERANCE) return cam;
-  const spare = bottom - top - (yNear - yFar);
+  const fits = yNear <= bottom + HUD_TOLERANCE && yFar >= top - HUD_TOLERANCE;
+  if (fits && !fill) return cam;
+  const span = yNear - yFar;
+  const spare = bottom - top - span;
   const gap = spare >= 0 ? Math.min(HUD_GAP, spare / 2) : HUD_GAP;
   const lo = top + gap, hi = bottom - gap;
-  const f = spare >= 0 ? 1 : (hi - lo) / (yNear - yFar);
+  let f = spare >= 0 ? 1 : (hi - lo) / span;
+  if (fill && spare >= 0) {
+    f = (hi - lo) / span; // use the whole space, not the official framing's share of it
+    const cols = Array.isArray(o.cols) ? o.cols : null;
+    if (cols && Number.isFinite(cols[0]) && Number.isFinite(cols[1])) {
+      // the near edge is the board's widest line: cap the zoom so it stays inside the horizontal HUD claims
+      const z = finite(keep.zNear, 0);
+      const left = cam.project(cols[0] - 0.5, keep.near, z).x;
+      const right = cam.project(cols[1] + 0.5, keep.near, z).x;
+      const bL = Math.max(0, finite(o.bounds?.left, 0)), bR = Math.max(0, finite(o.bounds?.right, 0));
+      const c = W / 2;
+      const capL = left < c ? (bL - c) / (left - c) : Infinity;
+      const capR = right > c ? (W - bR - c) / (right - c) : Infinity;
+      const cap = Math.min(capL, capR);
+      if (Number.isFinite(cap)) f = Math.min(f, Math.max(1, cap));
+    }
+  }
+  if (f === 1 && fits) return cam;
   const out = cam.clone();
   // image transform x' = xc + f·(x − xc), y' = lo + f·(y − yFar) (zoom) or y' = y + dy (pan, the smallest shift
   // that puts [yFar, yNear] inside [lo, hi]): scale the focal length by f and move the principal point accordingly
   out.scale = cam.scale * f;
   out.cx = W / 2 + f * (cam.cx - W / 2);
-  out.cy = f < 1 ? lo + f * (cam.cy - yFar) : cam.cy + Math.min(Math.max(0, lo - yFar), hi - yNear);
+  out.cy = f !== 1 ? lo + f * (cam.cy - yFar) : cam.cy + Math.min(Math.max(0, lo - yFar), hi - yNear);
   return out.update();
 }
 
@@ -456,7 +492,17 @@ export function presetCamera(kind, viewport, options) {
     const cfg = opts.config && typeof opts.config === 'object' ? opts.config : null;
     const param = (cfg && parseCameraParam(cfg[key])) || parseCameraParam(OFFICIAL_PARAMS[key]);
     const cam = officialCamera(param, { width: W, height: H }, opts);
-    return preset.keep && opts.hud ? clearHud(cam, opts.hud, preset.keep, { width: W, height: H }) : cam;
+    if (!preset.keep || !opts.hud) return cam;
+    // A phone in landscape (`PHONE_FILL_MAX_H`, the same threshold as the css/devices.css phone rules, which is what
+    // leaves the band slack there) frames the kept band to fill the space the HUD leaves; every other viewport keeps
+    // the official framing untouched. The horizontal claims keep the filled board inside the HUD's side panels.
+    const fill = H <= PHONE_FILL_MAX_H;
+    const pad = (opts.padding && typeof opts.padding === 'object' ? opts.padding : null)
+      || (viewport?.padding && typeof viewport.padding === 'object' ? viewport.padding : null);
+    const board = rect || preset.rect;
+    return clearHud(cam, opts.hud, preset.keep, { width: W, height: H }, fill
+      ? { fill: true, cols: [board.c0, board.c1], bounds: { left: pad?.left, right: pad?.right } }
+      : null);
   }
   if (!rect) {
     rect = { ...preset.rect };

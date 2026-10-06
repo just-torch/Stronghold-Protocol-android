@@ -215,12 +215,20 @@
 .readybtn.is-on .readybtn__box { border-color: var(--text-on-mint); background: var(--text-on-mint); color: var(--mint-400); }
 .readybtn.is-on .readybtn__key { color: var(--mint-900); border-color: var(--mint-700); }
 .readybtn.is-on:hover:not(:disabled) { background: var(--mint-400); color: var(--text-on-mint); box-shadow: 0 0 .3rem rgba(23, 249, 183, .45); }
+/* first press of 准备就绪: armed, waiting for its confirmation (screens/game.js READY_CONFIRM_MS, DESIGN §21.38) — amber,
+   the warning glyph and the 再点一次确认 label, so the two-tap state cannot be mistaken for the plain button */
+.readybtn.is-armed { border-color: var(--amber); color: #ffe6c2; background: rgba(246, 163, 41, .18); box-shadow: 0 0 .26rem rgba(246, 163, 41, .35); }
+.readybtn.is-armed .readybtn__box { border-color: var(--amber); color: var(--amber); }
+.readybtn.is-armed .readybtn__label { letter-spacing: .08em; }
+.readybtn.is-armed:hover:not(:disabled) { background: rgba(246, 163, 41, .28); box-shadow: 0 0 .34rem rgba(246, 163, 41, .5); }
 .readybtn:disabled { border-color: var(--line-2); color: var(--text-dim); box-shadow: none; cursor: not-allowed; }
 .readybtn:disabled .readybtn__box { border-color: var(--line-2); }
 .readybtn.is-busy { opacity: .7; }
 
 /* ---- bond strip ---------------------------------------------------------------------------------------- */
-.gm__bonds { position: absolute; left: 1.56rem; top: 1.36rem; right: 5.2rem; pointer-events: none;
+/* The strip's own box grew with the discs (.865rem, §21.39) and it starts .09rem higher, so the top band the prep
+   camera reserves is the 2.14rem it was — the foldable list (upstream #149) sits inside the same box. */
+.gm__bonds { position: absolute; left: 1.56rem; top: 1.27rem; right: 5.2rem; pointer-events: none;
   display: flex; align-items: flex-start; gap: max(.1rem, 8px); }
 /* Only the bond discs (and the +N chip) take the pointer: the strip's box spans the width under the top bar, where the
    top board row's units stand (row 12 at 16:9 / 21:9 / 720p / phones, the boss field's row 5 in a boss prep) — it used
@@ -255,12 +263,25 @@
 }
 .bstrip.is-other .bond__core { box-shadow: 0 0 0 1px rgba(246, 163, 41, .45); }
 .bstrip__more { align-self: center; font-size: .16rem; color: var(--text-lo); padding: .04rem .08rem; border: 1px solid var(--line-2); background: rgba(8, 11, 10, .7); }
-.bslot { position: relative; display: flex; flex-direction: column; align-items: center; width: .74rem; }
-.bslot .bond { --disc: .52rem; }
-.bslot .bond__name { font-size: .14rem; font-weight: 500; text-shadow: 0 1px 3px #000, 0 0 6px #000; }
+/* One bond = a disc with its name under it and TWO counts: the round's stacks on the disc (research 06 §11.1 "堆叠数在
+   圆盘上") and the member count / next threshold on a badge. The discs were .52rem with the chip hanging over their
+   top-right — a player report after 0.1.1: "盟约图标过小，数字和图标叠在一起影响阅读". The .60rem disc + corner chip of
+   §21.36 still left the number on the disc: at the phones' 1rem = 40 px it covered 8 % of the disc's face, 10 % of the
+   tier ring and 3 % of the glyph itself — a second report ("图标仍被激活人数挡住"). The discs are .68rem now (+13 %,
+   phones +15 %) and the count badge rides ABOVE the tier ring, `bottom: calc(100% + var(--bslot-disc) * .12)`: the ring's
+   outer edge is at .082 of the disc above its top (bond__ring r = 46 of a 120 %-of-disc box), so the badge clears the
+   ring as well as the face and the glyph at every size, width and count. The badge is absolute, so it costs no height of
+   its own; what the bigger disc costs (`--bslot-disc + .02 + .15 × 1.1` = .865rem, the prep camera's top band,
+   ui/fieldHost.js hudBands) is paid back by starting the strip .09rem higher (1.27rem): the measured band — and every
+   desktop prep camera with it (`test/render/projection.test.js`) — is the 2.14rem it was (127 + 87 px at 1rem = 100 px).
+   `--bslot-disc` lives on the slot so the badge can be positioned from it. */
+.bslot { position: relative; display: flex; flex-direction: column; align-items: center; width: .86rem; --bslot-disc: .68rem; }
+.bslot .bond { --disc: var(--bslot-disc); gap: .02rem; }
+.bslot .bond__name { font-size: .15rem; font-weight: 500; line-height: 1.1; text-shadow: 0 1px 3px #000, 0 0 6px #000; }
 .bslot__count {
-  position: absolute; top: -.04rem; right: .02rem; font-size: .13rem; font-weight: 700; color: var(--text-hi);
-  background: rgba(8, 11, 10, .92); border: 1px solid var(--line-2); padding: 0 .04rem; line-height: 1.35;
+  position: absolute; bottom: calc(100% + var(--bslot-disc) * .12); right: calc((100% - var(--bslot-disc)) / 2);
+  font-size: .12rem; font-weight: 700; color: var(--text-hi); background: rgba(8, 11, 10, .92); border: 1px solid var(--line-2);
+  padding: 0 .03rem; line-height: 1.2;
 }
 .bslot__count small { color: var(--text-dim); font-size: .11rem; }
 .bslot__count.is-max { border-color: var(--mint-700); color: var(--mint-400); }
@@ -513,7 +534,7 @@
 .set-seg button:last-child { border-right: 0; }
 .set-seg button.is-on { background: var(--mint-500); color: var(--text-on-mint); font-weight: 700; }
 .set-hint { margin-top: .06rem; font-size: .14rem; color: var(--text-dim); line-height: 1.8; }
-.set-hint kbd, .lvcard__key, .toolbtn kbd { font-family: var(--font-num); font-size: .11rem; border: 1px solid var(--line-2); padding: 0 .04rem; color: var(--text-lo); background: rgba(0, 0, 0, .3); }
+.set-hint kbd, .lvcard__key, .toolbtn kbd, .funds__collapse kbd, .shopbar-tab__btn kbd { font-family: var(--font-num); font-size: .11rem; border: 1px solid var(--line-2); padding: 0 .04rem; color: var(--text-lo); background: rgba(0, 0, 0, .3); }
 
 /* ---- exit / away ------------------------------------------------------------------------------------------------------ */
 .exitm { display: flex; flex-direction: column; gap: .1rem; font-size: .17rem; line-height: 1.7; }

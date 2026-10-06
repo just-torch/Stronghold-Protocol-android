@@ -248,7 +248,9 @@ describe('pickTile / tileQuad', () => {
 });
 
 describe('HUD clearance of the prep views (user playtest #5 item 9)', () => {
-  // the in-match HUD in rem (ui/fieldHost.js HUD_REM): the bond strip ends 2.16rem below the top, the shop bar starts
+  // the in-match HUD in rem (ui/fieldHost.js HUD_REM): the bond strip ends 2.16rem below the top (its measured box is
+  // 2.14rem on the desktop — §21.38 grew the discs and started the strip .09rem higher to pay for them — and 2.09rem on
+  // the short phones, where the constant is the conservative fallback this model uses), the shop bar starts
   // 2.64rem + 3 px above the bottom; the root font size is clamp(40px, min(W / 19.2, H / 10.8), 240px) (css/theme.css)
   const hudAt = (w, h) => {
     const rem = Math.max(40, Math.min(w / 19.2, h / 10.8, 240));

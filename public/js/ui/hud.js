@@ -206,16 +206,23 @@ export function tempReadyReason(priv) {
 /**
  * Ready toggle (PREP only). Disabled while the temp row holds pieces — the reason shows under it (not only on hover):
  * "临时整备区 N 个单位待处理" (user playtest #3 item 3).
- * @param {{ priv:any, onToggle:(ready:boolean)=>void, busy?:boolean, readyCount?:number, total?:number }} props
+ * `armed` (screens/game.js, READY_CONFIRM_MS): the first press only armed the button — it asks for a second one
+ * ("再点一次确认", amber) before g.ready goes out, because the button sits next to the countdown in the top-right corner
+ * and was easy to hit by accident (player report after 0.1.1, DESIGN §21.38). 取消准备 is always immediate.
+ * @param {{ priv:any, onToggle:(ready:boolean)=>void, busy?:boolean, armed?:boolean, readyCount?:number, total?:number }} props
  */
-export function ReadyToggle({ priv, onToggle, busy, readyCount, total }) {
+export function ReadyToggle({ priv, onToggle, busy, readyCount, total, armed = false }) {
   const ready = !!priv?.ready;
   const temp = tempInfo(priv);
   const reason = !ready ? tempReadyReason(priv) || shopBlockReason('ready', { priv, editable: true }) : null;
-  const btn = html`<button type="button" class=${cx('readybtn', 'tapx', ready && 'is-on', busy && 'is-busy')} disabled=${!!reason || busy}
-      aria-pressed=${ready ? 'true' : 'false'} aria-describedby=${!ready && temp.count ? 'readywrap-why' : undefined} onClick=${() => onToggle(!ready)}>
-    <span class="readybtn__box">${ready ? html`<${Icon} name="check" />` : null}</span>
-    <span class="readybtn__label">${ready ? '取消准备' : '准备就绪'}</span>
+  const confirm = armed && !ready;
+  const btn = html`<button type="button" class=${cx('readybtn', 'tapx', ready && 'is-on', confirm && 'is-armed', busy && 'is-busy')}
+      disabled=${!!reason || busy} aria-pressed=${ready ? 'true' : 'false'} data-armed=${confirm ? '1' : null}
+      aria-describedby=${!ready && temp.count ? 'readywrap-why' : undefined}
+      title=${confirm ? '再点一次确认准备就绪（4 秒后自动取消）' : ready ? '取消准备（立即生效）' : '准备就绪（需连点两次确认）'}
+      onClick=${() => onToggle(!ready)}>
+    <span class="readybtn__box">${ready ? html`<${Icon} name="check" />` : confirm ? html`<${Icon} name="warn" />` : null}</span>
+    <span class="readybtn__label">${ready ? '取消准备' : confirm ? '再点一次确认' : '准备就绪'}</span>
     <kbd class="readybtn__key">Space</kbd>
   </button>`;
   return html`<div class="readywrap">
@@ -307,7 +314,7 @@ export function PauseButton({ paused, busy = false, onToggle }) {
  *   live: the own battle's pending LP loss (liveLp): the tower shows lp − pending in red with a −N tick, 联防中 during 联防;
  *     `left` (a leaker in 联防): its enemies still standing — the capsule's ×N tag
  */
-export function TopBar({ pub, priv, conn, hud, total, drawer, onExit, onDrawer, onReady, readyBusy, readyCount, playerCount, pen = false, penAvail = false, onPen = () => {},
+export function TopBar({ pub, priv, conn, hud, total, drawer, onExit, onDrawer, onReady, readyBusy, readyArmed = false, readyCount, playerCount, pen = false, penAvail = false, onPen = () => {},
   config = null, frozenAt = null, pause = null, live = null, spectator = false }) {
   const phase = pub?.phase;
   const boss = isBossPhase(phase);
@@ -365,7 +372,7 @@ export function TopBar({ pub, priv, conn, hud, total, drawer, onExit, onDrawer, 
         ${pause && (pause.show || pause.paused) ? html`<${PauseButton} paused=${!!pause.paused} busy=${pause.busy} onToggle=${pause.onToggle} />` : null}
       </div>
       <${OvertimeWarning} ot=${ot} />
-      ${showReady ? html`<${ReadyToggle} priv=${priv} onToggle=${onReady} busy=${readyBusy} readyCount=${readyCount} total=${playerCount} />` : null}
+      ${showReady ? html`<${ReadyToggle} priv=${priv} onToggle=${onReady} busy=${readyBusy} armed=${readyArmed} readyCount=${readyCount} total=${playerCount} />` : null}
     </div>
   </header>`;
 }

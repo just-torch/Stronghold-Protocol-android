@@ -80,7 +80,7 @@
 import { randomBytes, randomInt } from 'node:crypto';
 import { ERR, MAX_SEATS, MAX_SPECTATORS, ROOM_CODE_LEN, modeIdFor } from '../shared/constants.js';
 import { checkLoadout } from '../shared/protocol.js';
-import { encode, isDroppable, isErrCode, sendRaw, sendSession } from './net.js';
+import { encode, isDroppable, isErrCode, isLoopbackIp, sendRaw, sendSession } from './net.js';
 import { getData as defaultGetData, lookup } from './data.js';
 import { Match as DefaultMatch } from './match/Match.js';
 
@@ -95,7 +95,36 @@ export const LOBBY_DEFAULTS = Object.freeze({
   maxMatchesPerAddr: 8,   // matches started from one client network that may run at once (0 = unlimited)
   resyncMinGapMs: 1000,   // heavy resyncs (match state / result replay) per session at most this often on repeated hellos
   soloReconnectWindowMs: null, // a dropped solo run stays resumable this long (null = data singleReconnectTime, 24 h)
+  console: 'auto',        // debug console (DESIGN §21.34): 'auto' = loopback clients only, 'on' / 'off' force it
 });
+
+/**
+ * The debug console's server-side switch (DESIGN §21.34, env SP_CONSOLE, `console` option): `'on'` grants it to every
+ * seat of every match, `'off'` to nobody, `'auto'` (default, and for anything unrecognised) to the connections that come
+ * from the machine itself — the packaged Android app and a desktop dev browser both are. It is a test tool: a hosted
+ * server keeps 'auto', so nobody playing over the internet or the LAN can hand themselves operators.
+ * @param {unknown} v option / SP_CONSOLE value
+ * @returns {'auto' | 'on' | 'off'}
+ */
+export function parseConsoleMode(v) {
+  if (v === true) return 'on';
+  if (v === false) return 'off';
+  const s = typeof v === 'string' ? v.trim().toLowerCase() : '';
+  if (s === '1' || s === 'on' || s === 'true' || s === 'yes') return 'on';
+  if (s === '0' || s === 'off' || s === 'false' || s === 'no') return 'off';
+  return 'auto';
+}
+
+/**
+ * Whether one connection may use the debug console (`console` option + the client address net.js resolved).
+ * @param {'auto' | 'on' | 'off'} mode
+ * @param {string | null | undefined} addr `Session.addr`
+ */
+export function consoleAllowed(mode, addr) {
+  if (mode === 'on') return true;
+  if (mode === 'off') return false;
+  return isLoopbackIp(typeof addr === 'string' ? addr : '');
+}
 
 /** Official `singleReconnectTime` (s) when the data lacks it (constData, research 01 §1). */
 export const SOLO_RECONNECT_FALLBACK_SEC = 86_400;
@@ -587,6 +616,9 @@ export class Lobby {
       seat: s.seat, playerId: s.playerId, name: s.name, isBot: s.isBot, connected: s.connected,
       // DESIGN §16: the human's checked operator loadout (bots fight with the defaults)
       loadout: s.isBot ? null : s.loadout || null,
+      // DESIGN §21.34: may this seat use the debug console? Decided per connection here (the address of the session's
+      // latest socket), never by the client. A bot never gets one — its intents would be the engine's own anyway.
+      console: !s.isBot && consoleAllowed(this.opts.console, this.registry.byId(s.playerId)?.addr),
     }));
     // lastPublic / results: the latest m.public broadcast and the m.result frames (encoded), kept for the replay.
     const ctx = { live: true, ended: false, disposed: false, match: null, lastPublic: null, sharedResult: null, results: new Map() };

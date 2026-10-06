@@ -42,7 +42,8 @@ const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI'];
 // pasted string are the SAME object, so 导出 and 导入 both funnel through applyLoadoutEntries
 // (sanitise → persist → room.loadout). The dialog is a shared Modal rendered next to the overlay, not inside it.
 
-/** Save `text` as a download. Silent no-op when the browser refuses downloads — 复制 stays available. */
+/** Save `text` as a download. Returns false when the browser refuses the download (GitHub #173 item 3: the failure used
+ * to be swallowed, so 导出 looked like it worked); 复制 stays available as the other way out. */
 function downloadText(filename, text) {
   try {
     const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
@@ -53,7 +54,10 @@ function downloadText(filename, text) {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-  } catch { /* ignore */ }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Read a picked file as text (`File.text()`, with a FileReader fallback for older Safari). */
@@ -418,7 +422,9 @@ function LoadoutScreen({ st }) {
     const ok = await copyText(ioText);
     toast(ok ? '已复制到剪贴板' : '复制失败，请在文本框中手动全选复制', ok ? 'success' : 'warn');
   };
-  const ioDownload = () => downloadText(exportFilename(), ioText);
+  const ioDownload = () => {
+    if (!downloadText(exportFilename(), ioText)) toast('浏览器拒绝了下载，请改用「复制」', 'warn');
+  };
   const ioPick = () => fileRef.current?.click();
   const ioFile = async (e) => {
     const f = e.currentTarget.files && e.currentTarget.files[0];

@@ -37,6 +37,7 @@ import { bodyInKeys, bodyInRadius, bodyKeys } from '../../body.js';
 import { absoluteRangeKeys, sortEnemyTargets } from '../../targeting.js';
 import { frontOf, rotateOffset, toLocal } from '../../dir.js';
 import { mitigate, hasHp, isHpLoss } from '../../damage.js';
+import { unitBonds } from '../support/index.js';
 
 // ---- text-only constants (the official blackboards carry no key for these) --------------------------------------
 /** 华法琳 S1 "只当目标生命值不满一半时才会触发"; 塞雷娅 S1 "血量小于等于一半"; 山 module "生命值高于50%时". */
@@ -97,7 +98,7 @@ const batPct = (sec, chess) => { const b = num(chess?.stats?.bat, 1) || 1; const
 const mods = (m) => { const o = {}; for (const k of Object.keys(m)) { const v = m[k]; if (typeof v === 'number' && Number.isFinite(v) && v !== 0) o[k] = v; } return o; };
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const nationOf = (u) => u?.def?.raw?.nationId ?? null;
-const inFaction = (u, bond, nations) => !!u?.def && ((u.def.bonds || []).includes(bond) || nations.includes(nationOf(u)));
+const inFaction = (u, bond, nations) => !!u?.def && (unitBonds(u).includes(bond) || nations.includes(nationOf(u)));
 const isLaterano = (u) => inFaction(u, 'lateranoShip', ['laterano']);
 const isKazimierz = (u) => inFaction(u, 'kazimierzShip', ['kazimierz']);
 const isKjerag = (u) => inFaction(u, 'kjeragShip', ['kjerag']);
@@ -1985,6 +1986,11 @@ const KITS = {
       skills: lazySkills({
         skchr_thorn2_1: () => ({
           kind: instantKind(chess, def),
+          // 度算浪波 is `skillType: AUTO` in the data ("自动触发"), and this tree's convention is that an AUTO skill carries
+          // no 技能策略: the kit writes `trigger: 'SP_FULL'` itself, so it fires the moment its SP fills instead of the
+          // data's DEFAULT rule (an enemy in the initial range) — GitHub #124: without the line she stood with 7/7 SP and
+          // never cast while the field was empty, even though the maintainer confirms "技力满了就释放，不需要周围有敌人".
+          trigger: 'SP_FULL',
           onStart({ battle, unit }) {
             const t = battle.alliesInGrid(unit).filter((a) => a.hp > 0).sort((a, b) => a.hpRatio - b.hpRatio || b.blocking.length - a.blocking.length || dist(a, unit) - dist(b, unit) || a.id - b.id)[0];
             if (!t) return;

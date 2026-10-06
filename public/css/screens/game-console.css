@@ -1,0 +1,135 @@
+/* ==========================================================================================
+   screens/game-console.css — the debug console panel (DESIGN §21.33, js/ui/console.js).
+
+   A components.js Modal (`width="9.8rem"`, class `dbgbox` on its box) holding one flex column:
+     .dbg__bar      the four tabs + the status line of the state the panel acts on
+     .dbg__filters  the search field, the tier chips and the "odd ones" toggle (干员 / 装备 / 盟约)
+     .dbg__list     the scrolling rows (thumbnail, name, tags, the op buttons)
+     .dbg__cmd      the command line
+     .dbg__log      the last few command outcomes
+   The height is capped against the viewport (the modal box allows 88vh): the list scrolls, the header, the
+   filters, the command line and the log stay put. Everything is rem-based like the rest of the in-match HUD, so a
+   phone at 844×390 and a desktop at 1920×1080 both get a usable panel (styles: theme.css's rem root).
+   ========================================================================================== */
+
+/* the corner button (screens/game.js .gm__corner): the same box as the gear / guide, mint on hover */
+.gm__dbg { color: var(--mint-500); }
+.gm__dbg:hover { color: var(--mint-400); border-color: var(--mint-700); }
+
+/* the panel's own overlay (ui/console.js): the box keeps the modal frame, but the backdrop is a light dim without the
+   shared modal's blur — the console is used WHILE watching the game (the bond strip, the 整备区 behind it) */
+.modal.dbgwrap {
+  background: rgba(3, 5, 4, .34);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.modal__box.dbgbox { --bk-c: var(--mint-700); }
+.dbgbox .modal__body { padding: .12rem .2rem .18rem; overflow: hidden; }
+
+.dbg { display: flex; flex-direction: column; gap: .1rem; height: min(6.1rem, 66vh); min-height: 0; }
+
+/* ---- header: tabs + status ---- */
+.dbg__bar { display: flex; align-items: center; justify-content: space-between; gap: .14rem; flex: none; }
+.dbg__status { font-size: .15rem; color: var(--text-lo); letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---- filters ---- */
+.dbg__filters { display: flex; align-items: center; gap: .1rem; flex: none; }
+.dbg__search {
+  flex: 1 1 auto; min-width: 0; height: .38rem; padding: 0 .12rem; color: var(--text-hi); font-size: .16rem;
+  background: rgba(0, 0, 0, .45); border: 1px solid var(--line-2);
+}
+.dbg__search::placeholder { color: var(--text-dim); }
+.dbg__search:focus { outline: none; border-color: var(--mint-700); }
+.dbg__tiers { display: flex; flex: none; }
+.dbg__tier {
+  width: .3rem; height: .38rem; font-size: .15rem; font-weight: 700; color: var(--text-lo);
+  background: rgba(0, 0, 0, .45); border: 1px solid var(--line-2); border-left: none;
+}
+.dbg__tier:first-child { width: .46rem; border-left: 1px solid var(--line-2); }
+.dbg__tier:hover { color: var(--text-hi); }
+.dbg__tier.is-on { color: #08110d; background: var(--mint-500); border-color: var(--mint-400); }
+.dbg__tier--1.is-on { background: var(--tier-1); }
+.dbg__tier--2.is-on { background: var(--tier-2); }
+.dbg__tier--3.is-on { background: var(--tier-3); }
+.dbg__tier--4.is-on { background: var(--tier-4); }
+.dbg__tier--5.is-on { background: var(--tier-5); }
+.dbg__tier--6.is-on { background: var(--tier-6); }
+.dbg__odd {
+  flex: none; height: .38rem; padding: 0 .12rem; font-size: .14rem; color: var(--text-lo); letter-spacing: .04em;
+  background: rgba(0, 0, 0, .45); border: 1px solid var(--line-2);
+}
+.dbg__odd:hover { color: var(--text-hi); }
+.dbg__odd.is-on { color: var(--gold-2); border-color: rgba(255, 198, 0, .5); }
+
+/* ---- rows ---- */
+.dbg__list {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
+  display: flex; flex-direction: column; gap: .04rem;
+  border: 1px solid var(--line); background: rgba(0, 0, 0, .28);
+  padding: .06rem;
+}
+.dbg__empty { flex: none; margin: .2rem 0; text-align: center; font-size: .16rem; color: var(--text-dim); }
+.dbg__item {
+  display: flex; align-items: center; gap: .12rem; flex: none; padding: .06rem .08rem;
+  border: 1px solid transparent; background: rgba(255, 255, 255, .015);
+}
+.dbg__item:hover { border-color: var(--line-2); background: rgba(78, 216, 175, .05); }
+.dbg__item.is-off { opacity: .62; }
+.dbg__meta { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: .03rem; }
+.dbg__name { font-size: .17rem; font-weight: 700; color: var(--text-hi); display: flex; align-items: baseline; gap: .08rem; }
+.dbg__sub { font-size: .13rem; font-weight: 400; color: var(--text-dim); letter-spacing: .04em; }
+.dbg__tags { display: flex; align-items: center; gap: .06rem; flex-wrap: wrap; }
+.dbg__tag {
+  display: inline-flex; align-items: center; gap: .04rem; font-size: .13rem; line-height: 1.5; color: var(--text-lo);
+  padding: 0 .06rem; background: rgba(255, 255, 255, .04); border: 1px solid var(--line);
+}
+.dbg__tag--bond { color: var(--mint-400); }
+.dbg__tag--on { color: var(--gold-2); border-color: rgba(255, 198, 0, .4); }
+.dbg__tag--rare { color: var(--gold-2); }
+.dbg__tag--desc { max-width: 3.6rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); }
+.dbg__ops { display: flex; align-items: center; gap: .06rem; flex: none; }
+.dbg__ops--bond { gap: .04rem; }
+.dbg__value { font-size: .16rem; color: var(--gold-2); min-width: .5rem; text-align: right; }
+.dbg__num {
+  width: .56rem; height: .32rem; padding: 0 .06rem; text-align: center; font-size: .15rem; color: var(--text-hi);
+  background: rgba(0, 0, 0, .5); border: 1px solid var(--line-2);
+}
+.dbg__num:focus { outline: none; border-color: var(--mint-700); }
+
+/* the row's buttons are the small component size, a touch tighter than elsewhere */
+.dbg__item .btn--sm { padding: .05rem .1rem; font-size: .14rem; }
+
+/* ---- 资源 tab ---- */
+.dbg__res { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: .12rem; padding: .08rem .04rem; }
+.dbg__field { flex: none; display: flex; flex-direction: column; gap: .06rem; }
+.dbg__label { display: flex; align-items: baseline; gap: .08rem; font-size: .16rem; font-weight: 700; color: var(--text-hi); }
+.dbg__row { display: flex; align-items: center; gap: .08rem; flex-wrap: wrap; }
+.dbg__hint { flex: none; font-size: .14rem; line-height: 1.6; color: var(--text-dim); }
+.dbg__hint b { color: var(--mint-400); font-weight: 700; }
+
+/* ---- command line + log ---- */
+.dbg__cmd { display: flex; align-items: center; gap: .08rem; flex: none; }
+.dbg__input {
+  flex: 1 1 auto; min-width: 0; height: .38rem; padding: 0 .12rem; font-size: .16rem; color: var(--text-hi);
+  font-family: var(--font-mono); background: rgba(0, 0, 0, .55); border: 1px solid var(--line-2);
+}
+.dbg__input::placeholder { color: var(--text-dim); }
+.dbg__input:focus { outline: none; border-color: var(--mint-700); }
+.dbg__log {
+  /* the newest line is the one that matters: the panel renders the log reversed (newest first, ui/console.js), so the
+     box grows with its lines up to the cap and anything that does not fit is an OLD line clipped at the bottom
+     (`flex: none` on the lines keeps them from being squeezed into the box instead of overflowing it) */
+  flex: none; display: flex; flex-direction: column;
+  min-height: .44rem; max-height: 1.08rem; overflow: hidden;
+}
+.dbg__logline { flex: none; font-size: .14rem; line-height: 1.5; color: var(--text-lo); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dbg__logline.is-ok { color: var(--mint-400); }
+.dbg__logline.is-bad { color: var(--red); }
+.dbg__logline.is-hint { color: var(--text-dim); }
+
+/* a phone in landscape is short: give the list the room the log would take */
+@media (max-height: 460px) {
+  .dbg { height: min(5.4rem, 78vh); gap: .06rem; }
+  .dbg__log { max-height: .6rem; }
+  .dbg__status { display: none; }
+}

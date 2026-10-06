@@ -1,0 +1,261 @@
+/* android/web/launcher.css — styling for the host/join launcher, matching the game's dark green theme. */
+
+:root {
+  color-scheme: dark;
+  --bg: #0d1210;
+  --panel: #141b18;
+  --panel-2: #1b2420;
+  --line: #2c3a35;
+  --text: #d8e3de;
+  --muted: #8ba39a;
+  --accent: #4ed8af;
+  --accent-dim: #2f8f74;
+  --danger: #ff7b72;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background: radial-gradient(120% 90% at 50% 0%, #16211d 0%, var(--bg) 60%);
+  color: var(--text);
+  font: 15px/1.55 "Noto Sans SC", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  /* the cutout insets matter on the sides too: a phone in landscape has its punch-hole on the left or right edge, and
+     android/.../MainActivity.java hides the system bars, so env(safe-area-inset-left/right) is what keeps the room
+     list clear of it */
+  padding: max(20px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right))
+           max(20px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+}
+
+.shell { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; min-height: calc(100vh - 40px); }
+
+/* ---------------------------------------------------------------- header */
+.hero { text-align: center; padding: 12px 0 4px; }
+.hero h1 {
+  margin: 0;
+  font-size: 30px;
+  letter-spacing: 3px;
+  font-weight: 700;
+  color: var(--accent);
+  text-shadow: 0 0 26px rgba(78, 216, 175, .25);
+}
+.hero h1 .colon { opacity: .55; }
+.tagline { margin: 6px 0 0; color: var(--muted); font-size: 13px; letter-spacing: 1px; }
+
+/* ---------------------------------------------------------------- cards */
+.card {
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.card h2 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: .5px; }
+.hidden { display: none !important; }
+
+/* ---------------------------------------------------------------- actions */
+.action {
+  -webkit-appearance: none;
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #18211d;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color .15s, background .15s, transform .06s;
+}
+.action:active { transform: scale(.99); }
+.action:not(:disabled):hover { border-color: var(--accent-dim); background: #1c2723; }
+.action.primary { border-color: var(--accent-dim); background: linear-gradient(180deg, #1d3a32, #16241f); }
+.action-title { font-size: 17px; font-weight: 600; letter-spacing: .5px; }
+.action.primary .action-title { color: var(--accent); }
+.action-desc { font-size: 12.5px; color: var(--muted); }
+.action:disabled { opacity: .45; cursor: default; }
+
+button.primary, button.ghost, button.link {
+  -webkit-appearance: none;
+  appearance: none;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: border-color .15s, background .15s, opacity .15s, transform .06s;
+}
+button.primary {
+  flex: 1;
+  padding: 13px 18px;
+  border: 1px solid var(--accent-dim);
+  background: linear-gradient(180deg, #23705a, #1a5442);
+  color: #eafff7;
+  font-weight: 600;
+  letter-spacing: .5px;
+}
+button.primary:active { transform: scale(.99); }
+button.primary:disabled { opacity: .4; cursor: default; }
+button.ghost {
+  flex: 1;
+  padding: 13px 18px;
+  border: 1px solid var(--line);
+  background: #1a2320;
+  color: var(--text);
+}
+button.ghost:hover { border-color: var(--accent-dim); }
+button.link {
+  align-self: center;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  padding: 6px 10px;
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+button.link:hover { color: var(--text); }
+.row { display: flex; gap: 10px; align-items: stretch; }
+
+/* ---------------------------------------------------------------- text bits */
+.status { margin: 0; color: var(--text); font-size: 14px; }
+.status.error { color: var(--danger); }
+.label { margin: 0; color: var(--muted); font-size: 13px; }
+.hint { margin: 0; color: var(--muted); font-size: 12.5px; }
+code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  background: #0e1513;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 1px 5px;
+  font-size: 12.5px;
+}
+
+/* ---------------------------------------------------------------- progress */
+.progress {
+  height: 6px;
+  border-radius: 99px;
+  background: #0e1513;
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.progress-bar {
+  height: 100%;
+  width: 0%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  transition: width .4s ease;
+}
+/* Used while the APK assets are unpacked and we have no real percentage to show. */
+.progress-bar.indeterminate {
+  width: 40%;
+  animation: slide 1.4s ease-in-out infinite;
+  transition: none;
+}
+@keyframes slide {
+  0%   { margin-left: -40%; }
+  100% { margin-left: 100%; }
+}
+
+/* ---------------------------------------------------------------- addresses */
+.addresses { display: flex; flex-direction: column; gap: 8px; }
+.addr-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.addr-list li {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 14px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--accent-dim);
+  background: #10201b;
+  color: var(--accent);
+  word-break: break-all;
+  user-select: all;
+}
+
+/* ---------------------------------------------------------------- input */
+input[type="text"] {
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #0e1513;
+  color: var(--text);
+  font: inherit;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 15px;
+}
+input[type="text"]:focus { outline: none; border-color: var(--accent-dim); }
+
+/* ---------------------------------------------------------------- log */
+.log {
+  margin: 0;
+  padding: 10px 12px;
+  max-height: 180px;
+  overflow: auto;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: #0b0f0e;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---------------------------------------------------------------- discovery */
+/* The list of servers found on the same Wi-Fi (see ../scripts/nodejs-template/lan/). It sits under both the
+   chooser and the join card, which is where it is useful. */
+#card-lan { gap: 10px; }
+.discover-state { float: right; color: var(--muted); font-size: 12px; }
+.discover-state.found { color: var(--accent); }
+.discover-state.warn { color: var(--danger); }
+.host-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.host {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 11px;
+  border: 1px solid var(--accent-dim);
+  background: #10201b;
+}
+.host-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.host-name { font-size: 15px; font-weight: 600; color: var(--accent); }
+.host-addr {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  color: var(--muted);
+  user-select: all;
+}
+.host-meta { font-size: 12.5px; color: var(--muted); }
+.host-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.host-actions button { flex: 0 1 auto; padding: 9px 13px; font-size: 13px; }
+.host-empty { font-size: 12.5px; color: var(--muted); }
+.status.warn { color: #ffc46b; }
+
+/* ---------------------------------------------------------------- footer */
+.foot { margin-top: auto; padding-top: 8px; }
+.foot p { margin: 0; color: #5f736c; font-size: 11px; line-height: 1.5; text-align: center; }

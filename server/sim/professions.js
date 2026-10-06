@@ -362,12 +362,20 @@ const installFunnel = (battle, unit) => {
 const installMystic = (battle, unit) => {
   unit.trait.stored = 0;
   const max = unit.profile.storeMax ?? 3;
+  // 秘术师 "找不到攻击目标时，储存攻击能量，最多3个…下次攻击时消耗所有储存的能量" (PRTS): the charge clock IS the unit's own
+  // attack interval, and it runs for as long as nothing can be engaged — an empty field, or a field whose only enemies
+  // it may not hit (深靛's own 束缚, kits/tier1.js trait.canAttack). GitHub #181: gating it on `atkCd <= 0` made the
+  // clock start only after the previous attack's cooldown had run out — the first charge took two intervals — and a
+  // 束缚 that began inside a cooldown produced no charge at all. `profile.canAttack` is the same probe ai.js:80 gates
+  // the attack loop with, so the two cannot drift; `trait.hadTarget` cannot be read here (updateAlly refreshes it only
+  // on a tick that finds `atkCd === 0`, so it is stale for exactly the window this clock is about). Engaging something
+  // resets the clock: the attack spends everything stored, partial progress included.
   battle.on('tick', () => {
     if (!unit.canAct) return;
-    if (unit.atkCd <= 0 && !unit.trait.hadTarget && unit.trait.stored < max) {
-      unit.trait.storeAcc = (unit.trait.storeAcc ?? 0) + battle.dt;
-      if (unit.trait.storeAcc >= unit.s.interval) { unit.trait.storeAcc = 0; unit.trait.stored++; }
-    }
+    if (!(unit.profile.canAttack && !unit.profile.canAttack(battle, unit))) { unit.trait.storeAcc = 0; return; }
+    if (unit.trait.stored >= max) return;
+    unit.trait.storeAcc = (unit.trait.storeAcc ?? 0) + battle.dt;
+    if (unit.trait.storeAcc >= unit.s.interval) { unit.trait.storeAcc = 0; unit.trait.stored++; }
   }, { owner: unit });
 };
 

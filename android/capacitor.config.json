@@ -1,0 +1,20 @@
+{
+  "appId": "io.github.sganggs.strongholdprotocol",
+  "appName": "Stronghold Protocol",
+  "webDir": "web",
+  "loggingBehavior": "debug",
+  "server": {
+    "allowNavigation": ["*"]
+  },
+  "plugins": {
+    "CapacitorNodeJS": {
+      "nodeDir": "nodejs",
+      "startMode": "manual"
+    }
+  },
+  "android": {
+    "allowMixedContent": true,
+    "webContentsDebuggingEnabled": true,
+    "backgroundColor": "#111614"
+  }
+}

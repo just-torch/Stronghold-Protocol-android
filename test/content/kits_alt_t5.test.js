@@ -1028,6 +1028,24 @@ test('引星棘刺 S1 度算浪波: an alchemy unit on the lowest-HP ally: DEF +
   }
 });
 
+test('引星棘刺 S1 度算浪波 is AUTO: it fires the moment its SP fills with nothing on the field (GitHub #124)', () => {
+  for (const id of pair('15')) {
+    const h = run({
+      defs: { chess: { t_low: ally('t_low') }, enemies: {} },
+      units: [entry(id, 'skchr_thorn2_1', { row: 10, col: 3 }), { chessId: 't_low', row: 10, col: 5 }],
+    });
+    const u = h.unit(id);
+    assert.equal(u.skill.id, 'skchr_thorn2_1');
+    assert.equal(u.skill.rule, 'SP_FULL', 'an AUTO skill carries no 技能策略 (the data row says AUTO)');
+    assert.equal(u.skill.manual, false);
+    u.skill.gainSp(1000);
+    assert.equal(u.skill.sp, u.skill.spCost, 'full');
+    assert.ok(h.runUntil(() => u.skill.activations > 0, 3), 'it cast with an empty field — "技力满了就释放，不需要周围有敌人"');
+    assert.ok((u.mem.zones ?? []).length >= 1, 'the 法阵 went down on the lowest-HP ally');
+    done(h);
+  }
+});
+
 test('引星棘刺 S3 “我的海疆”: passive skill range; alchemy units on the 3 lowest-block ops debuff (不叠加) and burn enemies around them, ramping to the max after 15 s', () => {
   for (const id of pair('15')) {
     const h = run({

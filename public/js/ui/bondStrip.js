@@ -54,13 +54,18 @@ export function BondStrip({ bonds, layersDisabled = false, onOpen, openId = null
       const rec = data.lookup('bonds', b.bondId);
       const th = Array.isArray(b.thresholds) && b.thresholds.length ? b.thresholds : rec?.thresholds || [];
       if (b.off) {
-        // a bond the mode never activates, with members: the briefing's grey ✕ disc, no stack count, 本局禁用 under it
+        // A bond the mode never activates, with members: the briefing's grey ✕ disc, no member count, 本局禁用 under it.
+        // The LAYERS it holds are shown (local fix after 0.1.1, DESIGN §21.40): the traits and items whose text says
+        // 「无需激活盟约」 keep feeding a mode-off bond (灵知 +5 to 谢拉格 AND 灵巧, 随身身份牌 +3/+6, 锏 +8 …), the
+        // server sends them (offBondCounts → { count, layers }), and hiding the number made a player read 本局禁用 as
+        // "the layers I earned went missing" (community report: 谢拉格 paired with 灵巧, fewer layers than expected).
         const name = rec?.name || b.bondId;
+        const layers = !rec?.noStack && Number.isFinite(b.layers) && b.layers > 0 ? b.layers : undefined;
         return html`<div key=${b.bondId} role="listitem" data-bond=${b.bondId} data-off="1"
             class=${cx('bslot', 'is-off', openId === b.bondId && 'is-open')}>
-          <${BondDisc} name=${name} icon=${bondIconUrl(m, b.bondId)} tier=${0} maxTier=${Math.max(1, th.length)} active=${false}
+          <${BondDisc} name=${name} icon=${bondIconUrl(m, b.bondId)} layers=${layers} tier=${0} maxTier=${Math.max(1, th.length)} active=${false}
             disabled=${true} size="sm" showName=${true} layersDisabled=${layersDisabled} onClick=${() => onOpen(b.bondId)}
-            title=${`${briefingBondTip(name, 'off')} · ${b.count ?? 0} 名成员`} />
+            title=${`${briefingBondTip(name, 'off')} · ${b.count ?? 0} 名成员${layers ? ` · ${layers} 层` : ''}`} />
           <span class="bslot__count bslot__off">本局禁用</span>
         </div>`;
       }

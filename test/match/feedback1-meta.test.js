@@ -2,7 +2,11 @@
 // g.move / g.equip, the round loop's SETTLE):
 //   #1 拉普兰德 garrison_123 "<刷新时>若为本回合首次主动刷新，使已激活的【叙拉古】层数+4(+8)，此干员在整备区时也有效": the
 //      players' official behaviour — "获得该干员后该回合的首次刷新" also stacks. The refresh count is the 拉普兰德's own
-//      (each copy counts the manual refreshes it witnessed this round), not the player's.
+//      (each copy counts the manual refreshes it witnessed this round), not the player's; after 0.1.1 (players' report,
+//      DESIGN §21.31) only a refresh the effect can pay out counts — one taken while 【叙拉古】 is still inactive (she
+//      waits on the bench) leaves her trigger for the refresh that follows the bond's activation. Every newly GAINED
+//      piece counts from its own first refresh: a bought copy, and the elite a merge sends (§21.34, a player report
+//      after 0.1.1 — a promoted 拉普兰德 was expected to still fire).
 //   #4 昆图斯 突变细胞 "战斗结束后，装备者替换为高一阶的随机干员": the cell is not consumed — the original operator is
 //      destroyed (PRTS 备注 "生效时，原干员销毁，获得一名高一阶的随机初始干员（最高六阶）") and its equipment, the cell
 //      included, returns to the hand, to be equipped again ("之后就是一直打针，扎到核心卡…就换人扎"); then the new operator
@@ -94,7 +98,7 @@ test('#1 players\' scenario: 普罗旺斯 + 德克萨斯 deployed, refresh, buy 
   m.dispose();
 });
 
-test('#1 each copy counts its own refreshes: a bench copy (整备区时也有效) bought later fires on its own first refresh; an elite keeps "already fired"', () => {
+test('#1 each copy counts its own refreshes: a bench copy (整备区时也有效) bought later fires on its own first refresh; a promoted elite is a new 拉普兰德 and fires again', () => {
   const s = setup();
   const { m, ps } = s;
   s.activate();
@@ -107,23 +111,26 @@ test('#1 each copy counts its own refreshes: a bench copy (整备区时也有效
   assert.equal(s.L(), 8, 'copy B: its first refresh (A already fired this round)');
   s.refresh();
   assert.equal(s.L(), 8, 'nothing more this round');
-  // the third copy completes the elite: A and B already fired this round, so the elite does not fire again this round
-  // [ASSUMED: conservative — the elite keeps the highest refresh count of its copies]
+  // The third copy completes the elite. PRTS 卫戍协议/帮助 §干员的获得与精锐化: "发送1名【精锐】状态的该干员至手牌区" —
+  // the elite is GAINED, so "获得该干员后该回合的首次主动刷新" opens again for it (player report after 0.1.1: 参与进阶后的
+  // 拉普兰德 was expected to still fire; 0.1.1 carried the consumed copies' count over and spent it).
   const elite = s.buy(LAP);
   assert.equal(elite.id, LAP_B, 'merged into the elite');
   assert.ok(!ps.find(a.uid) && !ps.find(b.uid), 'copies consumed');
   s.refresh();
-  assert.equal(s.L(), 8, 'the elite made this round from copies that already fired: no second trigger');
+  assert.equal(s.L(), 16, 'the elite, gained this round, fires on its own first refresh (+8 on the elite)');
+  s.refresh();
+  assert.equal(s.L(), 16, 'and only once');
   s.h.toPrep(2);
   ps.funds = 50;
   s.activate();
   s.refresh();
-  assert.equal(s.L(), 8 + 8, 'R2: the elite fires +8 on the round\'s first refresh');
+  assert.equal(s.L(), 16 + 8, 'R2: the elite fires +8 on the round\'s first refresh');
   checkInvariants(m);
   m.dispose();
 });
 
-test('#1 an elite merged from copies that had not fired yet this round fires on the next refresh; a re-bought copy is a new 拉普兰德', () => {
+test('#1 an elite merged from copies that had not fired yet this round fires on the next refresh; a re-bought copy is a new 拉普兰德 too', () => {
   const s = setup();
   const { m, ps } = s;
   s.activate();
@@ -155,6 +162,32 @@ test('#1 only manual refreshes count: a re-triggered "刷新时" trait (ctx.trig
   assert.equal(s.L(), 0, 'not a manual refresh');
   s.refresh();
   assert.equal(s.L(), 4, 'her first manual refresh still counts');
+  checkInvariants(m);
+  m.dispose();
+});
+
+test('#1 only a refresh that can pay out counts: with 叙拉古 still inactive her trigger waits for the deployment, not for the next prep (players\' report after 0.1.1)', () => {
+  const s = setup();
+  const { m, ps } = s;
+  give(m, ps, PROVENCE, 'board', legalTileFor(m, ps, PROVENCE));
+  give(m, ps, TEXAS, 'board', legalTileFor(m, ps, TEXAS));
+  const lap = s.buy(LAP); // into the 整备区 — a hand piece counts for no bond (叙拉古 countMode BOARD)
+  assert.equal(ps.bonds.siracusaShip.count, 2);
+  assert.ok(!ps.bonds.siracusaShip.active, '2 叙拉古: not active yet');
+  s.refresh();
+  assert.equal(s.L(), 0, 'nothing active to raise: this refresh is not her first refresh of the round');
+  s.place(lap); // she is the 3rd 叙拉古: the bond activates
+  assert.ok(ps.bonds.siracusaShip.active);
+  s.refresh();
+  assert.equal(s.L(), 4, 'her first refresh that can pay out — still this prep, not the next');
+  s.refresh();
+  assert.equal(s.L(), 4, 'and only once');
+  s.h.toPrep(2);
+  ps.funds = 50;
+  s.refresh();
+  assert.equal(s.L(), 8, 'R2: her first refresh of the new round');
+  s.refresh();
+  assert.equal(s.L(), 8, 'R2: once');
   checkInvariants(m);
   m.dispose();
 });

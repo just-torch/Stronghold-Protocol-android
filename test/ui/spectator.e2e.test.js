@@ -117,7 +117,8 @@ describe('spectator seats (community report #26, real server)', { skip: !ENABLED
       await spec.shot('prep');
 
       // battle: the first field, a display replica (watch), never the authority
-      await host.click('.readybtn', null, { timeout: 10000 });
+      // 准备就绪 asks twice in this fork (DESIGN §21.38): the helper arms and confirms (and answers the 剩余资金 question)
+      await host.ready({ timeout: 20000 });
       await spec.waitFor((s) => s.phase === 'COMBAT', 'combat', 60000);
       await spec.page.waitForFunction(() => !!globalThis.__SP__.store.get().match.battle?.watch, { timeout: 20000 });
       const sp2 = await specState(spec);

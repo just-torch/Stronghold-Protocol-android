@@ -313,7 +313,7 @@ describe('DESIGN §20.15 — the bond strip shows the watched teammate\'s bonds 
       guest.w = 756;
       guest.h = 366;
       for (const c of [host, guest]) {
-        if (!(await c.st()).ready) await c.click('.readybtn');
+        if (!(await c.st()).ready) await c.ready();
       }
       for (const c of [host, guest]) await c.waitFor((s) => s.phase === 'FINAL_ASSAULT', 'Final Assault', 60000);
       for (const c of [host, guest]) await c.page.waitForSelector('.chud__layers', { timeout: 20000 });
@@ -417,7 +417,7 @@ describe('DESIGN §20.15 — the bond strip shows the watched teammate\'s bonds 
       for (let round = 3; round <= 5 && !found; round++) {
         for (const c of [host, guest]) await c.waitFor((s) => s.phase === 'PREP' && s.round === round, `round-${round} prep`, 120000);
         await sleep(1500);
-        for (const c of [host, guest]) if (!(await c.st()).ready) await c.click('.readybtn');
+        for (const c of [host, guest]) if (!(await c.st()).ready) await c.ready();
         after = await guest.waitFor((s) => s.phase === 'UNITE' || s.phase === 'SETTLE' || (s.phase === 'PREP' && s.round > round), '联防', 300000);
         const mv0 = after.phase === 'UNITE' ? await matchView(guest) : null;
         const u0 = mv0 ? mv0.fields.find((f) => f.fieldId === 'u') : null;
@@ -483,7 +483,7 @@ describe('DESIGN §20.15 — the bond strip shows the watched teammate\'s bonds 
       for (let round = 3; round <= 5 && !checked; round++) {
         for (const c of [host, guest]) await c.waitFor((s) => s.phase === 'PREP' && s.round === round, `round-${round} prep`, 180000);
         await sleep(1500);
-        for (const c of [host, guest]) if (!(await c.st()).ready) await c.click('.readybtn');
+        for (const c of [host, guest]) if (!(await c.st()).ready) await c.ready();
         await host.waitFor((s) => s.phase === 'COMBAT', 'combat', 60000);
         // the own battle over while a teammate's still runs
         const target = await host.page.waitForFunction(() => {
@@ -569,7 +569,7 @@ describe('DESIGN §20.15 — the bond strip shows the watched teammate\'s bonds 
       await host.waitFor((s) => s.phase === 'PREP' && !s.ready, 'boss-round prep', 60000);
       assert.equal((await guest.st()).alive, false, 'the guest is eliminated');
       await sleep(1500);
-      await host.click('.readybtn');
+      await host.ready();
       for (const c of [host, guest]) await c.waitFor((s) => s.phase === 'FINAL_ASSAULT', 'Final Assault', 90000);
       await guest.page.waitForSelector('.chud__layers', { timeout: 20000 });
       await sleep(1000);

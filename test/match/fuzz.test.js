@@ -10,6 +10,9 @@ import { DATA, makeMatch, checkInvariants } from './harness.js';
 
 const GAME = Object.keys(C2S).filter((t) => t.startsWith('g.') && t !== 'g.leave');
 const BANDS = Object.keys(DATA.bands);
+const CHESS_IDS = Object.keys(DATA.chess);
+const ITEM_IDS = Object.keys(DATA.items);
+const BOND_IDS = Object.keys(DATA.bonds);
 
 function randomIntent(rng, m, ps) {
   const t = rng.pick(GAME);
@@ -36,6 +39,13 @@ function randomIntent(rng, m, ps) {
     case 'g.watch': return { t, fieldId: rng.pick(['n:p_0', 'n:p_1', 'n:ai_0', 'u', 'b1', 'b2', 'zz', '']) };
     case 'g.autoplay': return { t, on: rng() < 0.05 };
     case 'g.pause': return { t, on: rng() < 0.5 };
+    // debug console (§21.33, the harness' seats have no grant → every one of these answers NO_CONSOLE): valid shapes
+    // only (the fuzz asserts validateC2S), odd ids included so the handlers' own lookups are exercised
+    case 'g.dbgChess': return { t, chessId: rng() < 0.7 ? rng.pick(CHESS_IDS) : rng.pick(['chess_x', 'constructor', '__proto__']) };
+    case 'g.dbgItem': return { t, itemId: rng() < 0.7 ? rng.pick(ITEM_IDS) : 'chess_item_x' };
+    case 'g.dbgFunds': return { t, funds: rng() < 0.9 ? rng.int(300) : 9999 };
+    case 'g.dbgLayers': return { t, bondId: rng() < 0.7 ? rng.pick(BOND_IDS) : 'nopeShip', layers: rng() < 0.9 ? rng.int(1000) : 999 };
+    case 'g.dbgLevel': return { t, level: 1 + rng.int(9) };
     default: return { t };
   }
 }

@@ -303,7 +303,8 @@ export function ShopBar({ priv, editable, collapsed, onCollapse, onBuy, onLevel,
   if (collapsed) {
     return html`<div class="shopbar-tab" ref=${barRef}>
       <div class="shopbar-tab__funds"><${CoinGlyph} /><b class="num">${funds}</b></div>
-      <button type="button" class="shopbar-tab__btn" onClick=${() => onCollapse(false)}><${Icon} name="chevronLeft" />展开商店</button>
+      <button type="button" class="shopbar-tab__btn" onClick=${() => onCollapse(false)} title="展开商店 · C"
+        aria-keyshortcuts="C"><${Icon} name="chevronLeft" />展开商店<kbd>C</kbd></button>
     </div>`;
   }
 
@@ -350,7 +351,8 @@ export function ShopBar({ priv, editable, collapsed, onCollapse, onBuy, onLevel,
           <b class="funds__num num">${funds}</b>
         </div>
         <span class="funds__label">目前资金</span>
-        <button type="button" class="funds__collapse" onClick=${() => onCollapse(true)}><${Icon} name="close" />收起</button>
+        <button type="button" class="funds__collapse" onClick=${() => onCollapse(true)} title="收起商店，露出整备区与场地 · C"
+          aria-keyshortcuts="C"><${Icon} name="close" />收起<kbd>C</kbd></button>
       </div>
     </div>
   </section>`;

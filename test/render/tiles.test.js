@@ -7,8 +7,9 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseStage, mixColor } from '../../public/js/render/tiles.js';
-import { GLYPH, TILE_H, dmgStyleKey, STATUS_ICON, PROJ } from '../../public/js/render/style.js';
+import { GLYPH, TILE_H, dmgStyleKey, statusIconKey, STATUS_ICON, PROJ } from '../../public/js/render/style.js';
 import { STATUS_KEYS } from '../../public/js/render/textures.js';
+import { STATUS } from '../../server/sim/buffs.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const stages = JSON.parse(readFileSync(path.join(ROOT, 'data/stages.json'), 'utf8'));
@@ -86,6 +87,24 @@ describe('style helpers', () => {
     assert.equal(dmgStyleKey('???'), 'phys');
     for (const k of Object.values(STATUS_ICON)) assert.ok(STATUS_KEYS.includes(k), `status icon ${k} drawn in the atlas`);
     for (const p of Object.values(PROJ)) assert.ok(p.speed > 0 && p.width > 0);
+  });
+
+  // GitHub #171: the sim applied 麻痹 (palsy — the neural burst's 3 stacks, one normal attack each) and sent the status
+  // event, but no `palsy` mapping existed, so `statusIconKey` answered null and render/units.js dropped the icon: the
+  // player saw nothing. The same silence covered 诱导 and 暴露.
+  test('every status the sim can apply has an icon, and 麻痹 is one of them (GitHub #171)', () => {
+    assert.equal(statusIconKey('palsy'), 'palsy');
+    assert.ok(STATUS_KEYS.includes('palsy'), 'the atlas draws st_palsy');
+    // `unblockable` is a unit property (the official client shows it in the enemy's info panel), not a status badge
+    const NO_BADGE = new Set(['unblockable']);
+    for (const key of Object.keys(STATUS)) {
+      if (NO_BADGE.has(key)) { assert.equal(statusIconKey(key), null, `${key} stays without a badge`); continue; }
+      const icon = statusIconKey(key);
+      assert.ok(icon && STATUS_KEYS.includes(icon), `${key} → ${icon}`);
+    }
+    // namespaced content keys reach the same icons through the keyword fallbacks
+    assert.equal(statusIconKey('ab:palsy'), 'palsy');
+    assert.equal(statusIconKey('skill:attract_point'), 'attract');
   });
 
   test('mixColor', () => {

@@ -17,6 +17,12 @@
 //     the bench pads' near corners (accepted, ui/fieldHost.js hudBands)
 //  8  the corner's ⚙ is the regular gear glyph (ui/gameComponents.js gearPath), square, as large as 📖 / ⛶ (half the
 //     grown button on phones)
+//  §21.32 (after 0.1.1, the same strip) the bar's row is one box in every state: the 晋升奖励 offer that replaces the cards
+//     mid-prep used to make the row taller than the band the camera had reserved, pushing the bench under the bar — and
+//     the board changed size with it ("有人反映有时商店会阻挡场地有时不会"). Measured here at desktop windows (where the
+//     offer used to bite: 1400×636, 1920×872, 1920×1080): the row's top and height, the bench's tile size and the free
+//     fraction of every bench pad are the same before and after the offer arrives. And C folds the bar: the tab takes
+//     its place, the board grows to the official shop-collapsed camera and no bench pad is left under the HUD.
 // Screenshots: test/e2e/out/p5-*.png.
 
 import { test, describe, before, after } from 'node:test';
@@ -188,15 +194,149 @@ describe('user playtest #5 — UI items 8 / 9 (mock harness, headless Chrome)', 
         const s = svg.getBoundingClientRect(), br = b.getBoundingClientRect();
         return { cls: b.className, w: s.width, h: s.height, bw: br.width, d: svg.querySelector('path')?.getAttribute('d') };
       }));
-      assert.equal(r.length, 3, `${name}: ⚙ 📖 ⛶`);
+      // ⚙ 📖 ⛶ and — the harness grants the debug console (§21.33) — the terminal button at the group's right end
+      assert.equal(r.length, 4, `${name}: ⚙ 📖 ⛶ + the console's terminal`);
       assert.equal(r[0].d, GLYPHS.gear, `${name}: the gear glyph`);
+      assert.ok(r[3].cls.includes('gm__dbg') && r[3].d !== GLYPHS.gear, `${name}: the terminal glyph is last`);
       for (const b of r) {
         assert.ok(Math.abs(b.w - b.h) < 0.01, `${name}: ${b.cls} square (${b.w}×${b.h})`);
         assert.ok(b.w >= 0.45 * b.bw && b.w <= 0.55 * b.bw, `${name}: ${b.cls} icon ${b.w} in a ${b.bw} button`);
       }
-      await page.screenshot({ path: path.join(OUT, `p5-corner-${name}.png`), clip: { x: 0, y: h - 90, width: 420, height: 90 } });
+      await page.screenshot({ path: path.join(OUT, `p5-corner-${name}.png`), clip: { x: 0, y: h - 90, width: 480, height: 90 } });
       assert.deepEqual(problems, [], name);
       await page.close();
     }
+  });
+
+  test('§21.32: the 晋升奖励 offer arriving mid-prep neither moves the bar nor covers the bench', { timeout: 5 * 60 * 1000 }, async () => {
+    // The reproduction: `phase=PREP` fits the camera to the operator cards, then the offer replaces them (the player
+    // levels up mid-prep; the mock's mutate does what the Switcher's "merge reward" button does). Before the fix the
+    // row grew by 9–14 px and pushed the bench pads under it at exactly these window heights — the official framing is
+    // fitted to 1080p, and 1400×636 / 1920×872 / 1920×1080 had no slack (1440×900 did).
+    const report = [];
+    for (const [name, w, h] of [['1400x636', 1400, 636], ['1920x872', 1920, 872], ['1920x1080', 1920, 1080]]) {
+      const { page, problems } = await open('phase=PREP', { w, h, touch: false });
+      const bar = () => page.evaluate(() => {
+        const r = document.querySelector('.shopbar__row').getBoundingClientRect();
+        return { top: +r.top.toFixed(2), height: +r.height.toFixed(2) };
+      });
+      const before = await bar();
+      const benchBefore = await freeFractions(page, BENCH);
+      await page.evaluate(() => globalThis.__MOCK__.mutate((S) => {
+        S.priv.shop.rewardOffer = {
+          tier: 5,
+          slots: ['chess_char_6_17_a', 'chess_char_4_09_a', 'chess_char_5_04_a'].map((id) => ({ kind: 'chess', id, price: 0, sold: false })),
+        };
+      }));
+      await sleep(900);
+      assert.ok(await page.$('.rwtag'), `${name}: the offer banner is up`);
+      const after = await bar();
+      const benchAfter = await freeFractions(page, BENCH);
+      assert.deepEqual(after, before, `${name}: the bar's row is the same box before and after the offer`);
+      assert.deepEqual(benchAfter.map((t) => t.s), benchBefore.map((t) => t.s), `${name}: the board is framed the same (no size change)`);
+      for (const t of [...benchBefore, ...benchAfter]) assert.ok(t.free >= 0.99, `${name}: bench ${t.c} ${Math.round(t.free * 100)} % free`);
+      report.push(`${name}: row ${before.height} px, bench ${Math.round(benchBefore[5].s)} px/tile, free ${Math.round(Math.min(...benchAfter.map((t) => t.free)) * 100)} %`);
+      await page.screenshot({ path: path.join(OUT, `p5-reward-${name}.png`) });
+      assert.deepEqual(problems, [], name);
+      await page.close();
+    }
+    console.log(report.join('\n'));
+  });
+
+  test('§21.32: C folds the shop bar — the tab takes its place, the board grows and the bench stays clear', { timeout: 5 * 60 * 1000 }, async () => {
+    for (const [name, w, h, touch] of [['1400x636', 1400, 636, false], ['756x366', 756, 366, true]]) {
+      const { page, problems } = await open('phase=PREP', { w, h, touch });
+      const unfolded = await freeFractions(page, BENCH);
+      await page.keyboard.press('c');
+      await sleep(1200);
+      assert.ok(await page.$('.shopbar-tab'), `${name}: the folded tab`);
+      assert.equal(await page.$('.shopbar'), null, `${name}: the full bar is gone`);
+      const folded = await freeFractions(page, BENCH);
+      for (const t of folded) assert.ok(t.free >= 0.99, `${name}: bench ${t.c} ${Math.round(t.free * 100)} % free while folded`);
+      // the official shop-collapsed camera (public issue #5) is a bigger board — the bench pads included
+      assert.ok(folded[5].s > unfolded[5].s * 1.05, `${name}: ${unfolded[5].s} → ${folded[5].s} px per bench tile`);
+      await page.screenshot({ path: path.join(OUT, `p5-fold-${name}.png`) });
+      await page.keyboard.press('c');
+      await sleep(1200);
+      assert.ok(await page.$('.shopbar'), `${name}: C unfolds it again`);
+      assert.equal(await page.$('.shopbar-tab'), null, `${name}: the tab is gone`);
+      assert.deepEqual(problems, [], name);
+      await page.close();
+    }
+  });
+
+  test('§21.38: the count badge leaves the disc, the glyph and the tier ring alone', { timeout: 5 * 60 * 1000 }, async () => {
+    // The report after §21.35: "继续调大盟约图标，现在图标仍被激活人数挡住". The corner chip of a disc that fills its slot
+    // cannot but cover it (measured before the fix: 8.0 % of the face, 10.2 % of the ring and 2.65 % of the glyph at
+    // 1rem = 40 px). The badge rides above the tier ring now, so every part of the disc is free at every size — sampled
+    // here over the face's circle, the glyph's circle and the ring's annulus, with the badge's own box as the mask.
+    const report = [];
+    for (const [name, w, h, touch] of [view('1920x1080'), ['1440x900', 1440, 900, false], view('844x390'), view('915x412'), view('756x366')]) {
+      const { page, problems } = await open('phase=PREP', { w, h, touch });
+      const r = await page.evaluate(() => {
+        const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+        const R = (el) => el.getBoundingClientRect();
+        // the top bar's boxes that actually paint something (the same predicate the free-fraction sweep uses): the
+        // transparent containers (.gtop__left spans a whole grid column) are not what "covering the top bar" means
+        const clear = (c) => !c || c === 'transparent' || /rgba\([^)]*,\s*0\)$/.test(c);
+        const paints = (el) => {
+          const cs = getComputedStyle(el);
+          if (cs.visibility === 'hidden' || Number(cs.opacity) === 0) return false;
+          if (['IMG', 'svg', 'path', 'B', 'SPAN', 'KBD', 'I', 'P', 'LABEL'].includes(el.tagName)) return true;
+          if (!clear(cs.backgroundColor) || cs.backgroundImage !== 'none') return true;
+          if (['Top', 'Right', 'Bottom', 'Left'].some((s) => parseFloat(cs[`border${s}Width`]) > 0 && !clear(cs[`border${s}Color`]))) return true;
+          return [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
+        };
+        const bars = [...document.querySelectorAll('.gtop, .gtop *')].filter(paints).map(R).filter((b) => b.width > 1 && b.height > 1);
+        const slots = [...document.querySelectorAll('.gm__bonds .bslot')].map((s) => {
+          const core = R(s.querySelector('.bond__core'));
+          const disc = R(s.querySelector('.bond__disc'));
+          const gl = s.querySelector('.bond__icon, .bond__glyph');
+          const chip = R(s.querySelector('.bslot__count'));
+          const cx = core.left + core.width / 2; const cy = core.top + core.height / 2;
+          const faceR = core.width / 2;
+          const glyphR = gl ? Math.min(R(gl).width, R(gl).height) / 2 : 0;
+          // .bond__ring: r = 46 of a 100-unit viewBox in a box of 120 % of --disc → its outer edge is at .582 of the disc
+          const ringR = disc.width * 0.582;
+          const cover = (rIn, rOut) => {
+            let n = 0; let k = 0; const N = 80;
+            for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+              const x = cx - rOut + (2 * rOut * (i + 0.5)) / N; const y = cy - rOut + (2 * rOut * (j + 0.5)) / N;
+              const d = Math.hypot(x - cx, y - cy);
+              if (d > rOut || d < rIn) continue;
+              n++;
+              if (x >= chip.left && x <= chip.right && y >= chip.top && y <= chip.bottom) k++;
+            }
+            return n ? k / n : 0;
+          };
+          let over = 0;
+          for (const b of bars) {
+            const ox = Math.min(chip.right, b.right) - Math.max(chip.left, b.left);
+            const oy = Math.min(chip.bottom, b.bottom) - Math.max(chip.top, b.top);
+            if (ox > 0 && oy > 0) over = Math.max(over, ox * oy);
+          }
+          return { bond: s.getAttribute('data-bond'), count: s.querySelector('.bslot__count').textContent.trim(),
+            disc: disc.width, face: cover(0, faceR), glyph: glyphR ? cover(0, glyphR) : 0, ring: cover(faceR, ringR),
+            bars: over, lift: core.top - chip.bottom };
+        });
+        return { rem, slots };
+      });
+      const want = touch && h <= 460 ? 0.62 : 0.68;
+      assert.ok(r.slots.length > 0, `${name}: bond discs`);
+      for (const s of r.slots) {
+        assert.equal(s.face, 0, `${name}: ${s.bond} ${s.count} — the badge covers ${(s.face * 100).toFixed(1)} % of the disc's face`);
+        assert.equal(s.glyph, 0, `${name}: ${s.bond} — the badge covers ${(s.glyph * 100).toFixed(2)} % of the glyph`);
+        assert.equal(s.ring, 0, `${name}: ${s.bond} — the badge covers ${(s.ring * 100).toFixed(1)} % of the tier ring`);
+        assert.equal(s.bars, 0, `${name}: ${s.bond} — the badge overlaps the top bar by ${s.bars.toFixed(1)} px²`);
+        assert.ok(Math.abs(s.disc - want * r.rem) < 0.5, `${name}: ${s.bond} disc ${s.disc} px (--bslot-disc ${want}rem of ${r.rem})`);
+        // the lift is the CSS's .12 of the disc; the ring's own overhang is .082, so this must hold with room to spare
+        assert.ok(s.lift > 0.1 * s.disc, `${name}: ${s.bond} — the badge sits ${s.lift.toFixed(2)} px above the disc (${s.disc} px)`);
+      }
+      report.push(`${name}: ${r.slots.length} discs of ${(r.slots[0].disc).toFixed(1)} px, face/glyph/ring covered 0 %, lift ${r.slots[0].lift.toFixed(1)} px`);
+      await page.screenshot({ path: path.join(OUT, `p5-bonds-${name}.png`), clip: { x: 0, y: 0, width: Math.min(w, 700), height: Math.min(h, 200) } });
+      assert.deepEqual(problems, [], name);
+      await page.close();
+    }
+    console.log(report.join('\n'));
   });
 });

@@ -8,6 +8,10 @@
 //      render/app.js → render/projection.js clearHud; the camera math itself: test/render/projection.test.js). The
 //      bands mirror the CSS; here: the CSS rules they depend on, the wiring, and every bench / temp / back-row tile at
 //      the phone viewports through the real hudBands. Browser measurement: test/ui/playtest5-ui.e2e.test.js.
+//      §21.32 (players' report after 0.1.1, the same bench/shop strip): the row's box is ONE height in every state the
+//      bar can show, because the 晋升奖励 banner used to be taller than the cards — the board was framed against the
+//      shorter row and the banner then covered the bench ("有人反映有时商店会阻挡场地有时不会"). Its CSS invariants are
+//      pinned here too; the browser measurement of that case is the e2e file's §21.32 test.
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -117,19 +121,57 @@ describe('9: the prep camera keeps the bench clear of the shop bar on phones in 
   test('HUD_REM mirrors the CSS it measures (bond strip bottom, shop bar top, the notched-phone rule)', () => {
     const game = read('public/css/screens/game.css');
     const shop = read('public/css/screens/game-shop.css');
-    // bond strip: top 1.36rem + a .52rem disc and its name line → measured 2.14–2.15rem in Chrome; 2.16rem kept
-    assert.match(game, /\.gm__bonds \{ position: absolute; left: 1\.56rem; top: 1\.36rem;/);
-    assert.match(game, /\.bslot \.bond \{ --disc: \.52rem; \}/);
+    // bond strip: the discs grew to .60rem with the count chip pushed out of them (§21.35, player report after 0.1.1) and
+    // to .68rem with the chip lifted ABOVE the tier ring (§21.38, "图标仍被激活人数挡住"). The strip's own box grew with
+    // them — `--bslot-disc + .02 + .15 × 1.1` = .865rem, not the `.52 + .05 + 1.5 × .14` box the original .52rem disc made
+    // — so §21.38 starts the strip .09rem higher (top 1.27rem) and the measured band is the 2.14rem it was; the constant
+    // stays the conservative 2.16rem fallback for a page without the strip. test/ui/playtest5-ui.e2e.test.js measures it.
+    assert.match(game, /\.gm__bonds \{ position: absolute; left: 1\.56rem; top: 1\.27rem;/);
+    assert.match(game, /\.bslot \{ position: relative; display: flex; flex-direction: column; align-items: center; width: \.86rem; --bslot-disc: \.68rem; \}/);
+    assert.match(game, /\.bslot \.bond \{ --disc: var\(--bslot-disc\); gap: \.02rem; \}/);
+    assert.match(game, /\.bslot \.bond__name \{ font-size: \.15rem; font-weight: 500; line-height: 1\.1;/);
+    // the badge rides above the tier ring (whose outer edge is at .082 of the disc): the lift clears it, and its right
+    // edge sits on the disc's right edge (the slot's margin), so it belongs to the disc under it at any slot width
+    assert.match(game, /\.bslot__count \{\n {2}position: absolute; bottom: calc\(100% \+ var\(--bslot-disc\) \* \.12\); right: calc\(\(100% - var\(--bslot-disc\)\) \/ 2\);/);
+    assert.ok(!/\.bslot__count \{\n {2}position: absolute; top:/.test(game), 'the badge no longer hangs over the disc');
     assert.equal(HUD_REM.bondStripBottom, 2.16);
-    // shop bar: bottom .2rem + row padding .1rem × 2 + 2.24rem cards (level / operator / item) + 2 px + 1 px borders
-    assert.match(shop, /\.shopbar \{\n {2}position: absolute; right: \.26rem; bottom: \.2rem;/);
-    assert.match(shop, /\.shopbar__row \{\n {2}position: relative; display: flex; align-items: stretch; gap: \.08rem; padding: \.1rem;\n[^}]*border: 1px solid var\(--line-2\); border-top: 2px solid var\(--mint-700\);/);
-    assert.match(shop, /\.lvcard \{\n {2}position: relative; width: 1\.24rem; height: 2\.24rem;/);
-    assert.match(shop, /\.scard \{\n {2}--tc: var\(--tier-1\);\n {2}position: relative; width: 1\.56rem; height: 2\.24rem;/);
-    assert.equal(HUD_REM.shopBarTop, 0.2 + 0.1 * 2 + 2.24);
+    // shop bar: bottom .2rem + row padding .1rem × 2 + the row's own content height (`--shopbar-row`: the cards and
+    // the 晋升奖励 banner are one box, §21.32) + 2 px + 1 px borders
+    const row = Number(/--shopbar-row: ([\d.]+)rem;/.exec(shop)?.[1]);
+    assert.ok(row > 0, `--shopbar-row: ${row}`);
+    assert.match(shop, /\.shopbar \{\n(?:[^}]*\n)* {2}position: absolute; right: \.26rem; bottom: \.2rem;/);
+    assert.match(shop, /\.shopbar__row \{\n {2}position: relative; display: flex; align-items: stretch; gap: \.08rem; padding: \.1rem;\n {2}min-height: calc\(var\(--shopbar-row\) \+ \.2rem \+ 3px\); [^}]*\n[^}]*border: 1px solid var\(--line-2\); border-top: 2px solid var\(--mint-700\);/);
+    assert.equal(HUD_REM.shopBarTop, 0.2 + 0.1 * 2 + row);
     assert.equal(HUD_REM.shopBarBorderPx, 3);
     // the bar stays on the viewport's bottom edge on a notched phone (DESIGN §18.1): no bottom inset to add
     assert.match(read('public/css/devices.css'), /\.gm__hud > \.shopbar \{ bottom: calc\(\.2rem - var\(--sa-b\)\); \}/);
+  });
+
+  test('the bar\'s row is ONE box in every state, so the prep board is framed once (§21.32)', () => {
+    // The report: "有人反映有时商店会阻挡场地有时不会". The 晋升奖励 banner that replaces the bar's cards needs ~2.42rem
+    // against the cards' 2.24rem, so the row grew when an offer appeared — after the camera had already been fitted to
+    // the shorter one (→ the bench under the bar), and it grew back later (→ a re-framed board). Every part is the
+    // row's height now and the banner is clamped to it: hudBands measures the same box in every prep frame.
+    const shop = read('public/css/screens/game-shop.css');
+    const row = Number(/--shopbar-row: ([\d.]+)rem;/.exec(shop)?.[1]);
+    assert.match(shop, /\.lvcard \{\n(?:[^}]*\n)* {2}position: relative; width: 1\.24rem; height: var\(--shopbar-row\);/);
+    assert.match(shop, /\.scard \{\n {2}--tc: var\(--tier-1\);\n(?:[^}]*\n)* {2}position: relative; width: 1\.56rem; height: var\(--shopbar-row\);/);
+    // the banner: capped at the row, its text the part that gives way, 稍后 pinned to the bottom
+    assert.match(shop, /\.rwtag \{\n(?:[^}]*\n)* {2}min-height: 0; max-height: var\(--shopbar-row\); overflow: hidden;/);
+    assert.match(shop, /\.rwtag__title, \.rwtag__sub, \.rwtag__more \{ flex: 0 1 auto; min-height: 0; overflow: hidden; \}/);
+    assert.match(shop, /\.rwtag__later \{[^}]*flex: none; margin-top: auto;/);
+    // the camera reserves content + padding + borders; the row's own box is exactly that, so the band cannot lie
+    assert.equal(HUD_REM.shopBarTop, 0.2 + 0.1 * 2 + row, 'the reserved band is the row the bar really draws');
+    // the banner's content fits: icon .3 + 4-char vertical title .22(1 + .1em) + micro + one sub line + 稍后 ≈ 2.15rem
+    // (measured in Chrome through the mock harness: test/ui/playtest5-ui.e2e.test.js)
+    const tag = shop.slice(shop.indexOf('.rwtag {'), shop.indexOf('.rwtag__later:hover'));
+    const num = (sel, re) => Number(re.exec(shop.slice(shop.indexOf(sel), shop.indexOf(sel) + 320))?.[1]);
+    const icon = num('.rwtag__icon', /width: ([\d.]+)rem/);
+    const title = num('.rwtag__title', /font-size: ([\d.]+)rem/);
+    const titleSpacing = num('.rwtag__title', /letter-spacing: ([\d.]+)em/);
+    assert.ok(icon > 0 && title > 0, `${icon} ${title}`);
+    assert.ok(icon + 4 * title * (1 + titleSpacing) + 0.6 < row, `the banner's block ${icon + 4 * title * (1 + titleSpacing)}rem fits ${row}rem`);
+    assert.match(tag, /max-height: var\(--shopbar-row\)/);
   });
 
   test('hudBands: prep / Final Assault prep only; rem-scaled; below the top safe-area inset; clamped', () => {

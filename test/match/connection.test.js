@@ -29,7 +29,8 @@ test('constructor validation mirrors the stub; start() sends the first m.public 
   assert.deepEqual(privs.map(([id]) => id).sort(), ['p_0', 'p_1'], 'one m.private per human, none for bots');
   for (const [id, priv] of privs) {
     assert.equal(priv.playerId, id);
-    for (const k of ['seat', 'alive', 'lp', 'funds', 'bandId', 'ready', 'canReady', 'shop', 'hand', 'temp', 'board', 'deployCap', 'deployCount', 'bonds', 'effects', 'nextEnemies', 'stats']) assert.ok(k in priv, `m.private.${k}`);
+    for (const k of ['seat', 'alive', 'lp', 'funds', 'bandId', 'ready', 'canReady', 'shop', 'hand', 'temp', 'board', 'deployCap', 'deployCount', 'bonds', 'effects', 'nextEnemies', 'stats', 'console']) assert.ok(k in priv, `m.private.${k}`);
+    assert.equal(priv.console, false, 'a Match built without the seat flag offers no debug console (§21.33)');
     for (const k of ['level', 'maxLevel', 'upgradePrice', 'refreshPrice', 'freeRefreshes', 'frozen', 'slots', 'rewardOffer']) assert.ok(k in priv.shop, `shop.${k}`);
     assert.equal(priv.hand.length, 10);
     assert.equal(priv.temp.length, 5);

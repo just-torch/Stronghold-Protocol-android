@@ -74,6 +74,41 @@ test('不屈: no roll on the 突袭 retreat (it redeploys at once anyway) nor on
   assert.ok(missed, 'a missed roll within 39 seeds at p = 0.18');
 });
 
+test('不屈: a refused landing banks the zeroed next deployment instead of spending the roll (GitHub #108)', () => {
+  const h = makeBattle({
+    defs: { chess: { t_a: groundOp('t_a'), t_b: groundOp('t_b') } },
+    units: [{ chessId: 't_a', row: 10, col: 4 }, { chessId: 't_b', row: 10, col: 6 }],
+    bonds: INDOM(300), autoFinish: false, timeLimit: 120, hooks: ['death', 'deploy'],
+  });
+  h.step();
+  const a = h.unit('t_a'), b = h.unit('t_b');
+  // the state the owner describes for #108 — "没复活通常是原格被占": an ally stands on the tile she would come back on. It is
+  // written straight into the occupancy map: every public move refuses a 倒地干员's tile (relocate / _deploy downOn), so a
+  // test cannot produce it with the API — which is also why the report is hard to reproduce.
+  h.b.on('death', (c) => {
+    if (c.unit !== a) return;
+    const [r, col] = h.b.restTile(a);
+    b.tileR = r; b.tileC = col; b.x = col; b.y = r;
+    h.b._occ[r * 21 + col] = b;
+  }, { priority: 20 });
+  const dp0 = h.b.getPlayer('p1').dp;
+  h.b.retreat(a, { reason: 'retreat' });
+  assert.equal(a.alive, false, 'the landing is taken: no immediate redeploy');
+  assert.equal(a.mem.indomShip, h.b.time, 'the roll happened');
+  assert.equal(a.freeRedeploy, true, 'and it is banked: the next deployment is free');
+  assert.ok(a.respawnAt <= h.b.time + 1e-9, 'its redeploy time is zeroed');
+  h.run(1);
+  assert.equal(a.alive, false, 'still waiting for the tile');
+  // the tile frees: she comes back at once — without waiting out the 70 s timer and without paying DP
+  const dpBefore = h.b.getPlayer('p1').dp;
+  h.b.relocate(b, 10, 8);
+  assert.ok(h.runUntil(() => a.alive && a.deployed, 1), 'back the moment the tile is free');
+  assert.equal(a.freeRedeploy, false, 'the bank is spent by the deployment');
+  // the field's own income still ticks (it may only go up); the deployment itself took nothing
+  assert.ok(h.b.getPlayer('p1').dp >= dpBefore - 1e-9, `no deployment cost (${dpBefore} → ${h.b.getPlayer('p1').dp})`);
+  checkInvariants(h.b);
+});
+
 test('不屈: a 傀儡师 switch to the 替身 rolls — she stays on the field, and a hit makes her next deployment immediate and free', () => {
   const h = makeBattle({ units: [{ chessId: GH2, row: 10, col: 4 }], bonds: INDOM(300), autoFinish: false, timeLimit: 120, captureNoisy: true, hooks: ['deploy'] });
   h.step();

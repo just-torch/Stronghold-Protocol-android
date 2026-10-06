@@ -108,7 +108,10 @@ describe('user playtest #2 — UI fixes (mock harness, headless Chrome)', { skip
       if (!underframe) return true;
       if (await page.$(`.uframe[data-uid="${uid}"]`)) return true;
       await page.keyboard.press('Escape');
-      await page.mouse.click(5, Math.round((await page.evaluate(() => innerHeight)) / 2)); // deselect (field press)
+      // deselect (field press): the CENTRE of the canvas — the old click at x = 5 lands on the team panel's 44 px touch
+      // area on a phone, which switches the view to watching a teammate (this piece then has no view at all)
+      const c = await page.evaluate(() => ({ x: Math.round(innerWidth / 2), y: Math.round(innerHeight / 2) }));
+      await page.mouse.click(c.x, c.y);
       await sleep(150);
     }
     return false;
@@ -244,7 +247,7 @@ describe('user playtest #2 — UI fixes (mock harness, headless Chrome)', { skip
       await sleep(350);
       assert.ok(await page.$(`.uframe[data-uid="${top.uid}"]`), `${name}: a tap on the row-12 unit's tile selects it`);
       await page.keyboard.press('Escape');
-      await page.mouse.click(5, Math.round(h / 2));
+      await page.mouse.click(Math.round(w / 2), Math.round(h / 2)); // deselect (field press; see tapPiece)
       await sleep(150);
       // notched phone in landscape: the HUD layer sits inside the safe-area insets (css/devices.css)
       await page.evaluate(() => { const s = document.documentElement.style; s.setProperty('--sa-l', '47px'); s.setProperty('--sa-r', '47px'); s.setProperty('--sa-t', '12px'); s.setProperty('--sa-b', '21px'); });

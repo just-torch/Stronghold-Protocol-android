@@ -154,6 +154,8 @@ import { buildBattleSpec, createBattleFromSpec, resultDigest, compactResult as c
 import { CreditPool } from './finalAssault.js';
 import { buildResult } from './results.js';
 import { botPrepBeginSteps, botPrepEndSteps, botPickBand, botPickCard } from './bot.js';
+// debug console (DESIGN §21.34): the g.dbg* intents and their seat guard
+import { isConsoleType, runConsole } from './console.js';
 
 const BOT_REHEARSAL_DEFAULT = 3;
 /** Wall-clock ms of bot layout rehearsal per scheduler callback (real time; virtual time runs it in one go). */
@@ -1099,7 +1101,10 @@ export class Match {
       case 'g.leave': this.onLeave(ps.playerId); return OK;
       case 'b.progress': return this._onProgress(ps, msg);
       case 'b.result': return this._onResult(ps, msg);
-      default: return fail(ERR.BAD_MSG);
+      default:
+        // debug console (DESIGN §21.34): its own module; the seat's own flag decides (ERR.NO_CONSOLE for everyone else)
+        if (isConsoleType(msg.t)) return runConsole(this, ps, msg);
+        return fail(ERR.BAD_MSG);
     }
   }
 

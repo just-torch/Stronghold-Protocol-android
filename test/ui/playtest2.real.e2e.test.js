@@ -248,7 +248,7 @@ describe('user playtest #2 item 6 — 前往查看 → 返回战场 in combat (r
         }
         const v0 = await battleViewState(c);
         assertNoPen(v0, `R${s0.round} prep`);
-        await c.click('.readybtn');
+        await c.ready();
         await c.waitFor((s) => s.phase === 'COMBAT', 'combat', 60000);
         await sleep(1500);
         assertNoPen(await battleViewState(c), `R${s0.round} own battle`);
@@ -315,7 +315,7 @@ describe('user playtest #2 item 10 — boss-round prep on the boss field (real s
       assert.equal(Math.round(v.prepY[placed.uid]), placed.row - 7, 'the placed piece stands on its boss row');
       await c.shot('boss-prep-solo-placed');
       await penRoundTrip(c, 'solo');
-      await c.click('.readybtn');
+      await c.ready();
       await checkBossBattle(c, placed, 'L', 'solo');
       assert.deepEqual(problemsOf([c]), []);
     } finally {
@@ -334,7 +334,7 @@ describe('user playtest #2 item 10 — boss-round prep on the boss field (real s
       await checkBossPrep(c, 'L', 'hidden');
       const placed = await placeOne(c, 'UP');
       await c.shot('boss-prep-hidden');
-      await c.click('.readybtn');
+      await c.ready();
       await checkBossBattle(c, placed, 'L', 'hidden');
       assert.deepEqual(problemsOf([c]), []);
     } finally {
@@ -412,7 +412,7 @@ describe('user playtest #2 item 10 — boss-round prep on the boss field (real s
         assert.deepEqual(back.prepField, { kind: 'bossPrep', side: 'L', mirror: false }, '返回: the own boss half again');
       }
       await penRoundTrip(guest, 'guest');
-      for (const c of [host, guest]) await c.click('.readybtn');
+      for (const c of [host, guest]) await c.ready();
       await checkBossBattle(host, hp, 'L', 'host');
       await checkBossBattle(guest, gp, 'R', 'guest');
       assert.deepEqual(problemsOf([host, guest]), []);

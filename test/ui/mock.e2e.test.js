@@ -123,22 +123,53 @@ describe('in-match UI (mock harness, headless Chrome)', { skip: !ENABLED && 'set
     await page.keyboard.press('KeyD');
     await sleep(300);
     assert.equal((await mockState(page)).shop.level, lv + 1, 'D levels up');
+    // 准备就绪 asks twice (DESIGN §21.38): the first Space / tap only arms the button (amber 再点一次确认) — the
+    // top-right corner it sits in made it easy to hit by accident (player report after 0.1.1)
+    await page.keyboard.press('Space');
+    await sleep(250);
+    assert.equal((await mockState(page)).ready, false, 'the first Space only arms');
+    assert.ok(await page.$('.readybtn.is-armed'), 'armed: 再点一次确认');
+    assert.equal(await page.$eval('.readybtn__label', (el) => el.textContent.trim()), '再点一次确认');
+    // funds are left, so a confirming press asks first (剩余资金, upstream §23.11) — answer it, then the seat is ready
+    const answerFunds = async () => {
+      await sleep(200);
+      if (await page.$('.modal__title')) {
+        const title = await page.$eval('.modal__title', (el) => el.textContent || '');
+        if (title.includes('剩余资金')) await page.click('.modal__actions .btn--primary');
+        await sleep(300);
+      }
+    };
     await page.keyboard.press('Space');
     await sleep(300);
-    // funds are left, so 准备 asks first (剩余资金). Confirm, then the seat is ready.
-    if (await page.$('.modal__title')) {
-      const title = await page.$eval('.modal__title', (el) => el.textContent || '');
-      if (title.includes('剩余资金')) await page.click('.modal__actions .btn--primary');
-      await sleep(300);
-    }
-    assert.equal((await mockState(page)).ready, true, 'Space readies');
+    await answerFunds();
+    assert.equal((await mockState(page)).ready, true, 'the second Space confirms');
     assert.ok(await page.$('.readybtn.is-on'));
+    assert.equal(await page.$('.readybtn.is-armed'), null, 'the armed state is gone');
     await page.keyboard.press('KeyR');
     await sleep(200);
     assert.equal((await mockState(page)).shop.frozen, true, 'no actions while ready');
     await page.keyboard.press('Space');
     await sleep(300);
+    assert.equal((await mockState(page)).ready, false, '取消准备 is immediate (no confirmation)');
+    // and a click: tap once (arms) → tap again (confirms, and asks about the leftover funds again)
+    await page.click('.readybtn');
+    await sleep(250);
+    assert.equal((await mockState(page)).ready, false, 'the first tap only arms');
+    assert.ok(await page.$('.readybtn.is-armed'));
+    await page.click('.readybtn');
+    await sleep(300);
+    await answerFunds();
+    assert.equal((await mockState(page)).ready, true, 'the second tap confirms');
+    // the armed state lapses on its own (READY_CONFIRM_MS, screens/game.js) — no need to press anything
+    await page.click('.readybtn'); // 取消准备
+    await sleep(250);
     assert.equal((await mockState(page)).ready, false);
+    await page.click('.readybtn'); // arm
+    await sleep(250);
+    assert.ok(await page.$('.readybtn.is-armed'));
+    await sleep(4200);
+    assert.equal(await page.$('.readybtn.is-armed'), null, 'the arm lapses after 4 s');
+    assert.equal((await mockState(page)).ready, false, 'and nothing was sent');
     // detail + Esc: the first tap on a card opens its detail (there is no ⓘ corner — user playtest #6 item 10)
     await page.click('.shopbar__cards .scard:not(.scard--sold)');
     await page.waitForSelector('.dpanel');
@@ -526,7 +557,9 @@ describe('in-match UI (mock harness, headless Chrome)', { skip: !ENABLED && 'set
       assert.deepEqual([...new Set(shown.map((x) => x[0]))].sort(), [...new Set(theirs.map((e) => e.enemyKey))].sort());
       if (render === 'engine') assert.ok(shown.every((x) => x[1] >= 17), 'their upper-gate enemies stand in rows 17–18');
       await page.click('.gtop__iconbtn');
-      await page.waitForFunction(() => document.querySelector('.gm')?.dataset.camera === 'normal', { timeout: 3000 });
+      // the way back is THEIR board in prep: the same 'prep' camera the fold/watching work gives a scouted teammate in
+      // 休整期 (§23.36, and test/ui/devices.e2e.test.js asserts 'prep' for the same button on a phone) — not 'normal'
+      await page.waitForFunction(() => document.querySelector('.gm')?.dataset.camera === 'prep', { timeout: 3000 });
       assert.ok(await page.$('.gm__watching'), 'still scouting the teammate');
       await page.click('.gm__watching button');
       await page.waitForFunction(() => document.querySelector('.gm')?.dataset.camera === 'prep', { timeout: 3000 });

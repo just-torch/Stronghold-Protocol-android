@@ -421,6 +421,22 @@ export function limitKeyOf(ip) {
   return g ? `${g.slice(0, 4).map((x) => x.toString(16)).join(':')}::/64` : ip;
 }
 
+/**
+ * Loopback only (127.0.0.0/8, ::1 / ::) — strictly narrower than isLocalIp, which also covers LAN/private addresses
+ * (DESIGN §21.34): the debug console is granted on this test, so a client in the same house must not count as local.
+ * The connection's resolved client address (`Session.addr`, clientAddress) is what it is asked about: behind a trusted
+ * proxy the peer is loopback while the real client is not, and a public client through a tunnel must not qualify.
+ * @param {string} ip normalized
+ */
+export function isLoopbackIp(ip) {
+  if (isIP(ip) === 4) return Number(ip.split('.')[0]) === 127;
+  if (isIP(ip) === 6) {
+    const g = ipv6Groups(ip);
+    return !!g && g.every((x, i) => (i < 7 ? x === 0 : x <= 1)); // ::1 and ::
+  }
+  return false;
+}
+
 /** The client address a trusted local proxy forwards (null when it sent none). */
 function forwardedAddress(headers) {
   if (!headers) return null;

@@ -41,10 +41,12 @@ export function hudPadding(kind, size) {
 
 /**
  * HUD geometry (rem) the prep cameras keep clear (they mirror the CSS; test/ui/playtest5-ui.test.js checks the rules):
- * the bond strip's bottom edge (css/screens/game.css .gm__bonds top 1.36rem + a .bslot: disc .52rem + name ≈
- * 2.15rem measured) and the shop bar's top edge above the viewport's bottom (css/screens/game-shop.css .shopbar
- * bottom .2rem + .shopbar__row padding .1rem ×2 + card height 2.24rem, plus its 2 px + 1 px borders). The shop bar
- * sits on the viewport's bottom edge even on a notched phone (css/devices.css, DESIGN §18.1).
+ * the bond strip's bottom edge (css/screens/game.css .gm__bonds top 1.27rem + a .bslot: disc .68rem + name
+ * ≈ 2.14rem measured — the strip starts higher by exactly what the discs grew, §21.38, so the band is the one the
+ * .52rem discs made) and the shop bar's top edge above the viewport's bottom (css/screens/game-shop.css .shopbar
+ * bottom .2rem + .shopbar__row padding .1rem ×2 + its `--shopbar-row` content 2.24rem — the cards and the 晋升奖励
+ * banner are that one box in every state the bar can show, §21.32 — plus its 2 px + 1 px borders). The shop bar sits on
+ * the viewport's bottom edge even on a notched phone (css/devices.css, DESIGN §18.1).
  * The folded shop (public issue #5): the tab's top edge (.shopbar-tab bottom .2rem + padding .08rem ×2 + its .44rem
  * button, plus its 2 px + 1 px borders; it sits inside the HUD layer, above the bottom safe-area inset) and the corner
  * buttons' top edge (css/screens/game.css .gm__corner bottom .24rem + a .56rem row — the fallback when the corner
@@ -52,8 +54,29 @@ export function hudPadding(kind, size) {
  * css/devices.css).
  */
 export const HUD_REM = Object.freeze({
+  // the strip's own box is .865rem since §21.38 (was .78rem) and it starts .09rem higher, so the desktop band is the
+  // 2.14rem it was; the phone rule pays 2.09rem for the badges' room. 2.16rem covers both as the no-DOM fallback.
   bondStripBottom: 2.16, shopBarTop: 2.64, shopBarBorderPx: 3, shopTabTop: 0.8, shopTabBorderPx: 3, cornerTop: 0.8,
 });
+
+/**
+ * CSS px from `root`'s padding edge down to `el`'s border box, or null when `el` is not inside `root`. Sums the
+ * `offsetTop` chain (`offsetTop` is relative to the element's own offsetParent — the shop ROW's is the shop bar, not
+ * the HUD layer), which ignores transforms, unlike `getBoundingClientRect`.
+ * @param {any} el
+ * @param {any} root
+ */
+function offsetIn(el, root) {
+  if (!el || !root) return null;
+  let y = 0;
+  let n = el;
+  while (n && n !== root) {
+    if (!Number.isFinite(n.offsetTop)) return null;
+    y += n.offsetTop;
+    n = n.offsetParent;
+  }
+  return n === root ? y : null; // the chain must really end at `root`, not off the page
+}
 
 /**
  * CSS px of HUD along the top edge (top bar + bond strip) and the bottom edge of the viewport during prep — the own
@@ -85,21 +108,46 @@ export function hudBands(kind, size, opts) {
   let safeTop = 0;
   let safeBottom = 0;
   let corner = 0;
+  // Measured edges of the HUD that actually matters: the bond strip's bottom (the top band) and the shop bar's top
+  // (the bottom band) — the elements' own offsets inside .gm__hud, which ignore the entry animation's transform as
+  // well as any other transform. The HUD_REM values below stay as the fallback for when those elements are not on the
+  // page (tests, the first frame), but the page wins: every phone rule that changes a HUD height (css/devices.css)
+  // would otherwise have to be mirrored here by hand, and a stale constant silently costs the board its height.
+  let bondBottom = null;
+  let barTop = null;
   try {
     rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 100;
     // the HUD layer starts below the top safe-area inset and ends above the bottom one (css/devices.css .gm__hud)
-    const hud = document.querySelector('.gm__hud')?.getBoundingClientRect();
+    const hudEl = document.querySelector('.gm__hud');
+    const hud = hudEl?.getBoundingClientRect();
     safeTop = Math.max(0, hud?.top || 0);
     if (folded) {
       if (hud && hud.bottom > 0) safeBottom = Math.max(0, h - hud.bottom);
       corner = cornerBand(h);
     }
+    // Offset geometry (the element's own box inside the HUD layer, + the layer's rect for the safe-area inset),
+    // NOT getBoundingClientRect(): the bar and the folded tab animate in (css/screens/game-shop.css `shop-up`),
+    // i.e. they are translateY'd for their first ~250 ms, and a band read then is ~.3rem short — the board would be
+    // framed too large, exactly when the fold's way back re-measures it (test/ui/mock.e2e.test.js). Offsets ignore
+    // transforms, so every camera request sees the settled band.
+    const bonds = document.querySelector('.gm__bonds');
+    const bondsTop = bonds && bonds.offsetHeight > 0 ? offsetIn(bonds, hudEl) : null;
+    if (bondsTop != null && bondsTop >= 0) bondBottom = safeTop + bondsTop + bonds.offsetHeight;
+    // the card ROW, not .shopbar: the tool buttons (冻结 / 刷新 / 剩余可放置角色) sit above the row and inside the
+    // reserved band, and HUD_REM.shopBarTop models the row's top edge — measuring the whole bar would reserve an
+    // extra ~30 px of board for nothing. The row is one constant box in every state the bar can show (its
+    // `--shopbar-row` content height, the 晋升奖励 banner included: §21.32), so this band does not move when the bar's
+    // cards are replaced — and can never be stale in the direction that covers the bench.
+    const bar = document.querySelector(folded ? '.shopbar-tab' : '.shopbar__row');
+    const barOffset = bar && bar.offsetHeight > 0 ? offsetIn(bar, hudEl) : null;
+    if (barOffset != null && barOffset > 0) barTop = safeTop + barOffset;
   } catch { /* ignore */ }
+  const tabBand = safeBottom + rem * HUD_REM.shopTabTop + HUD_REM.shopTabBorderPx;
   const bottom = folded
-    ? Math.max(safeBottom + rem * HUD_REM.shopTabTop + HUD_REM.shopTabBorderPx, corner || safeBottom + rem * HUD_REM.cornerTop)
-    : rem * HUD_REM.shopBarTop + HUD_REM.shopBarBorderPx;
+    ? Math.max(barTop != null ? Math.max(0, h - barTop) : tabBand, corner || safeBottom + rem * HUD_REM.cornerTop)
+    : (barTop != null ? Math.max(0, h - barTop) : rem * HUD_REM.shopBarTop + HUD_REM.shopBarBorderPx);
   return {
-    top: Math.min(h * 0.4, safeTop + rem * HUD_REM.bondStripBottom),
+    top: Math.min(h * 0.4, bondBottom != null ? Math.max(bondBottom, safeTop) : safeTop + rem * HUD_REM.bondStripBottom),
     bottom: Math.min(h * 0.4, bottom),
   };
 }

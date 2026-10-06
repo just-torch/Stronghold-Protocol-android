@@ -1,0 +1,26 @@
+{
+  "name": "stronghold-protocol-android",
+  "version": "0.1.1",
+  "private": true,
+  "description": "Android app shell for 卫戍协议：盟约 (Stronghold Protocol: Covenant). Embeds a Node.js 24 runtime plus the whole game so one phone can host LAN co-op and the others join it.",
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "test": "node test/launcher.test.js && node test/lan-protocol.test.js",
+    "assemble": "node scripts/assemble-nodejs.mjs",
+    "sync": "cap sync android",
+    "apk": "pwsh -NoProfile -File scripts/build-apk.ps1",
+    "verify:lan": "node scripts/lan-verify.mjs",
+    "host:lan": "node scripts/host-with-lan.mjs",
+    "lan:scan": "node scripts/lan-tool.mjs scan",
+    "lan:doctor": "node scripts/lan-tool.mjs doctor",
+    "lan:announce": "node scripts/lan-tool.mjs announce"
+  },
+  "dependencies": {
+    "@capacitor/android": "7.6.9",
+    "@capacitor/core": "7.6.9",
+    "@jadejr/capacitor-nodejs": "1.0.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "7.6.9"
+  }
+}

@@ -155,7 +155,14 @@ describe('multi-device (Chrome device emulation)', { skip: !ENABLED && 'set SP_E
           assert.equal(await page.$eval('.gm__field canvas:last-of-type', (el) => getComputedStyle(el).touchAction).catch(() => 'none'), 'none', 'the field owns its gestures');
           for (const b of await hitBoxes(page, HUD_TARGETS)) {
             if (b.missing) continue;
-            assert.ok(b.w >= 34 && b.h >= 34 && Math.max(b.w, b.h) >= 40, `${dev}: ${b.sel} hit box ${b.w}×${b.h}`);
+            // The corner stacks ⚙ / 📖 / ⛶ / 交流 into two rows with a .1rem (≈4 px) gap, and the 44 px tap expansion of
+            // devices.css is centred on each control: neighbours therefore share the few pixels between them and the
+            // later sibling wins the hit test, so a stacked control measures its own box + the gap (34+4 = 38). The row
+            // is what has to be big — a tap anywhere on the column hits a control, and each control's own 34 px box is
+            // fully its own — so the one-axis 40 px rule is for the free-standing controls (§21.41).
+            const stacked = /\.gm__gear$|\.ewheel__btn$/.test(b.sel);
+            const ok = b.w >= 34 && b.h >= 34 && (Math.max(b.w, b.h) >= 40 || (stacked && Math.min(b.w, b.h) >= 34));
+            assert.ok(ok, `${dev}: ${b.sel} hit box ${b.w}×${b.h}`);
           }
         }
         assert.deepEqual(problems, [], `${dev} ${name}`);

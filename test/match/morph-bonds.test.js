@@ -163,3 +163,23 @@ test('a teammate\'s views: m.public counts the wearer; the scouting UnitInfo and
   assert.equal(unitInfo(plain).items, undefined, 'no items: no field');
   assert.equal(battle.enemies.every((e) => unitInfo(e).items === undefined), true, 'enemies: never');
 });
+
+test('the bond\'s own battle effect reaches the converted member: 谢拉格 ×1.25 sits on the wearer (real match)', () => {
+  const h = prep({ seed: 51 });
+  const { m } = h; const ps = h.ps('p_0');
+  place(h, 'p_0', 'chess_char_1_02_a');  // 角峰: kjeragShip + steadShip
+  place(h, 'p_0', 'chess_char_3_11_a');  // 雪猎: kjeragShip + preciShip
+  const w = wearer(h, 'p_0', outsider('kjeragShip'), [ISO, 'chess_item_5_02_e_a']); // 变形同构体 + 谢拉格不融冰
+  assert.equal(count(ps, 'kjeragShip'), 3, 'the wearer is the third 谢拉格 member');
+  assert.equal(ps.bonds.kjeragShip.active, true);
+  let battle = null;
+  const orig = m.newBattle.bind(m);
+  m.newBattle = (o) => { const bt = orig(o); battle ??= bt; return bt; };
+  assert.ok(h.drive(() => battle != null), 'combat starts');
+  const u = battle.allyUnits.find((x) => x.kind === 'op' && x.uid === w.uid);
+  assert.ok(isMember(battle, u, 'kjeragShip'), 'the battle treats the wearer as a member');
+  const b = u.findBuff('bond:kjerag');
+  assert.ok(b, 'the 谢拉格 passive is on the converted member');
+  assert.equal(b.mods.dmgDealtMul, 1.25, '×1.25 as for any member');
+  h.invariants();
+});

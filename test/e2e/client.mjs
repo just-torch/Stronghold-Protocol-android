@@ -183,6 +183,28 @@ export class Client {
     return this.click('.modal__actions button', '准备就绪', { timeout: 4000 });
   }
 
+  /**
+   * 准备就绪 (the .readybtn toggle). Readying asks twice (DESIGN §21.38): the first press arms the button — it turns
+   * amber and says 再点一次确认 — and the second one confirms, which may then ask about leftover funds (upstream §23.11:
+   * 剩余资金 — confirmFundsLeft answers it). 取消准备 is immediate, so an already-ready client is left alone. Presses
+   * until the toggle is on (or the prep is over), so a press that lands before the button is enabled costs nothing.
+   */
+  async ready({ timeout = 30000 } = {}) {
+    const t0 = Date.now();
+    for (;;) {
+      const st = await this.page.evaluate(() => ({
+        on: !!document.querySelector('.readybtn.is-on'),
+        armed: !!document.querySelector('.readybtn.is-armed'),
+        btn: !!document.querySelector('.readybtn'),
+      }));
+      if (st.on || !st.btn) return st.on;
+      await this.click('.readybtn', null, { timeout: 4000 });
+      await sleep(120);
+      await this.confirmFundsLeft();
+      if (Date.now() - t0 > timeout) return this.page.evaluate(() => !!document.querySelector('.readybtn.is-on'));
+    }
+  }
+
   /** Centre of the nth visible, enabled (unless `any`), uncovered match (or null). */
   point(sel, text = null, nth = 0, any = false) {
     return this.page.evaluate((sel, text, nth, any) => {
@@ -203,9 +225,7 @@ export class Client {
     }, sel, text, nth, any);
   }
 
-  async exists(sel) { return !!(await this.page.$(sel)); }
-
-  async visible(sel) {
+  async exists(sel) { return !!(await this.page.$(sel)); }  async visible(sel) {
     return this.page.evaluate((sel) => {
       const el = document.querySelector(sel);
       if (!el) return false;

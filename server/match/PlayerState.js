@@ -99,6 +99,12 @@ export class PlayerState {
     this.name = seat.name;
     this.isBot = !!seat.isBot;
     this.connected = this.isBot ? true : !!seat.connected;
+    /**
+     * Debug console (DESIGN §21.34): this seat may use the `g.dbg*` test intents. The lobby decides it from the
+     * connection (loopback, or SP_CONSOLE=1) — a Match built directly (tests, tools) has it off unless the seat asks
+     * for it; `m.private.console` tells the client whether to offer the panel.
+     */
+    this.console = seat.console === true;
     this.left = false;
     this.autoplay = false;
     this.alive = true;
@@ -372,9 +378,10 @@ export class PlayerState {
 
   /**
    * Per-piece counter of the current round (`piece.meta.round` = { r, n: { key: count } }): 0 for a key not counted yet
-   * this round. The counters belong to the operator: a move keeps them, a new piece (bought, granted, transformed)
-   * starts at 0, and an elite merged this round keeps the highest count of its copies (_mergeChess) — 拉普兰德's
-   * "本回合首次主动刷新" is the first manual refresh she witnesses (player feedback after 0.1.0, garrisons/meta.js).
+   * this round. The counters belong to the operator: a move keeps them, and every newly gained piece (bought, granted,
+   * transformed, merged into an elite) starts at 0 — 拉普兰德's "本回合首次主动刷新" is the first manual refresh the
+   * operator she was gained as witnesses, so a promoted 拉普兰德 fires again (player reports after 0.1.0 and 0.1.1:
+   * "获得该干员后该回合的首次主动刷新"; garrisons/meta.js).
    */
   pieceRoundCount(piece, key) {
     const rc = piece && piece.meta && piece.meta.round;
@@ -541,12 +548,10 @@ export class PlayerState {
       l.piece.items = [];
     }
     const elite = this.newPiece('chess', goldenId, { poolCopies: copies });
-    // this round's per-piece counters: the highest of the copies' (an elite made from 拉普兰德 that already saw their
-    // first refresh this round does not fire again this round — [ASSUMED] conservative, pieceRoundCount)
-    for (const l of consumed) {
-      const rc = l.piece.meta && l.piece.meta.round;
-      if (rc && rc.r === this.m.round) for (const [k, v] of Object.entries(rc.n)) this.bumpPieceRoundCount(elite, k, Math.max(0, v - this.pieceRoundCount(elite, k)));
-    }
+    // this round's per-piece counters stay with the pieces that earned them: the elite is a newly GAINED operator
+    // ("发送1名【精锐】状态的该干员至手牌区" — a gain like any other), so its counters start at 0 and 拉普兰德's
+    // "获得该干员后该回合的首次主动刷新" window opens again (player report after 0.1.1: a promoted 拉普兰德 was expected
+    // to still fire; 0.1.1 carried the consumed copies' highest count over and spent it — pieceRoundCount)
     const deployed = consumed.filter((l) => l.key && !this.board.has(l.key)).map((l) => ({ key: l.key, dir: pieceDir(l.piece) }));
     const toTile = (t) => { elite.dir = parseDir(t.dir) || 'RIGHT'; this.board.set(t.key, elite); return 'board'; };
     const tile = mergeTile(deployed, (r, c) => this._legal(elite, r, c));
@@ -1662,6 +1667,8 @@ export class PlayerState {
       nextEnemies: this.m.nextEnemiesFor(this),
       // DESIGN §16: the effective operator loadout ({ [baseChessId]: { skill, module } }; chess not listed use defaults)
       loadout: this.loadout,
+      // DESIGN §21.34: may this player open the debug console? (the seat flag the lobby set from his connection)
+      console: this.console,
       stats: {
         dmgDealt: Math.round(this.stats.dmgDealt), kills: this.stats.kills, leaks: this.stats.leaks, gold: this.stats.gold,
         refreshes: this.stats.refreshes, merges: this.stats.merges,

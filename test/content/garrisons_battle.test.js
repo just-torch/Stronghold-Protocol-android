@@ -282,7 +282,7 @@ test('onstart (砾 143 / 瑕光 106 / 史尔特尔 107 / 锏 155): every deploy,
   assert.deepEqual(deploys('garrison_155_b', 5, self, ['yanShip', 'kjeragShip']), { yanShip: 48 }, '锏 精锐: +16, cap 48');
 });
 
-test('allyenemy_sleepstun_inrange (缇缇 125): enemies or operators entering 沉睡 / 晕眩 in range; cap 24 / 48', () => {
+test('allyenemy_sleepstun_inrange (缇缇 125): every 沉睡 / 晕眩 application in range counts, a refresh too; cap 24 / 48', () => {
   for (const gid of idsOfKey('act2autochess_gar_event_allyenemy_sleepstun_inrange')) {
     const per = num(GR(gid).bb.bond_add_count);
     const h = battle({ units: [{ id: 'tt', g: [gid], row: 10, col: 4 }, { id: 'ally', row: 10, col: 5 }], bonds: { sargonShip: B(0), preciShip: B(0) }, enemies: [{ key: 'e_dummy', pos: [12, 9] }, { key: 'e_dummy', pos: [10, 5] }] });
@@ -293,7 +293,12 @@ test('allyenemy_sleepstun_inrange (缇缇 125): enemies or operators entering �
     expectAll(h, ['sargonShip', 'preciShip'], per, `${gid}: enemy out of range`);
     h.b.applyStatus(near, 'stun', { duration: 5 });
     h.b.applyStatus(near, 'stun', { duration: 5 });
-    expectAll(h, ['sargonShip', 'preciShip'], 2 * per, `${gid}: a stun refresh is not a new entry`);
+    expectAll(h, ['sargonShip', 'preciShip'], 3 * per, `${gid}: a stun refresh counts too (GitHub #162)`);
+    // GitHub #162: 缇缇's S2 re-applies sleep every AURA_IV = 0.25 s and never removes it, so refreshes alone must reach
+    // the cap — with "new entries only" the count stopped at the ±1 of each enemy in the ward (4 of 24) and the trait
+    // read as broken
+    for (let i = 0; i < 40; i++) h.b.applyStatus(near, 'stun', { duration: 1e9 });
+    expectAll(h, ['sargonShip', 'preciShip'], capOf(gid), `${gid}: refreshes alone reach the cap`);
     for (let i = 0; i < 40; i++) { h.b.removeStatus(near, 'stun'); h.b.applyStatus(near, 'stun', { duration: 1 }); }
     expectAll(h, ['sargonShip', 'preciShip'], capOf(gid), `${gid}: cap`);
     cover(gid);

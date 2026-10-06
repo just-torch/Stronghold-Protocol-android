@@ -371,7 +371,13 @@ class Client {
       await sleep(150);
     }
     assert.ok(after.funds !== s.funds || now.free !== before.free || now.ids !== before.ids, `${this.label}: R refreshed the shop`);
-    if (s.refreshPrice > 0) assert.equal(after.funds, s.funds - s.refreshPrice, `${this.label}: refresh cost`);
+    if (s.refreshPrice > 0) {
+      // The prep-start income of a round that advances between the read and the key press lands in the same window, and
+      // the delta is then price − income (host: refresh cost 6 !== 5 once): the exact check only holds within a round.
+      const later = await this.st();
+      if (later.round === s.round) assert.equal(after.funds, s.funds - s.refreshPrice, `${this.label}: refresh cost`);
+      else this.note(`refresh cost not checked: round ${s.round} → ${later.round} while pressing R`);
+    }
     this.note(`refresh (${s.refreshPrice ? `funds ${s.funds} → ${after.funds}` : `free ${before.free} → ${now.free}`}, slots ${before.ids === now.ids ? 'same ids' : 'rerolled'})`);
     return true;
   }
@@ -412,7 +418,16 @@ class Client {
 
   async ready() {
     if (!(await this.isEditable())) return;
+    // 准备就绪 asks twice now (DESIGN §21.38): the first press arms the button (再点一次确认), the second confirms —
+    // and confirming with funds left asks again (剩余资金, upstream §23.11), so answer that dialog too.
     await this.click('.readybtn');
+    await this.page.waitForFunction(() => !!document.querySelector('.readybtn.is-armed'), { timeout: 4000 }).catch(() => {});
+    await this.click('.readybtn');
+    await sleep(250);
+    if (await this.page.$('.modal__title')) {
+      const title = await this.page.$eval('.modal__title', (el) => el.textContent || '');
+      if (title.includes('剩余资金')) { await this.click('.modal__actions button', '准备就绪', { timeout: 4000 }); await sleep(250); }
+    }
     await this.waitFor((s) => s.ready || s.phase !== 'PREP', 'ready', 8000);
   }
 }
@@ -535,7 +550,8 @@ describe('real server + real browsers', { skip: !ENABLED && 'set SP_REAL_E2E=1 (
             await c.deployFromHand(2);
             const s2 = await c.st();
             if (s2.temp > 0) c.note(`temp not empty (${s2.temp}) — ready blocked`);
-            if (c === guest) { await c.page.keyboard.press('Space'); await c.waitFor((x) => x.ready || x.phase !== 'PREP', 'ready (Space)', 8000); } else await c.ready();
+            // 准备就绪 asks twice since the local fork (§21.38): the helper arms, confirms and answers 剩余资金
+            if (c === guest) { await c.ready({ timeout: 12000 }); await c.waitFor((x) => x.ready || x.phase !== 'PREP', 'ready (helper)', 8000); } else await c.ready();
           }
         } else if (hs.phase === 'SP_DRAFT') {
           for (const c of both) {

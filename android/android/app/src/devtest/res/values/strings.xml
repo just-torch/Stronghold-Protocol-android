@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!--
+  The devtest build type's label override (scripts-apk/build-apk.ps1 -Variant devtest, app/build.gradle `devtest`):
+  the same game, installable NEXT TO the release app (applicationIdSuffix ".dev"), so the launcher icon and the
+  recents entry say which one is the test build. Everything else (icons, activity, colours) comes from src/main/.
+-->
+<resources>
+    <string name="app_name">卫戍协议：盟约·测试</string>
+    <string name="title_activity_main">卫戍协议：盟约·测试</string>
+</resources>

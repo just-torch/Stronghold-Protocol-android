@@ -24,6 +24,8 @@ server/match/
   fields.js        FieldRunner: battle pacing (2×), snapshots, per-field error isolation
   results.js       m.result rows, titles, trophies, rewards
   bot.js           AI player (AI teammates, departed humans, "AI 托管")
+  console.js       the debug console's test intents (DESIGN §21.34: `g.dbg*` — grant any chess / item, set 资金 /
+                   盟约层数 / 调度中心等级, for a seat the lobby granted it)
   scheduler.js     RealScheduler / VirtualScheduler
   StubMatch.js     the old platform stub (platform tests only)
 ```
@@ -362,7 +364,7 @@ that per garrison with `garrisonHooks(garrison) → hook[]`, e.g. "<进入休整
 | `SERVER_GAIN` 获得时 | `onGain` | the gained piece — run **×2 while 投资人 is active, ×3 at ≥ 100 投资人 layers** |
 | `SERVER_PREP_START` 进入休整期时 | `onRoundStart` | owned chess: board, and hand unless `bbStr.conditionkey === 'character_target_inboard'` |
 | `SERVER_PREP_FIN` 休整期结束时 | `onPrepEnd` | same |
-| `SERVER_REFRESH_SHOP` 刷新时 | `onRefresh` | same — manual refreshes only (`ev.trigger` marks a re-run); 拉普兰德's "本回合首次主动刷新" counts per copy (`incPieceCounter`) |
+| `SERVER_REFRESH_SHOP` 刷新时 | `onRefresh` | same — manual refreshes only (`ev.trigger` marks a re-run); 拉普兰德's "本回合首次主动刷新" counts per copy (`incPieceCounter`), and only a refresh whose effect can pay out (its bond active) counts (DESIGN §21.32) |
 | `SERVER_CHESS_SOLD` 售出时 | `onSold` | the sold piece |
 | `SERVER_PRICE` 购买价格 | `onPrice` (first) | the chess in the priced slot (`ctx.source.where === 'shop'`); SERVER_CHESS_PRICE `bb.price` is the discount off the tier price (至简 3 − 2 = 1, 红豆 2 − 1 = 1: both texts say 购买价格为1) |
 | `IN_BATTLE` | — | battle side (server/sim/content/garrisons.js `install`) |
@@ -388,11 +390,12 @@ Reads: `playerId seat name round phase modeId difficulty isSolo isCoop data (fro
 board() hand() temp() piece(uid) pieceAt(row, col) pieceBonds(uid) garrisonsOf(uid) chessRecord(id) stats() roundStats()
 shopSlots() effect(id)` (`piece(uid)` adds `area`, `holderUid`, `idx`; "身前一格" of (r, c) is (r, c + 1)),
 counters `counter(k) setCounter(k, v) incCounter(k, n)` (player scope, persistent; prefix keys with your module) and
-`pieceCounter(uid, k) incPieceCounter(uid, k, n)` (per piece, current round only: 0 in a new round and for a new piece —
-bought, granted, transformed —; a move keeps it; an elite merged this round keeps the highest of its copies'
-[ASSUMED]; `PlayerState.pieceRoundCount`; prefix keys with your module too) — 拉普兰德's "本回合首次主动刷新" is the
-first manual refresh that copy witnesses (player feedback after 0.1.0: "获得该干员后该回合的首次刷新" also stacks; a copy
-bought after selling one this round is a new copy and fires on its own first refresh [ASSUMED]).
+`pieceCounter(uid, k) incPieceCounter(uid, k, n)` (per piece, current round only: 0 in a new round and for every newly
+GAINED piece — bought, granted, transformed, and the elite a merge sends —; a move or an in-place promotion (升华) keeps
+it; `PlayerState.pieceRoundCount`; prefix keys with your module too) — 拉普兰德's "本回合首次主动刷新" is the
+first manual refresh that copy witnesses **and that can pay out** (its bond active; DESIGN §21.32) (player feedback after
+0.1.0: "获得该干员后该回合的首次刷新" also stacks; a copy bought after selling one this round, and a promoted elite, are
+new copies and fire on their own first refresh — the elite because PRTS's 精锐化 sends it as a gain, §21.35).
 
 Writes (all validated, never throw on bad input, never make funds / pools negative):
 
@@ -415,7 +418,7 @@ Writes (all validated, never throw on bad input, never make funds / pools negati
 | `setBondCountBonus(bondId, n)` | extra member count for a bond |
 | `setDeviceActive(alias, on)` / `setTileOverride(r, c, 'melee'\|'ranged'\|'none')` | terrain changes of this player's board (legality + battle input `deviceOverrides`) |
 | `addEffect(ref)` / `removeEffect(id)` / `setEffectCounter(id, v)` | EffectRefs `{ id, key?, name, desc, iconKind, iconId, counter?, battle=true, params?, data?, hidden? }` — shown in `m.private.effects`, passed to battles as `playerEffects` when `battle` |
-| `addBounty(card)` | a bounty (choices.json cards.bounty shape) on the next battles |
+| `addBounty(card)` | a bounty (choices.json cards.bounty shape) on the next battles. A `payout: 'kill'` card pays for the enemy it **added** (`card.enemyKey`): a unit content spawned from it (its declared offspring — `spawnChildren` inherits the parent's mods, `bountyId` included) pays nothing, in the player's own battle and in 联防 alike (player report after 0.1.1, DESIGN §21.37) |
 | `toast(text, kind)` / `ticker(text)` / `giftTicker(fromName, chessId)` | messages |
 | `teammates()` / `player(playerId)` | ctx objects of other alive players (team effects) |
 
@@ -701,6 +704,8 @@ PREP ready/acting · COMBAT/boss combat/done · UNITE helping/done · others don
 `m.private` = DESIGN §8.3 exactly (sent per player whenever it changed). `nextEnemies` = the current round's wave
 (+ the player's bounty enemies, tag `bounty`; boss rounds: the player's boss field, tag `boss` — the leader's entry with its
 spawn tile `start`, where the boss-field prep shows it —, + its bounties).
+`console` (DESIGN §21.34) = the seat's debug-console grant, decided from the connection at match start — the client's
+only signal that the panel and the `g.dbg*` intents are available to this player.
 
 Bond layers in the views (DESIGN §20.15): from the end of COMBAT (`_finishCombat`, every normal result in) until SETTLE,
 `m.private bonds` and `m.public players[].bonds` add the finished battle's IN_BATTLE gains (`PlayerState.pendingLayerGains`
@@ -766,6 +771,11 @@ round was over. The official 1 s `broadcastBeginDelay` is not modelled.
   prep of round 4 — drafts, 机变, buying/placing, combat snapshots `gt`, watching, 联防, throttled m.public), bot (field
   model, layout planner, rehearsal side-effect freedom, economy/bench regression).
   `node --test test/match/*.test.js`
+* **Debug console** (DESIGN §21.34, `server/match/console.js`): the five `g.dbg*` test intents — grant any chess / item,
+  set 资金 / 盟约层数 / 调度中心等级 — accepted only for a seat the lobby granted it (`server/lobby.js consoleAllowed`:
+  loopback, or `SP_CONSOLE=1`; the flag reaches the client as `m.private.console` and the panel is `public/js/ui/console.js`,
+  the corner's terminal button or the `` ` `` key). Suites: `node --test test/match/console.test.js`,
+  `node --test test/ui/console.test.js` (the panel's model), `SP_E2E=1 node --test test/ui/console.e2e.test.js` (browser).
 * `node tools/matchrun.mjs --mode coop --difficulty HARD --players 4 --seeds 20` — per-round balancing summary / aggregate
   (`--check` audit, `--errors` per-source error table, `--lp N` / `--layers N` to reach late rounds — the boost stops at
   999 per bond —, `--rehearsal N`).
@@ -788,11 +798,12 @@ round was over. The official 1 s `broadcastBeginDelay` is not modelled.
 * Promotions by effects (升华, 博士投影) keep the equipment; merges return it; 突变细胞's transformation returns it (the
   cell included) before its new operator is gained into the 整备区 — the carrier's tile is left empty (official footage,
   DESIGN §21.1).
-* An elite merged in a round keeps the highest per-piece round counter of its copies (`pieceRoundCount`): an elite made
-  from 拉普兰德 copies that already fired this round does not fire again before the next round (conservative; the
-  official server's instance handling is not observable). A 拉普兰德 bought after selling one in the same round is a new
-  copy and fires on its own first refresh ("获得该干员后"; each such +4 costs 3 + 1 refresh − 1 refund and needs her in
-  the shop).
+* Every newly gained piece starts its per-piece round counters at 0 (`pieceRoundCount`): a bought / granted / transformed
+  operator, and **the elite a merge sends** — 精锐化 sends it as a gain ("发送1名【精锐】状态的该干员至手牌区"), so an
+  elite made from 拉普兰德 copies that already fired this round fires on its own next refresh (player report after 0.1.1,
+  DESIGN §21.35; an in-place promotion, 升华 / 博士投影, keeps the same piece and its counters). A 拉普兰德 bought after
+  selling one in the same round is a new copy too and fires on its own first refresh ("获得该干员后"; each such +4 costs
+  3 + 1 refresh − 1 refund and needs her in the shop).
 * Chess granted by effects need a free pool copy unless `requirePool: false` (then they hold 0 copies).
 * Boss-round `local` pack spawns (boss parts) all spawn; content scripts (bosses.js) decide their behaviour.
 * The Final Assault ends as a defeat when every field finished with the boss pool above 0 (boss escaped).

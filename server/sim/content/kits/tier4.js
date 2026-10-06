@@ -11,9 +11,12 @@
 //   缩短) is a multiplier (×0.7) and 信仰搅拌机's 0.6 is the counter interval ratio — both handled in their kits.
 // - "技力光环 (同类效果取最高)" (莫斯提马, 白面鸮) share the buff key `aura:spRecovery`; a unit keeps the highest one.
 // - Auras refresh short buffs every AURA s so they lapse within a few ticks after the source leaves.
-// - Talents that name a faction use data fields: nationId (拉特兰 laterano, 卡西米尔 kazimierz, 谢拉格 kjerag),
-//   profession (术师 CASTER, 重装 TANK, 先锋 PIONEER), enemy tags (萨卡兹 sarkaz, 海怪 seamonster); 深海猎人 = research
-//   groupId `abyssal` (data/chess.json has no groupId: charIds from docs/research/03-operators.json).
+// - Talents whose text names a faction by its 盟约 in brackets ("【拉特兰】干员", "【卡西米尔】势力的干员", "【谢拉格】干员")
+//   read that faction's MEMBERSHIP, not the character's nation: `unitBonds(u).includes(bond)` (own bonds + 变形同构体
+//   grants, DESIGN §21.31/§21.43) with the nationId as a fallback (inFaction below) — 哈洛德 is a 谢拉格 member with
+//   nationId victoria, 锏 a 卡西米尔 member with kjerag, 能天使 / 新约能天使 拉特兰 members with lungmen.
+//   Other faction fields: profession (术师 CASTER, 重装 TANK, 先锋 PIONEER), enemy tags (萨卡兹 sarkaz, 海怪 seamonster);
+//   深海猎人 = research groupId `abyssal` (data/chess.json has no groupId: charIds from docs/research/03-operators.json).
 // - "友方干员" effects touch operators only (summons/devices excluded); SP gifts skip units whose timed skill runs
 //   (AK: no SP gain during a skill — the engine's gainSp enforces it too; the kits skip such units when picking).
 // - On-hit effects of 卡涅利安's attacks land on every enemy the attack strikes — the 阵法术师 trait strikes every enemy
@@ -34,6 +37,7 @@ import { aggregateMods } from '../../buffs.js';
 import { CAT_SHIELD_KEY } from '../tokens.js';
 import { isHpLoss } from '../../damage.js';
 import { holdsUndying } from '../items/battle.js';
+import { unitBonds } from '../support/index.js';
 
 const TICK_EPS = 0.01;     // minimal status duration (s)
 const AURA = 0.2;          // aura refresh period (s)
@@ -60,6 +64,16 @@ const grid = (g) => (Array.isArray(g) && g.length ? g.map((p) => [p[0], p[1]]) :
 const batFlat = (def, v) => { const b = num(def?.stats?.bat, 1) || 1; return Math.max(-0.9, num(v, 0) / b); };
 const tileKey = (u) => Math.round(u.y) * COLS + Math.round(u.x);
 const nationOf = (u) => u?.def?.raw?.nationId ?? null;
+/**
+ * "【X】干员" / "【X】势力的干员" in a talent's text = a member of that 盟约 (its own bonds plus the bonds a 变形同构体
+ * pairing grants, support.unitBonds — the same rule the bond counts, the bond effects and the item gates use, DESIGN
+ * §21.31) or an operator of that nation. A nation-only test missed every member whose nationId differs: 哈洛德
+ * (谢拉格, victoria), 锏 (卡西米尔, kjerag), 能天使 / 新约能天使 (拉特兰, lungmen) and every converted wearer (§21.43).
+ */
+const inFaction = (u, bond, nations) => !!u?.def && (unitBonds(u).includes(bond) || nations.includes(nationOf(u)));
+const isLaterano = (u) => inFaction(u, 'lateranoShip', ['laterano']);
+const isKazimierz = (u) => inFaction(u, 'kazimierzShip', ['kazimierz']);
+const isKjerag = (u) => inFaction(u, 'kjeragShip', ['kjerag']);
 const isAbyssal = (u) => u?.def?.raw?.groupId === 'abyssal' || ABYSSAL.has(u?.def?.charId ?? u?.def?.raw?.charId);
 const enemyHasTag = (e, tag) => !!e && e.side === 'enemy' && Array.isArray(e.def?.tags) && e.def.tags.includes(tag);
 const keySet = (unit) => unit.rangeKeySet || new Set(unit.rangeKeys || []);
@@ -232,7 +246,7 @@ const kits = {
             onHit({ battle, unit }) {
               const n = num(bb.charge, 1);
               const cand = battle.alliesInRadius(unit.x, unit.y, 1.5, unit.ownerId)
-                .filter((a) => a !== unit && a.kind === 'op' && nationOf(a) === 'laterano' && a.skill && a.skill.active && a.skill.kind === 'ammo')
+                .filter((a) => a !== unit && a.kind === 'op' && isLaterano(a) && a.skill && a.skill.active && a.skill.kind === 'ammo')
                 .sort((a, b) => Math.hypot(a.x - unit.x, a.y - unit.y) - Math.hypot(b.x - unit.x, b.y - unit.y) || a.id - b.id);
               if (!cand[0] || !(n > 0)) return;
               cand[0].skill.addAmmo(n);
@@ -256,7 +270,7 @@ const kits = {
         onStart({ battle, unit }) {
           unit.mem.counterReady = -Infinity;
           for (const a of battle.allies(unit.ownerId)) {
-            if (a === unit || a.kind !== 'op' || nationOf(a) !== 'laterano') continue;
+            if (a === unit || a.kind !== 'op' || !isLaterano(a)) continue;
             if (a.skill && a.skill.active && a.skill.kind === 'ammo') { a.skill.addAmmo(num(bb.ammo, 0)); battle.fx('reload', { x: a.x, y: a.y, id: a.id, n: num(bb.ammo, 0) }); }
           }
           battle.fx('sermon', { x: unit.x, y: unit.y, id: unit.id });
@@ -1139,7 +1153,7 @@ const kits = {
           const value = Math.min(1, Math.max(0, -num(t1.one_minus_status_resistance, -0.5)));
           whileDeployed(battle, unit, AURA, () => {
             if (battle.time - unit.deployedAt < num(t1.interval, 10) - 1e-9 || !(value > 0)) return;
-            for (const a of battle.allies(unit.ownerId)) if (a.kind === 'op' && nationOf(a) === 'kjerag') battle.applyStatus(a, 'resist', { duration: AURA_DUR, value, source: unit });
+            for (const a of battle.allies(unit.ownerId)) if (a.kind === 'op' && isKjerag(a)) battle.applyStatus(a, 'resist', { duration: AURA_DUR, value, source: unit });
           });
         } },
       ],
@@ -1579,7 +1593,7 @@ const kits = {
           }, { owner: unit });
         } },
         { install(battle, unit) { // 红松骑士团团长: 卡西米尔 operators +22 % physical dodge
-          whileDeployed(battle, unit, AURA, () => { for (const a of battle.allies(unit.ownerId)) if (nationOf(a) === 'kazimierz') pulse(battle, a, 'flamtl:dodge', { dodgePhys: num(t1.prob, 0.22) }); });
+          whileDeployed(battle, unit, AURA, () => { for (const a of battle.allies(unit.ownerId)) if (isKazimierz(a)) pulse(battle, a, 'flamtl:dodge', { dodgePhys: num(t1.prob, 0.22) }); });
         } },
       ],
     };

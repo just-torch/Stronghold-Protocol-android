@@ -18,7 +18,9 @@
 // them beside the operators; one off the field at the end enters fresh [ASSUMED]). Enemies = the union of every leaker's
 // counted leaks (same stats: the SpawnSpec mods travel with the leak), routed on the escaped template (`escaped_single`
 // for 1 helper, `escaped_multi` for 2): walkers on its `lrsldr` action, flyers on `yokai`, tokens on `gopro_2` /
-// `lazerd` (waves.js buildUniteWave); kill bounties keep paying the killer (a helper). No IN_BATTLE layer gains ("该阶段
+// `lazerd` (waves.js buildUniteWave); kill bounties keep paying the killer (a helper) — only for the enemy the 悬赏 card
+// added, never for a unit it content-spawned (§21.37 / upstream §23.25, planUnite: the child carries no bounty mod at
+// all, and a leak whose key is not the card's does not collect either). No IN_BATTLE layer gains ("该阶段
 // 不能叠加层数"); the helpers' bonds carry the layers their own combat reached (PlayerState.battleInput `reached`: the
 // round's pending gains, capped like settle() — the strip's count; "以其阵地当前的状态" [ASSUMED] includes them; until 0.1.3
 // the round-start layers), and settle() still adds those gains once. Time limit = the round's combat limit.
@@ -55,11 +57,14 @@ export function planUnite(m, results) {
     for (const l of r.leaked || []) {
       if (!l || l.counted === false) continue;
       if (!m.gd.enemy(l.enemyKey)) { notReentered.set(ps.playerId, (notReentered.get(ps.playerId) || 0) + 1); continue; }
-      // kill bounties keep paying in 联防, and only on the card's own enemy. A split or summoned child
+      // Kill bounties keep paying in 联防, and only on the card's own enemy. A split or summoned child
       // never carries bountyId / bountyCoins (spawnChildren). A leak that still has the card's id but is
       // some other enemy — a copy that did not go through spawnChildren — does not collect the card either
       // (GitHub #67, #89-2; owner 2026-10-04: the main body only). A bounty set on the SpawnSpec by content
       // is copied into mods.bountyCoins by the match and has no card to match.
+      // (The local fork had reached the same rule from the other side — the child inherited its parent's
+      // mods and the planner's key test refused it — player report after 0.1.1, DESIGN §21.37; upstream's
+      // stricter spawnChildren is what the merge keeps.)
       const bountyId = l.mods && l.mods.bountyId;
       const b = bountyId ? ps.bounties.find((x) => x.id === bountyId) : null;
       const card = b && b.card;

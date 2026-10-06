@@ -83,6 +83,7 @@ import { hasHp } from '../damage.js';
 import { genericKit } from './generic.js';
 import { normDir, localOrder } from '../dir.js';
 import { SKILL_SUMMON_START_DEPLOY } from '../../../shared/constants.js';
+import { unitBonds } from './support/index.js';
 
 const num = (v, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : (typeof v === 'string' && v.trim() !== '' && Number.isFinite(+v) ? +v : d));
 const GRID_3X3 = Object.freeze([[1, -1], [1, 0], [1, 1], [0, -1], [0, 0], [0, 1], [-1, -1], [-1, 0], [-1, 1]]);
@@ -588,7 +589,7 @@ function radiantSword(bb, raw, def) {
       bindToOwnerSkill(battle, unit);
       onDeploy(battle, unit, () => {
         const last = stateOf(battle).lastOp.get(unit.ownerId);
-        const kaz = !!(last && (last.def?.bonds || []).includes('kazimierzShip'));
+        const kaz = !!(last && unitBonds(last).includes('kazimierzShip'));
         burst(battle, unit, { grid, amount: ownerAtk(unit) * num(bb.atk_scale, 0), type: 'true', stun: num(bb.stun, 0), hits: kaz ? 2 : 1, source: unit, fx: 'radiantSword' });
       });
     },

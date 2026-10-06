@@ -138,3 +138,28 @@ test('hidden-layer bonds show activation and tiers without a stack badge or laye
     .find((v) => v.props?.name === DATA.bonds.yanShip.name);
   assert.equal(disc.props.layers, 12, 'stacking bonds keep their badge');
 });
+
+test('a 本局禁用 disc shows the layers it holds, still without its member count (local fix, DESIGN §21.40)', () => {
+  // 灵巧 is on 标准模拟's inactive list, yet 「无需激活盟约」 sources keep feeding it (灵知 +5, 随身身份牌 +3/+6 …) and the
+  // server sends them (offBondCounts { count, layers }). The strip used to hide the number, so a player pairing 谢拉格
+  // with 灵巧 read the grey disc as "my layers went missing" (community report).
+  const entry = { bondId: 'skillfulShip', active: false, tier: 0, count: 2, layers: 13, off: true };
+  const strip = BondStrip({ bonds: [entry], onOpen() {} });
+  const slot = [...walk(strip)].find((v) => v.props?.['data-off'] === '1');
+  assert.ok(slot, 'the grey 本局禁用 disc');
+  assert.equal(textOf(slot), '本局禁用', 'no member count on it');
+  const disc = [...walk(strip)].find((v) => v.props?.name === DATA.bonds.skillfulShip.name);
+  assert.equal(disc.props.layers, 13, 'the layers the traits and items granted are visible');
+  assert.match(disc.props.title, /本局禁用/);
+  assert.match(disc.props.title, /2 名成员/);
+  assert.match(disc.props.title, /13 层/);
+  // nothing earned: no badge; hidden-layer bonds (noStack) never show one, off or not
+  const none = [...walk(BondStrip({ bonds: [{ ...entry, layers: 0 }], onOpen() {} }))]
+    .find((v) => v.props?.name === DATA.bonds.skillfulShip.name);
+  assert.equal(none.props.layers, undefined);
+  for (const bondId of ['soloShip', 'suntShip']) {
+    const hidden = [...walk(BondStrip({ bonds: [{ bondId, active: false, tier: 0, count: 2, layers: 40, off: true }], onOpen() {} }))]
+      .find((v) => v.props?.name === DATA.bonds[bondId].name);
+    assert.equal(hidden.props.layers, undefined, bondId);
+  }
+});

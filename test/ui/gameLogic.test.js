@@ -508,6 +508,8 @@ describe('keyboard & settings', () => {
       }
       assert.equal(shortcutFor({ key, target: { isContentEditable: true } }), null);
     }
+    assert.equal(shortcutFor({ key: 'c', code: 'KeyC' }), 'collapse', 'C folds / unfolds the shop bar (§21.33)');
+    assert.equal(shortcutFor({ key: 'C', code: 'KeyC' }), 'collapse');
     assert.equal(shortcutFor({ key: ' ', code: 'Space' }), 'ready');
     assert.equal(shortcutFor({ key: 'Escape' }), 'escape');
     assert.equal(shortcutFor({ key: 'r', ctrlKey: true }), null);

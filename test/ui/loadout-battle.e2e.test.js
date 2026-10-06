@@ -125,7 +125,7 @@ describe('user playtest #2 item 1 — loadout chosen in the UI fights in the loc
       await c.page.waitForFunction(() => !document.querySelector('.dpanel'), { timeout: 4000 });
 
       // 4) ready → the local battle
-      await c.click('.readybtn');
+      await c.ready();
       await c.waitFor((s) => s.phase === 'COMBAT', 'combat', 60000);
       const got = await c.page.waitForFunction((uid) => {
         const r = globalThis.__SP_RUNNER__;

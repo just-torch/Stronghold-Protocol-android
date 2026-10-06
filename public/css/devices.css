@@ -99,6 +99,34 @@ html:not(.sp-in-match) .toast-host { margin-top: var(--sa-t); }
   .field--lg .field__box { height: max(.68rem, 40px); }
 }
 
+/* ---- 5. short landscape screens: what the board can still take ----------------------------------------------- */
+/* The prep camera has to fit the whole "bench -> field back row" band between the top bar + bond strip and the shop
+   bar (js/render/projection.js clearHud), so the HUD's vertical claim is exactly what caps the prep board: the band
+   is 5.36 tiles deep, i.e. every pixel of HUD height is 1/5.36 px of tile, and the board's own shape (11 columns by
+   6 rows ≈ 2.2:1) is far wider than the space left (3.6:1) — it can only grow upwards, never sideways.
+   The shop bar is by far the biggest consumer (2.64 rem of the bottom edge = 108 px of 412 = 26 %), but its cards
+   keep their design height: the shop's own display is not touched here at all (user decision after trying 1.34 rem
+   and 1.06 rem cards — the compact bar lost its portraits and was not worth the height it bought). What is left to
+   give back is the bond strip, which is chrome around a list of icons: the discs keep their shape, only the name line
+   under them and the strip's distance from the top bar get tighter. Since §21.38 the member-count badge rides ABOVE the
+   discs' tier rings (css/screens/game.css), so the strip has to start low enough for that badge to clear the top bar's
+   painted boxes (the .gtop__center panel's bottom edge is 40 px = 1.0 rem at 1rem = 40 px, the difficulty tag's 37 px):
+   1.30rem puts the badge's top at 41.3 px, clear of both, and the fill camera still leaves every bench pad untouched
+   there — 1.34rem already costs 924×424 four percent of bench pad 7 (measured in the mock harness). The band is
+   1.30 + .62 + .12 × 1.1 = 2.05rem (it was 1.1 + .54 + .132 = 1.77rem before the discs grew). The field then adapts
+   on its own: the prep camera fills whatever the HUD leaves instead of stopping at the official 1080p framing
+   (render/projection.js PHONE_FILL_MAX_H, the same 460 px threshold as this block). js/ui/fieldHost.js hudBands
+   measures both bands off the page, so the camera follows either way. */
+@media (max-height: 460px) and (pointer: coarse), (max-height: 460px) and (any-pointer: coarse) {
+  /* the bond strip (the top band): the discs and their counts are the information and keep their shape, the name
+     line under them and the strip's offset are what the band pays for */
+  .gm__bonds { top: 1.30rem; }
+  .bslot { width: .78rem; --bslot-disc: .62rem; }
+  .bslot .bond { gap: 0; }
+  .bslot .bond__name { font-size: .12rem; line-height: 1.1; }
+  .bslot__count { font-size: .12rem; line-height: 1.2; bottom: calc(100% + var(--bslot-disc) * .12); right: calc((100% - var(--bslot-disc)) / 2); }
+}
+
 /* ---- 4. misc ------------------------------------------------------------------------------------------------------ */
 .fsbtn { display: grid; place-items: center; padding: 0; background: rgba(8, 11, 10, .85); border: 1px solid var(--line-2); color: var(--text-lo); transition: color var(--t-fast), border-color var(--t-fast); }
 .fsbtn .icon { width: .26rem; height: .26rem; }

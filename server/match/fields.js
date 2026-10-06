@@ -789,7 +789,9 @@ export function validateClientResult(spec, raw, { gd = null } = {}) {
         }
         // mods / tag / source come from the spawn schedule (a leak re-enters 联防 with them). An enemy content spawned
         // (a split, a summon) carries its parent's mods — the round multipliers, a bounty id — so the leak's mods may
-        // equal another schedule entry's: keep those (dropping them would re-enter it weaker and lose its bounty)
+        // equal another schedule entry's: keep those (dropping them would re-enter it weaker). The bounty ID travels with
+        // them, but a spawn is not the enemy its card added: `match` (an entry of its OWN key) is what identifies the
+        // card's enemy, and unite.js pays the bounty only for it (§21.37 — a player report after 0.1.1).
         const cands = spawnMods.get(key) || [];
         const match = cands.find((s) => sameMods(s.mods ?? null, l.mods ?? null)) || null;
         const src = match || cands[0] || null;

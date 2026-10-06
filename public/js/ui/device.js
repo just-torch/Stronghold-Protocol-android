@@ -55,6 +55,10 @@ export function detectFeatures(win = globalThis) {
   const touchPoints = Number(nav.maxTouchPoints) || 0;
   const coarse = mq(win, '(any-pointer: coarse)') || mq(win, '(pointer: coarse)');
   const fine = mq(win, '(any-pointer: fine)');
+  // A device whose PRIMARY input is a finger, i.e. one you can turn to landscape: on a touch-screen laptop (this
+  // machine: maxTouchPoints 10, any-pointer coarse, but a mouse = pointer fine) the rotate hint must stay away — the
+  // 900x1000 window of a desktop browser is not a phone (test/ui/devices.e2e.test.js, test/ui/devices.test.js).
+  const pointerCoarse = mq(win, '(pointer: coarse)') || (coarse && !fine);
   const hover = mq(win, '(any-hover: hover)') || mq(win, '(hover: hover)');
   const el = doc?.documentElement;
   const fsEnabled = !!(doc && (doc.fullscreenEnabled || doc.webkitFullscreenEnabled))
@@ -64,6 +68,7 @@ export function detectFeatures(win = globalThis) {
   return {
     touch: touchPoints > 0 || coarse || 'ontouchstart' in (win || {}),
     coarse,
+    pointerCoarse,
     fine,
     hover,
     fullscreen: fsEnabled,
@@ -88,9 +93,10 @@ export function featureClasses(f) {
     'sp-fs': !!f.fullscreen,
     'sp-standalone': !!f.standalone,
     'sp-reduced-motion': !!f.reducedMotion,
-    // the rotate hint (css/theme.css) is for a device you can turn: a touch screen whose screen is not in landscape —
-    // never a desktop browser window that happens to be narrow, nor a split-view iPad
-    'sp-rotatable': !!f.coarse && f.screenLandscape !== true,
+    // the rotate hint (css/theme.css) is for a device you can turn: a touch-first screen whose screen is not in
+    // landscape — never a desktop browser window that happens to be narrow, nor a split-view iPad, nor a touch-screen
+    // laptop with a mouse (pointerCoarse, not merely "some coarse pointer exists")
+    'sp-rotatable': !!f.pointerCoarse && f.screenLandscape !== true,
   };
 }
 

@@ -27,6 +27,7 @@ import { COLS, CHAIN_RADIUS } from '../../constants.js';
 import { absoluteRangeKeys, sortEnemyTargets } from '../../targeting.js';
 import { frontOf, offsetTile } from '../../dir.js';
 import { bodyInKeys, bodyOnTile, bodyTileReach } from '../../body.js';
+import { unitBonds } from '../support/index.js';
 
 // =================================================================================================================
 // shared helpers (named exports; content/index.js only merges the default export)
@@ -341,7 +342,7 @@ export default {
             // (the larger magazine applies from the next activation: a running skill keeps its rounds)
             if (!up(unit) || unit.deploySeq !== seq) return;
             const pool = battle.allyUnits.filter((a) => a !== unit && a.kind === 'op' && a.ownerId === unit.ownerId && a.alive
-              && (a.def.bonds || []).includes('lateranoShip') && a.skill && a.skill.kind === 'ammo');
+              && unitBonds(a).includes('lateranoShip') && a.skill && a.skill.kind === 'ammo');
             const pick = battle.rng.pick(pool);
             if (!pick) return;
             (pick.mem.insiderAmmo ??= new Map()).set(unit.id, { src: unit, seq, n: allyAmmo });

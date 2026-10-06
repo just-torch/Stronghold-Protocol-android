@@ -55,7 +55,10 @@ describe('client leftovers — mock harness', { skip: !ENABLED && 'set SP_E2E=1 
     page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
     page.on('requestfailed', (r) => problems.push(`requestfailed: ${r.url()} ${r.failure()?.errorText}`));
     page.on('response', (r) => { if (r.status() >= 400) problems.push(`http ${r.status()}: ${r.url()}`); });
-    await page.goto(`${base}/dev/game-mock.html?shot=1&${query}`, { waitUntil: 'networkidle0' });
+    // `domcontentloaded` + the screen wait below, NOT `networkidle0`: with the complete asset set the mock page starts
+    // loading the battle BGM (and voice) files, whose media requests stay open long enough that networkidle0 hit the
+    // 30 s navigation timeout (test/ui/mock|playtest*.e2e.test.js use the same rule via test/e2e/client.mjs).
+    await page.goto(`${base}/dev/game-mock.html?shot=1&${query}`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => !!document.querySelector('.screen:not(.gload)'), { timeout: 15000 });
     await sleep(900);
     return { page, problems };
@@ -79,6 +82,10 @@ describe('client leftovers — mock harness', { skip: !ENABLED && 'set SP_E2E=1 
     const target = s.board.find((p) => p.kind === 'chess' && (p.items || []).length === 2);
     const item = s.hand.find((p) => p && p.kind === 'item' && attaches(p.id) && !target.items.some((x) => x.id === p.id));
     assert.ok(target && item, 'the mock has a full operator and an attachable hand item');
+    // the store already lists them; the fallback field renders the pieces a beat later (with the complete asset set the
+    // page no longer settles at networkidle0, so the DOM wait has to be explicit)
+    await page.waitForSelector(`.ff-piece[data-uid="${item.uid}"]`, { timeout: 10000 });
+    await page.waitForSelector(`.ff-piece[data-uid="${target.uid}"]`, { timeout: 10000 });
     const dropOnTarget = async () => {
       await drag(page, await center(page, `.ff-piece[data-uid="${item.uid}"]`), await center(page, `.ff-piece[data-uid="${target.uid}"]`));
       await page.waitForSelector('.eqr .eqr__opt', { timeout: 4000 });
@@ -148,14 +155,18 @@ describe('client leftovers — mock harness', { skip: !ENABLED && 'set SP_E2E=1 
     assert.deepEqual(problems, []);
     await page.close();
 
-    // the level time ran out: the drain starts in ~18 s
+    // the level time ran out: the drain starts in ~18 s (the mock's overtime variant needs a moment to boot on a busy
+    // machine — the 3 s this used to allow timed out under load)
     ({ page, problems } = await open('phase=FINAL_ASSAULT&variant=overtime'));
-    await page.waitForSelector('.otwarn[data-state="pending"]', { timeout: 3000 });
+    await page.waitForSelector('.otwarn[data-state="pending"]', { timeout: 10000 });
     const pend = await page.$eval('.otwarn', (el) => el.textContent);
     assert.match(pend, /DOT/);
     assert.match(pend, /\d+\s*秒后全队生命值开始流失/);
     const secs = Number(pend.match(/(\d+)\s*秒后/)[1]);
-    assert.ok(secs > 10 && secs <= 18, `drain in ${secs} s`);
+    // The mock starts the drain ~18 s after its own level clock hits zero, and the page may take seconds to load and
+    // settle on a busy machine (it read exactly 10 s once and failed `> 10`): what matters is a pending drain with a
+    // countdown left in the level's own window, not the exact remaining seconds.
+    assert.ok(secs > 2 && secs <= 18, `drain in ${secs} s`);
     assert.equal(await page.$eval('.gtop__right .countdown', (el) => el.getAttribute('aria-label')), '剩余0秒');
     await page.screenshot({ path: path.join(OUT, 'leftover-fa-overtime.png') });
     assert.deepEqual(problems, []);
@@ -304,7 +315,7 @@ describe('client leftovers — real server', { skip: !ENABLED && 'set SP_E2E=1 (
       await c.shot('replace-real-after');
 
       // 4) ready → the local battle → pause / resume
-      await c.click('.readybtn');
+      await c.ready();
       await c.waitFor((s) => s.phase === 'COMBAT', 'combat', 60000);
       await c.page.waitForSelector('[data-testid="pause"]', { visible: true, timeout: 15000 });
       await sleep(1500);
@@ -382,18 +393,25 @@ describe('client leftovers — real server', { skip: !ENABLED && 'set SP_E2E=1 (
       await c.waitFor((x) => !!x.room, 'a new solo room on the restarted server');
       if (!(await c.st()).phase) await c.click('.room-bar__right button', '开始模拟', { timeout: 20000 });
       await c.waitFor((x) => x.phase === 'INFO_CHECK', 'briefing on the restarted server', 30000);
-      // a graceful stop (Ctrl+C / SIGTERM): room.closed 'shutdown' says so first, the same clean way back — and only once
+      // a graceful stop (Ctrl+C / SIGTERM): room.closed 'shutdown' says so first, the same clean way back — and only once.
+      // POSIX only: on Windows `child.kill('SIGTERM')` is a TerminateProcess (Node docs), so the server's shutdown
+      // handler never runs and the client can only see the abnormal close — the notice is unobservable there.
+      const POSIX_SIGNALS = process.platform !== 'win32';
       const resetToast = () => c.page.evaluate(() => [...document.querySelectorAll('.toast')].some((t) => t.textContent.includes('服务器会话已重置')));
-      await c.page.waitForFunction(() => ![...document.querySelectorAll('.toast')].some((t) => t.textContent.includes('服务器会话已重置')), { timeout: 20000 });
-      await srv.stop();
-      await c.page.waitForFunction(() => [...document.querySelectorAll('.toast')].some((t) => t.textContent.includes('服务器维护中')), { timeout: 15000 });
-      await c.page.waitForSelector('.lobby-screen', { timeout: 10000 });
-      srv = await startRealServer({ port });
-      await c.waitFor((x) => x.room == null && x.phase == null, 'lobby after the graceful restart', 30000);
-      await c.page.waitForFunction(() => globalThis.__SP__.net.status === 'online', { timeout: 30000 });
-      await sleep(800);
-      assert.equal(await resetToast(), false, 'the room was already closed by room.closed: no second notice');
-      await c.shot('restart-graceful');
+      if (POSIX_SIGNALS) {
+        await c.page.waitForFunction(() => ![...document.querySelectorAll('.toast')].some((t) => t.textContent.includes('服务器会话已重置')), { timeout: 20000 });
+        await srv.stop();
+        await c.page.waitForFunction(() => [...document.querySelectorAll('.toast')].some((t) => t.textContent.includes('服务器维护中')), { timeout: 15000 });
+        await c.page.waitForSelector('.lobby-screen', { timeout: 10000 });
+        srv = await startRealServer({ port });
+        await c.waitFor((x) => x.room == null && x.phase == null, 'lobby after the graceful restart', 30000);
+        await c.page.waitForFunction(() => globalThis.__SP__.net.status === 'online', { timeout: 30000 });
+        await sleep(800);
+        assert.equal(await resetToast(), false, 'the room was already closed by room.closed: no second notice');
+        await c.shot('restart-graceful');
+      } else {
+        console.log('  (graceful-stop notice skipped: Windows cannot deliver SIGTERM to the child)');
+      }
       // only the downtime's socket errors are expected
       const other = c.problems.filter((p) => !/WebSocket|ERR_CONNECTION_REFUSED|\/ws\b|net::ERR_/.test(p));
       assert.deepEqual(other, []);

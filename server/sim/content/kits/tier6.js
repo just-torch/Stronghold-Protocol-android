@@ -114,6 +114,7 @@ import { rotateOffset } from '../../dir.js';
 import { bodyDist, bodyInKeys, bodyKeys } from '../../body.js';
 import { hasHp } from '../../damage.js';
 import { summonToken, TOKEN_IDS } from '../tokens.js';
+import { unitBonds } from '../support/index.js';
 
 // ------------------------------------------------------------------------------------------------------------------
 // helpers
@@ -148,7 +149,8 @@ function moduleBb(chess) {
 const parseN = (text, re, d) => { const m = String(text ?? '').match(re); return m ? +m[1] : d; };
 const live = (u) => !!u && u.alive && u.deployed && !u.removed && !u.hidden;
 const isElite = (e) => !!e && (e.isBoss || e.def?.rank === 'ELITE' || e.def?.rank === 'BOSS');
-const hasBond = (u, id) => !!(u && u.def && Array.isArray(u.def.bonds) && u.def.bonds.includes(id));
+/** "【X】盟约干员" = the operator's bonds incl. 变形同构体 grants (support.unitBonds, like items' memberOf). */
+const hasBond = (u, id) => !!u && unitBonds(u).includes(id);
 const keyOf = (u) => Math.round(u.y) * COLS + Math.round(u.x);
 const opsOf = (battle, ownerId) => battle.allies(ownerId).filter((a) => a.kind === 'op');
 const ANY = Object.freeze({ canHitFly: true });

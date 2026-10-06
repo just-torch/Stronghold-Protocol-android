@@ -31,7 +31,8 @@
 //                      无来源 damage uses the chance and hits nobody, a 流失 never does — PRTS 备注 / 作战机制)
 //                      + 脆弱 ×damage_scale for weak[limit] s
 //   助力 deputShip     all operators DEF +(base + per·L), redeploy time ×(1 + respawn_time)
-//   突袭 raidShip      member idle ≥ no_attack_duration s (or skill ready) with no enemy in range → "保留技力立即再部署"
+//   突袭 raidShip      member idle ≥ no_attack_duration s (or skill ready — a passive skill counts as ready while it is
+//                      in effect, GitHub issue #49) with no enemy in range → "保留技力立即再部署"
 //                      next to the most advanced ground enemy it can reach: on a free tile its position may be deployed
 //                      on from which its range covers that enemy (GitHub issue #51 [ASSUMED]: the first of the 8 most
 //                      advanced that has such a tile; none → it stays and the next poll looks again, never a jump that
@@ -45,7 +46,8 @@
 //                      “倒地干员”…自动部署至该位置"; its own home when it fell on another board piece's home);
 //                      L ≥ power_bond_stack_cnt: every operator ASPD +power_attack_speed
 //   不屈 indomShip     ground operator knocked out → p = min(1, base + per·L) immediate free redeploy where it lies
-//                      (the engine's rest tile); tier 2: every operator on the field +sp SP
+//                      (the engine's rest tile; a refused landing — someone stands there — banks the zeroed next
+//                      deployment instead of spending the roll: GitHub #108); tier 2: every operator on the field +sp SP
 //   协防 emptyShip     all operators phys/arts taken ×(1 − damage_resistance); members dealt ×damage_scale_normal
 //                      (elite ×damage_scale_extra)
 //   独行 soloShip      the member(s) ATK +atk, HP +max_hp, +sp SP on every deploy
@@ -316,7 +318,16 @@ function raidPoll(battle, st) {
   for (const u of st.members[ID.raid]) {
     if (!onField(u) || !u.canAct) continue;
     const since = Math.max(u.lastAttackAt ?? -Infinity, u.deployedAt ?? -Infinity, u.mem[KEY.raid] ?? -Infinity);
-    const ready = !!(u.skill && u.skill.ready && !(u.skill.active && u.skill.isTimed));
+    // GitHub issue #49 (the maintainer's 0.2.0 plan: "被动技能生效中也算技能就绪", the 突袭 check only): a skill that is in
+    // effect counts as 技能就绪 even though it never charges SP, so a 被动系 member advances the moment a ground enemy it
+    // can reach stands on the field instead of waiting out the idle timer. `SkillRuntime.ready` cannot express it: it
+    // needs a charge and `kind !== 'passive'`, and an ON_DEPLOY passive is not even `kind: 'passive'` here — content/
+    // generic.js:150-154 re-types one that carries a duration ("N秒内") to `duration` + `activateOnDeploy` (缄默德克萨斯
+    // S1–S3, 斯卡蒂 S2, 耀骑士临光 S2, 野鬃 S1, 砾 S1 …), the very members the report is about. 史尔特尔 S3 — a toggle
+    // she opens herself — is neither, and a running timed skill still is not ready.
+    const sk = u.skill;
+    const inEffect = !!sk && sk.active && (sk.kind === 'passive' || !!(sk.spec && sk.spec.activateOnDeploy));
+    const ready = inEffect || (!!sk && sk.ready && !(sk.active && sk.isTimed));
     const idleOk = battle.time - since >= idle - 1e-9;
     if (!(ready || idleOk)) continue;
     if (battle.enemiesInKeys(u.rangeKeys || [], u, u.profile).length) continue;
@@ -465,6 +476,14 @@ export function install(battle) {
       if (banked || (st && battle.rng() < prob(bb, L(battle, st, ID.indom)))) {
         u.mem[ID.indom] = battle.time;
         if (battle.redeploy(u, { free: true })) fxOn(battle, 'revive', u, 'bond:indomShip', 'redeploy');
+        else {
+          // the landing is refused right now (a living unit or another 倒地干员 on the rest tile). GitHub #108: the roll
+          // used to be spent for nothing — neither a revive nor the other half of PRTS's own note for 「立刻重新部署」,
+          // "令受益者下次部署的再部署时间和费用归零". Bank it instead: the timer is zeroed and the deployment that
+          // follows — as soon as the tile frees — spends no DP (Battle._checkRedeploys reads `freeRedeploy`).
+          u.respawnAt = battle.time;
+          u.freeRedeploy = true;
+        }
       }
     }, { priority: 10 });
     battle.on('dollSwap', ({ unit: u }) => {

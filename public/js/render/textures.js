@@ -835,7 +835,7 @@ export function fxAtlas() {
   return _fx;
 }
 
-export const STATUS_KEYS = ['stun', 'freeze', 'cold', 'stealth', 'shield', 'fragile', 'sleep', 'invuln', 'silence', 'slow', 'bind', 'fear', 'weaken', 'levitate', 'taunt', 'burn', 'neural', 'necrosis', 'blocked', 'skill', 'doll', 'healFree', 'refraction'];
+export const STATUS_KEYS = ['stun', 'freeze', 'cold', 'stealth', 'shield', 'fragile', 'sleep', 'invuln', 'silence', 'slow', 'bind', 'fear', 'weaken', 'levitate', 'taunt', 'burn', 'neural', 'necrosis', 'blocked', 'skill', 'doll', 'healFree', 'refraction', 'palsy', 'attract', 'reveal'];
 
 function drawStatusIcon(c, key, x, y, s) {
   const cx = x + s / 2, cy = y + s / 2;
@@ -888,6 +888,33 @@ function drawStatusIcon(c, key, x, y, s) {
       disc('rgba(12,36,48,0.92)', '#7ee0ff');
       c.strokeStyle = '#d8f7ff'; c.lineWidth = 2;
       c.beginPath(); c.moveTo(cx - 8, cy + 6); c.lineTo(cx - 1, cy - 8); c.lineTo(cx + 8, cy + 6); c.moveTo(cx + 2, cy - 2); c.lineTo(cx + 9, cy - 8); c.stroke();
+      break;
+    }
+    case 'palsy': {
+      // 麻痹 (神经损伤's burst, 3 stacks, one normal attack each — GitHub #171): a bolt through the disc with sparks
+      disc('rgba(30,18,54,0.94)', '#b48bff');
+      c.fillStyle = '#e6d6ff';
+      c.beginPath(); c.moveTo(cx + 3, cy - 10); c.lineTo(cx - 6, cy + 1); c.lineTo(cx - 1, cy + 1); c.lineTo(cx - 4, cy + 10);
+      c.lineTo(cx + 6, cy - 2); c.lineTo(cx + 1, cy - 2); c.closePath(); c.fill();
+      c.strokeStyle = '#c9aaff'; c.lineWidth = 1.6;
+      c.beginPath(); c.moveTo(cx - 11, cy - 6); c.lineTo(cx - 7, cy - 6); c.moveTo(cx + 8, cy + 7); c.lineTo(cx + 12, cy + 7); c.stroke();
+      break;
+    }
+    case 'attract': {
+      // 诱导: an arrow bent towards a point
+      disc('rgba(46,30,10,0.94)', '#ffbe5c');
+      c.strokeStyle = '#ffe0a8'; c.lineWidth = 2;
+      c.beginPath(); c.arc(cx, cy, 8, Math.PI * 0.15, Math.PI * 1.15); c.stroke();
+      c.beginPath(); c.moveTo(cx - 8.2, cy - 1.6); c.lineTo(cx - 3.4, cy - 5.2); c.lineTo(cx - 3.0, cy - 0.2); c.closePath();
+      c.fillStyle = '#ffe0a8'; c.fill();
+      break;
+    }
+    case 'reveal': {
+      // 暴露 / 照明: an eye, drawn for a stealth enemy someone lit up
+      disc('rgba(18,38,44,0.94)', '#7fe6ff');
+      c.strokeStyle = '#d6f8ff'; c.lineWidth = 2;
+      c.beginPath(); c.ellipse(cx, cy, 10, 6, 0, 0, Math.PI * 2); c.stroke();
+      c.fillStyle = '#d6f8ff'; c.beginPath(); c.arc(cx, cy, 3, 0, Math.PI * 2); c.fill();
       break;
     }
     case 'silence': {

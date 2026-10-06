@@ -309,8 +309,14 @@ const INSTALLERS = {
   },
 
   act2autochess_gar_event_allyenemy_sleepstun_inrange(battle, list) {
-    battle.on('statusApplied', ({ target, status, entered }) => { // "进入沉睡/晕眩时": new entries only (ctx.entered)
-      if (!target || (status !== 'sleep' && status !== 'stun') || !entered) return;
+    // "进入沉睡/晕眩时" (缇缇's 封护, garrison_125): every successful application counts, a refresh of a running sleep
+    // included — that refresh is where the stacks come from (her S2 re-applies sleep to the ward's surroundings every
+    // AURA_IV = 0.25 s, so a "new entry only" reading of ctx.entered could never pass the 24-per-battle cap: with four
+    // enemies standing in the ward the count stopped at 4 and the trait read as broken — GitHub issue #162, where the
+    // reporter's expectation is that the stacks climb "迅速…直至上限"). The cap (`max_add_count_per_battle`) is what
+    // bounds it. The freeze installer above keeps `entered`: its text says 「进入冻结时」 and a refresh is not an entry.
+    battle.on('statusApplied', ({ target, status }) => {
+      if (!target || (status !== 'sleep' && status !== 'stun')) return;
       if (!(target.side === 'enemy' || (target.side === 'ally' && target.kind === 'op'))) return;
       for (const it of list) if (S.onField(it.unit) && S.inRange(it.unit, target)) fireGain(battle, it);
     });

@@ -116,6 +116,11 @@ describe('ui/device.js feature detection', () => {
     assert.equal(cls(w(coarse, {}, undefined)), true, 'unknown screen orientation on a touch device: the hint may show');
     assert.equal(cls(w(coarse, { orientation: { type: 'landscape-primary' } })), false, 'split-view iPad: the screen is landscape');
     assert.equal(cls(w(fine, { orientation: { type: 'portrait-primary' } })), false, 'a desktop window (even on a portrait monitor)');
+    // a touch-screen laptop (this machine): any-pointer is coarse, but the primary pointer is the mouse — a narrow
+    // portrait window there is not a phone to rotate (devices.e2e's 900x1000 desktop window used to get the hint)
+    const touchLaptop = { '(any-pointer: coarse)': true, '(any-pointer: fine)': true, '(any-hover: hover)': true };
+    assert.equal(cls(w(touchLaptop, { orientation: { type: 'portrait-primary' } })), false, 'touch laptop with a mouse');
+    assert.equal(cls(w({ '(pointer: coarse)': true }, { orientation: { type: 'portrait-primary' } })), true, 'a touch-first device without any fine pointer');
   });
   test('fullscreen: standard API, and unsupported (iPhone Safari) → false', async () => {
     const f = fakeWindow();

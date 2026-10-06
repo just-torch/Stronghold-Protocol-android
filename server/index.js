@@ -40,7 +40,7 @@ import { pipeline } from 'node:stream/promises';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { Network, SessionRegistry, NET_DEFAULTS } from './net.js';
-import { Lobby } from './lobby.js';
+import { Lobby, parseConsoleMode } from './lobby.js';
 import { getData, loadData } from './data.js';
 import { PROTOCOL_VERSION, APP_VERSION } from '../shared/constants.js';
 import { MEDIA_PREFIX, AUDIO_EXTS } from '../shared/media.js';
@@ -607,6 +607,7 @@ function makeLogger(quiet) {
  *   ratePerSec?: number, rateBurst?: number, maxConnections?: number, maxRooms?: number,
  *   maxConnectionsPerAddr?: number, maxRoomsPerAddr?: number, maxMatchesPerAddr?: number, resyncMinGapMs?: number,
  *   heavyPerSec?: number, heavyBurst?: number, trustProxy?: 'auto' | boolean, soloReconnectWindowMs?: number,
+ *   console?: 'auto' | 'on' | 'off' | boolean,
  * }} [opts]
  * @returns {Promise<{ port: number, host: string, url: string, server: http.Server, wss: WebSocketServer,
  *                     lobby: Lobby, network: Network, registry: SessionRegistry, close: () => Promise<void> }>}
@@ -633,6 +634,8 @@ export async function startServer(opts = {}) {
   for (const k of ['lobbyGraceMs', 'maxRooms', 'maxRoomsPerAddr', 'maxMatchesPerAddr', 'resyncMinGapMs', 'soloReconnectWindowMs']) {
     if (opts[k] != null) lobbyOptions[k] = opts[k];
   }
+  // debug console (DESIGN §21.34): an explicit option wins, else SP_CONSOLE ('auto' = loopback clients only)
+  lobbyOptions.console = opts.console != null ? parseConsoleMode(opts.console) : parseConsoleMode(process.env.SP_CONSOLE);
   const lobby = new Lobby({ registry, log, MatchClass: opts.MatchClass, getData: () => data, seedFn: opts.seedFn, options: lobbyOptions });
   const network = new Network({ registry, handler: lobby, log, options: netOptions });
   const serveStatic = createStaticHandler({ publicDir, dataDir, sharedDir, log });
@@ -727,6 +730,14 @@ export async function startServer(opts = {}) {
     closing = (async () => {
       try { lobby.shutdown('shutdown'); } catch (e) { log.error('[shutdown] lobby', e); }
       network.close();
+      // The room.closed{shutdown} frames are queued on sockets that `network.close()` is closing: wait for them to
+      // finish before the process exits — process.exit() truncates pending writes, so a Ctrl+C / service stop would
+      // otherwise reach clients as an abnormal close (1006) with no 服务器维护中 notice. `network.conns` empties as each
+      // socket closes; the wait is capped so a stuck socket cannot hold the shutdown.
+      // (Windows note: `child.kill('SIGTERM')` there is TerminateProcess, so this handler never runs and a test that
+      // stops the server that way cannot observe the notice — see test/ui/leftovers.e2e.test.js, which skips it.)
+      const deadline = Date.now() + 300;
+      while ((network.conns?.size ?? 0) > 0 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 20));
       await new Promise((resolve) => {
         server.close(() => resolve());
         server.closeIdleConnections?.();

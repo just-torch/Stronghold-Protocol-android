@@ -1,0 +1,103 @@
+apply plugin: 'com.android.application'
+
+// Release signing. scripts-apk/build-apk.ps1 generates android/keystore.properties + the .jks on first run, so a
+// plain `gradlew assembleRelease` produces an installable APK without any manual keytool steps. When the file is
+// absent (e.g. a fresh checkout built by someone else) Gradle falls back to an unsigned release build.
+def keystorePropsFile = rootProject.file('keystore.properties')
+def keystoreProps = new Properties()
+def hasKeystore = keystorePropsFile.exists()
+if (hasKeystore) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+
+android {
+    namespace "io.github.sganggs.strongholdprotocol"
+    compileSdk rootProject.ext.compileSdkVersion
+    ndkVersion rootProject.ext.ndkVersion
+
+    signingConfigs {
+        release {
+            if (hasKeystore) {
+                storeFile rootProject.file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
+
+    defaultConfig {
+        applicationId "io.github.sganggs.strongholdprotocol"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        // The game's own version: keep in step with package.json (build-apk.ps1 checks and refuses a mismatch; the dist
+        // artifact name is derived from package.json). versionCode = major*10000 + minor*100 + patch. ASCII only.
+        versionCode 103
+        versionName "0.1.3"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    androidResources {
+        // The APK carries ~330 MB of game art that the capacitor-nodejs plugin copies out of the APK into the
+        // app's private storage on first launch. These types are already compressed, so deflating them again only
+        // slows that first-run copy down (and Android's own installer would have to inflate them first).
+        noCompress += ['png', 'jpg', 'jpeg', 'webp', 'gif', 'mp3', 'ogg', 'm4a', 'aac', 'skel', 'bin', 'woff2']
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasKeystore) {
+                signingConfig signingConfigs.release
+            }
+        }
+        /**
+         * A second, side-by-side TEST build (`scripts-apk/build-apk.ps1 -Variant devtest`, task `assembleDevtest`):
+         * the same game with its own application id (…`.dev`) and its own launcher label
+         * (src/devtest/res/values/strings.xml), signed with the same key, so it installs NEXT TO the release app
+         * instead of replacing it. The staged server carries the debug console switched on
+         * (`SP_CONSOLE=1`, DESIGN §21.33: every client of this app, LAN included) — the release build keeps the
+         * server's own default (`auto`: loopback clients only). No other difference: same versionCode/versionName
+         * (the version name gets a `-dev` suffix so the two are told apart on screen and by `aapt`).
+         */
+        devtest {
+            initWith release
+            applicationIdSuffix ".dev"
+            versionNameSuffix "-dev"
+            matchingFallbacks = ['release']
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>卫戍协议：盟约 · 局域网联机</title>
+<link rel="stylesheet" href="./launcher.css">
+</head>
+<body>
+<main class="shell">
+
+  <header class="hero">
+    <h1>卫戍协议<span class="colon">：</span>盟约</h1>
+    <p class="tagline">非官方同人复刻 · 局域网联机</p>
+  </header>
+
+  <section class="card" id="card-choose">
+    <button class="action primary" id="btn-host">
+      <span class="action-title">建立主机</span>
+      <span class="action-desc">用这台手机开服，同一 Wi-Fi 下的朋友都能加入</span>
+    </button>
+    <button class="action" id="btn-join">
+      <span class="action-title">加入房间</span>
+      <span class="action-desc">连接到别人已经开好的房间</span>
+    </button>
+  </section>
+
+  <section class="card" id="card-lan">
+    <p class="label">
+      同一 Wi-Fi 上正在开服的房间
+      <span class="discover-state" id="discover-state">正在搜索…</span>
+    </p>
+    <ul class="host-list" id="host-list"></ul>
+    <div class="row">
+      <button class="ghost" id="btn-rescan">重新搜索</button>
+    </div>
+  </section>
+
+  <section class="card hidden" id="card-host">
+    <h2>正在准备主机</h2>
+    <p class="status" id="host-status">正在启动…</p>
+    <div class="progress"><div class="progress-bar" id="host-bar"></div></div>
+    <p class="hint" id="host-hint"></p>
+    <p class="status warn hidden" id="host-rival"></p>
+    <div class="addresses hidden" id="host-addresses">
+      <p class="label">同一 Wi-Fi 下的朋友打开本应用就能在上面的列表里看到这个房间；也可以把地址发给他们：</p>
+      <ul class="addr-list" id="addr-list"></ul>
+      <p class="label">地址里的 <code>3000</code> 是端口，不能省。访客 Wi-Fi 常开启「AP 隔离」，会导致连不上。</p>
+      <p class="label">所有人必须连在<b>同一个</b>服务器上。两台手机都点「建立主机」会得到两个互不相通的游戏，想一起玩就让其中一方用「加入房间」。</p>
+    </div>
+    <div class="row">
+      <button class="ghost" id="btn-copy">复制地址</button>
+      <button class="primary" id="btn-enter" disabled>进入游戏</button>
+    </div>
+    <button class="link hidden" id="btn-loopback">局域网地址进不去？改用本机地址进入</button>
+    <button class="link" id="btn-back-1">返回</button>
+  </section>
+
+  <section class="card hidden" id="card-join">
+    <h2>加入房间</h2>
+    <p class="label">可以直接点上面搜索到的房间；也可以手动输入主机的局域网地址（例如 <code>192.168.1.23:3000</code>），或者粘贴对方发来的链接。</p>
+    <input id="join-addr" type="text" inputmode="url" autocomplete="off" autocapitalize="off"
+           spellcheck="false" placeholder="192.168.1.23:3000">
+    <p class="status error hidden" id="join-error"></p>
+    <div class="row">
+      <button class="ghost" id="btn-back-2">返回</button>
+      <button class="primary" id="btn-connect">连接</button>
+    </div>
+  </section>
+
+  <section class="card hidden" id="card-fatal">
+    <h2>启动失败</h2>
+    <p class="status error" id="fatal-message"></p>
+    <pre class="log hidden" id="fatal-detail"></pre>
+    <div class="row">
+      <button class="primary" id="btn-retry">重试</button>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <p>《明日方舟》相关素材版权归鹰角网络 / Yostar 所有，本项目仅供学习交流，严禁任何形式的盈利。</p>
+  </footer>
+
+</main>
+
+<script src="./vendor/capacitor.js"></script>
+<script src="./vendor/capacitor-nodejs.js"></script>
+<script src="./launcher.js"></script>
+</body>
+</html>

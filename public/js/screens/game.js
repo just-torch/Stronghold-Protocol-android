@@ -82,6 +82,8 @@ import { EmoteWheel } from '../ui/emotes.js';
 import { EffectsList } from '../ui/effectsList.js';
 import { CombatHud } from '../ui/combatHud.js';
 import { SettingsModal } from '../ui/settings.js';
+// debug console (DESIGN §21.34): the test panel, its key and its corner button — offered when m.private.console is set
+import { ConsolePanel, CONSOLE_KEY } from '../ui/console.js';
 import { ExitModal, AwayOverlay, awayStore } from '../ui/matchChrome.js';
 import { openGuide } from '../ui/guide.js';
 import { actions } from '../ui/gameActions.js';
@@ -113,6 +115,11 @@ import { useDocClass, FullscreenButton } from '../ui/device.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
 const HUD_HZ_MS = 200;
+/**
+ * How long the armed 准备就绪 button waits for its confirming second press (player report after 0.1.1: it sits in the
+ * top-right corner next to the countdown and was easy to hit by accident). A phase or round change disarms sooner.
+ */
+const READY_CONFIRM_MS = 4000;
 /** Range tiles of the selected unit (its own highlight group: the wheel's 'facing' group may be up at the same time). */
 const SEL_RANGE = Object.freeze({ group: 'selRange', color: 0xff9c33, fill: 0.3, line: 0.95 });
 /** The tile an armed merge-completing card's elite will take (its own group; gold like the promotion cue, render/fx.js). */
@@ -206,6 +213,7 @@ function MatchScreen() {
   const [rewardMin, setRewardMin] = useState(false);
   const [emoteOpen, setEmoteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [consoleOpen, setConsoleOpen] = useState(false);  // debug console (DESIGN §21.34) — only when the server grants it
   const [exitOpen, setExitOpen] = useState(false);
   const [drag, setDrag] = useState(null);                // { uid, kind, id } while dragging a piece
   const [facing, setFacing] = useState(null);            // direction step: { uid, piece, row, col, grid, name }
@@ -278,7 +286,7 @@ function MatchScreen() {
     priv, stage: gd.stage(pub?.stageId), editable, field: deployField,
     getChess: gd.chess, getToken: gd.token, getItem: gd.item, getEffect: gd.effect,
   }), [priv, pub?.stageId, editable, gd.ready, deployField]);
-  live.current = { pub, priv, field, editable, placeCtx, watching, watchWho, home, myId, detail, drawer, bondOpen, emoteOpen, settingsOpen, exitOpen, drag, facing, sel, selBusy, pen, collapsedNow: collapsed, localDone: false, canPause: false, paused };
+  live.current = { pub, priv, field, editable, placeCtx, watching, watchWho, home, myId, detail, drawer, bondOpen, emoteOpen, settingsOpen, exitOpen, drag, facing, sel, selBusy, pen, collapsedNow: collapsed, showShopNow: showShop, localDone: false, canPause: false, paused, consoleOpen, consoleAllowed: !!priv?.console };
 
   // ---- camera: every request goes through setCam, which remembers it for the pen's way back -----------------------
   // the own prep board: the normal board, or — in the prep of a boss round — the player's half of the boss field
@@ -545,6 +553,26 @@ function MatchScreen() {
     if (next) setCam(next.kind, next.opts);
   }, [view, shopFolded, showPrep, pen, !!drag, !!facing, prepCamKey]);
 
+  // The prep camera reserves the HUD bands measured at the moment it was requested (ui/fieldHost.js hudBands →
+  // render/projection.js clearHud): a box that grows afterwards — the 晋升奖励 banner replacing the bar's cards, the
+  // bond strip gaining a line, a web font that lands late — used to leave the bench / the field's back row under the
+  // HUD until some other camera request happened to re-measure it (§21.33: the same board with the shop over it
+  // "sometimes"). The bar's row is one constant box now (css/screens/game-shop.css `--shopbar-row`), so this never
+  // fires for the reward offer any more; it is the guarantee that no future state can cover the board. The engine's
+  // resize() re-measures the band and re-applies the camera in use (no flight, same request).
+  useEffect(() => {
+    if (!view || !showPrep || !showShop || typeof ResizeObserver !== 'function') return undefined;
+    const els = [barRef.current, document.querySelector('.gm__bonds')].filter(Boolean);
+    if (!els.length) return undefined;
+    let raf = 0;
+    const ro = new ResizeObserver(() => {
+      if (raf) return; // one re-fit per frame
+      raf = requestAnimationFrame(() => { raf = 0; view.resize(); });
+    });
+    for (const el of els) ro.observe(el);
+    return () => { if (raf) cancelAnimationFrame(raf); ro.disconnect(); };
+  }, [view, showPrep, showShop, shopFolded, phase, !!priv]);
+
   // 联防 / 最终攻势: the ‹ › pill moves the camera between the field's halves and 全景 (research 09 §3.1)
   useEffect(() => {
     if (!view || !field || !field.local || !isCombatPhase(phase)) return;
@@ -664,10 +692,27 @@ function MatchScreen() {
 
   // ---- actions ----------------------------------------------------------------------------------------------
   const buy = useCallback((i) => actions.buy(i), []);
+  // 准备就绪 asks twice (player report after 0.1.1: "开始游戏后右上角的准备就绪易误触，请添加确认机制"): the first click /
+  // Space arms it — the button says 再点一次确认 in amber — and the second one sends g.ready. 取消准备 (and a ready the
+  // server reports from elsewhere) is immediate, and the armed state lapses after READY_CONFIRM_MS or when the phase /
+  // round changes, so a stray tap cannot leave the button primed for a much later press. The state is mirrored in a ref:
+  // the key handler is registered once (see its `[]` deps) and must not close over a stale `readyArmed`.
+  const [readyArmed, setReadyArmed] = useState(false);
+  const readyArmedRef = useRef(false);
+  const readyArmTimer = useRef(null);
+  const armReady = useCallback((on) => {
+    readyArmedRef.current = on;
+    setReadyArmed(on);
+    if (readyArmTimer.current) { clearTimeout(readyArmTimer.current); readyArmTimer.current = null; }
+    if (on) readyArmTimer.current = setTimeout(() => { readyArmedRef.current = false; setReadyArmed(false); readyArmTimer.current = null; }, READY_CONFIRM_MS);
+  }, []);
+  useEffect(() => () => { if (readyArmTimer.current) clearTimeout(readyArmTimer.current); }, []);
   // 准备 with funds left asks first: the prep's end wipes them (community report #4; not 坎诺特, not at 0 funds, not
-  // under AI 托管 — gameLogic.readyFundsPrompt). The button and Space both come here.
+  // under AI 托管 — gameLogic.readyFundsPrompt). The button and Space both come here, after the two-press confirm.
   const askingReady = useRef(false);
   const toggleReady = useCallback(async (r) => {
+    if (r === true && !readyArmedRef.current) { armReady(true); return; } // armed: the second press confirms
+    armReady(false);
     const L = live.current;
     const me = Array.isArray(L.pub?.players) ? L.pub.players.find((p) => p && p.playerId === L.myId) : null;
     const ask = r ? readyFundsPrompt(L.priv, { keptBands: data.get('config')?.economy?.leftoverFundsKeptByBands, autoplay: !!me?.autoplay }) : null;
@@ -682,7 +727,11 @@ function MatchScreen() {
     setReadyBusy(true);
     await actions.ready(r);
     setReadyBusy(false);
-  }, []);
+  }, [armReady]);
+  const toggleReadyRef = useRef(toggleReady);
+  toggleReadyRef.current = toggleReady;
+  // a phase / round change (or a ready that arrived from the server) disarms: the button never stays primed
+  useEffect(() => { armReady(false); }, [armReady, phase, priv?.ready, pub?.round]);
   // the prep ended (timer) while the question was open: drop it — the funds are gone either way
   useEffect(() => { if (phase !== PHASE.PREP && askingReady.current) closeAllDialogs(); }, [phase]);
 
@@ -1095,6 +1144,15 @@ function MatchScreen() {
     const onKey = async (e) => {
       const act = shortcutFor(e);
       const L = live.current;
+      // the debug console's key (§21.34): it toggles its own panel too (a modal would swallow it below), but never over
+      // another dialog (the settings / 本局信息 / the guide), and never for a player the server did not grant it
+      if (act === 'console') {
+        if (!L.consoleAllowed) return;
+        if (!L.consoleOpen && document.querySelector('.modal, .guide')) return;
+        setConsoleOpen(!L.consoleOpen);
+        e.preventDefault();
+        return;
+      }
       // dialogs / the guide own the keyboard; behind the 本局信息 / 敌方情报 drawer only Esc (closing it) acts
       if (shortcutBlocked(act, { modal: !!document.querySelector('.modal, .guide'), drawer: !!L.drawer })) return;
       if (act === 'escape') {
@@ -1114,6 +1172,15 @@ function MatchScreen() {
         togglePauseRef.current(!L.paused);
         return;
       }
+      // C folds / unfolds the shop bar (收起 / 展开商店, the button in its funds card: the bench and the board's front
+      // rows come out from under it, §21.33). It is not a shop action, so it works while the bar is not
+      // editable (准备就绪 / round start) too. While the enemy pen is out the pen owns the folded state — C is ignored
+      // there (it would be undone when the pen returns the bar to how it was).
+      if (act === 'collapse') {
+        if (L.showShopNow && !L.pen) setCollapsed(!L.collapsedNow);
+        e.preventDefault();
+        return;
+      }
       if (L.pub?.phase !== PHASE.PREP || !L.priv) return;
       e.preventDefault(); // a focused HUD button must not also activate (Space) — see shortcutFor
       if (act === 'ready' && e.target instanceof HTMLElement && e.target.closest('button, [role="button"]')) e.target.blur();
@@ -1121,7 +1188,7 @@ function MatchScreen() {
         const refused = !L.priv.ready ? shopBlockReason('ready', { priv: L.priv, editable: true }) : null;
         // the temp overflow row blocks it: say why (the button shows it too — user playtest #3 item 3)
         if (refused) { audio.sfx('error', { volume: 0.5 }); toast(tempReadyReason(L.priv) || refused, 'warn'); return; }
-        toggleReady(!L.priv.ready);
+        toggleReadyRef.current(!L.priv.ready); // readying asks twice (§21.38): through the ref — this effect never re-runs
         return;
       }
       if (!L.editable) return;
@@ -1261,7 +1328,7 @@ function MatchScreen() {
     <div class="gm__hud" ref=${hudElRef}>
       <${TopBar} pub=${pub} priv=${priv} conn=${conn} hud=${hud} total=${total} drawer=${drawer}
         onExit=${() => setExitOpen(true)} onDrawer=${(t) => setDrawer((d) => (d ? null : t))} onReady=${toggleReady}
-        readyBusy=${readyBusy} readyCount=${readyCount} playerCount=${solo ? 1 : aliveCount}
+        readyBusy=${readyBusy} readyArmed=${readyArmed} readyCount=${readyCount} playerCount=${solo ? 1 : aliveCount}
         pen=${pen} penAvail=${penAvail} onPen=${togglePen} config=${gd.config} frozenAt=${frozenAt}
         pause=${canPause || paused ? { show: canPause, paused, busy: pauseBusy, onToggle: () => togglePause(!paused) } : null}
         live=${liveLpNow} spectator=${spectator} />
@@ -1321,6 +1388,8 @@ function MatchScreen() {
         <button type="button" class="gm__gear" aria-label="设置" title="设置" onClick=${() => setSettingsOpen(true)}><${GIcon} name="gear" /></button>
         <button type="button" class="gm__gear gm__guide" aria-label="玩法说明" title="玩法说明" onClick=${() => openGuide(0)}><${Icon} name="book" /></button>
         <${FullscreenButton} class="gm__gear gm__fs" />
+        ${priv?.console ? html`<button type="button" class="gm__gear gm__dbg" aria-label="调试控制台" title=${`调试控制台 · ${CONSOLE_KEY}`}
+          aria-keyshortcuts=${CONSOLE_KEY} onClick=${() => setConsoleOpen(true)}><${Icon} name="terminal" /></button>` : null}
       </div>
 
       ${drawer ? html`<${EnemyDrawer} tab=${drawer} onTab=${setDrawer} pub=${pub} priv=${priv} onClose=${() => setDrawer(null)}
@@ -1357,6 +1426,7 @@ function MatchScreen() {
       onConfirm=${(uid) => closeReplace(uid)} onCancel=${() => closeReplace(null)} />` : null}
 
     <${SettingsModal} open=${settingsOpen} onClose=${() => setSettingsOpen(false)} />
+    ${priv?.console ? html`<${ConsolePanel} open=${consoleOpen} onClose=${() => setConsoleOpen(false)} pub=${pub} priv=${priv} gd=${gd} />` : null}
     <${ExitModal} open=${exitOpen} onClose=${() => setExitOpen(false)} solo=${solo} />
   </div>`;
 }

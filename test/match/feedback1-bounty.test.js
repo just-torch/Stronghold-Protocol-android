@@ -13,11 +13,17 @@
 // Each card's enemy is fixed by its effect; the title only names category and tier (悬赏·损伤I = 底海滑动者 in
 // enemyeffect_12_4, 临时收音师 in enemyeffect_18_1). Real data, real draft code, the real match path for the players' case.
 // The 机密商店 is in test/match/feedback1-secret-shop.test.js.
+// #3 (player report after 0.1.1, DESIGN §21.36): "赏金阶段可选择的部分敌人存在死亡后会生成新敌人的机制，期望上这些新敌人不应
+// 有赏金，实际在联防阶段击杀后有赏金" — the bounty belongs to the enemy the card added; a unit content-spawned from it
+// inherits its parent's mods (bountyId included, enemies.js spawnChildren) but pays nothing.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { PHASE } from '../../shared/constants.js';
-import { DATA, makeMatch } from './harness.js';
+import { DATA, makeMatch, give, chessOfTier, legalTileFor, checkInvariants } from './harness.js';
+import { planUnite } from '../../server/match/unite.js';
+import { Battle } from '../../server/sim/Battle.js';
+import { buildBattleSpec, createBattleFromSpec } from '../../server/sim/spec.js';
 import { FakeBattle } from './fakeBattle.js';
 import { GameData } from '../../server/match/gamedata.js';
 import { generateDraft, bountyDraftKind } from '../../server/match/choices.js';
@@ -389,4 +395,146 @@ test('#2 E2E (co-op 绝境, the players\' case): the real R3 draft is an officia
     assert.deepEqual(rounds, [3, 4], `seed ${seed}: ${picked.name} (两场作战) spawned in R${rounds.join(', R')}`);
     m.dispose();
   }
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// #3 (after 0.1.1): the bounty belongs to the enemy the card added, not to everything that enemy leaves behind.
+
+test('#3 a bounty enemy\'s content-spawned child pays no bounty in 联防 — the enemy itself does (岁相 / 术师快艇 / 枯朽萃聚使徒)', () => {
+  // The reported families: an enemy the 悬赏 draft offers that spawns new enemies when it dies (or casts). The child
+  // inherits its parent's mods — `spawnChildren` passes `mods: opts.mods ?? parent.mods`, so bountyId rides along — and
+  // the 联防 planner used to pay the card's coins for it again (player report: "这些新敌人不应有赏金").
+  const CASES = [
+    ['enemyeffect_11_4', 'enemy_1195_sfyin', 'enemy_1196_msfyin'],  // 磨砻 · DeadSpawn 2 × 木制瑞印
+    ['enemyeffect_12_6', 'enemy_1162_magmot', 'enemy_1161_tidmag'], // 术师快艇 · DeathRattle 控潮术师
+    ['enemyeffect_10_8', 'enemy_1321_wdarft', 'enemy_1269_nhfly'],  // 枯朽萃聚使徒 · BornBugs 枯朽之种
+  ];
+  for (const [effectId, parent, child] of CASES) {
+    const card = CARD.get(effectId);
+    assert.equal(card.enemyKey, parent, `${effectId} brings ${parent}`);
+    assert.equal(card.payout, 'kill', `${effectId} pays its killer`);
+    assert.ok(DATA.enemies[child], `${child} exists`);
+    const h = makeMatch({ mode: 'coop', humans: 3, bots: 0, seed: 3711, fake: true, script: () => ({ duration: 0.1 }) }).start();
+    const m = h.m;
+    h.toPrep(1);
+    const ps = h.ps('p_0');
+    const id = m.addBounty(ps, card);
+    assert.ok(id, 'the bounty is the picker\'s');
+    const mods = { hpMul: 1.2, atkMul: 1.1, speedMul: 1, slot: 'N', bountyId: id };
+    // the own battle's result: the card's enemy leaked, and so did a unit it spawned (same mods, another key)
+    const results = new Map([
+      ['p_0', { perfect: false, leaked: [
+        { enemyKey: parent, mods, lpr: 1, sourcePlayerId: 'p_0', tag: 'bounty', counted: true },
+        { enemyKey: child, mods, lpr: 1, sourcePlayerId: 'p_0', tag: null, counted: true },
+      ] }],
+      ['p_1', { perfect: true, leaked: [] }],
+      ['p_2', { perfect: true, leaked: [] }],
+    ]);
+    const plan = planUnite(m, results);
+    assert.ok(plan, 'a leaker and a perfect helper: the 联防 happens');
+    const byKey = new Map(plan.leaked.map((l) => [l.enemyKey, l]));
+    assert.deepEqual(byKey.get(parent).bounty, { coins: card.coin, ownerPlayerId: 'p_0' }, `${card.name}: the enemy the card added still pays`);
+    assert.equal(byKey.get(child).bounty, null, `${card.name}: its spawn ${child} pays nothing`);
+    assert.deepEqual(byKey.get(child).mods, mods, `${child} still re-enters 联防 with the round's multipliers`);
+    assert.equal(byKey.get(child).sourcePlayerId, 'p_0', 'and is still billed to its leaker');
+    m.dispose();
+  }
+});
+
+test('#3 E2E (a real 联防 field pays the killer): killing a bounty enemy\'s spawn collects nothing, the enemy itself collects its coins', () => {
+  // Through the real match path from the leak record on: the real planner builds the 联防 field (real sim, real coins),
+  // and a helper's battle strikes every leaked enemy down at once (Battle.addCoins → the unite result's coins → the
+  // helper's pendingFunds at SETTLE). Before the fix the card paid once per leaked unit — its spawn included.
+  const card = CARD.get('enemyeffect_12_6');            // 术师快艇 · DeathRattle 控潮术师
+  const PARENT = card.enemyKey, CHILD = 'enemy_1161_tidmag';
+  /** kill every counted enemy as soon as it stands (the helper strikes them all down) */
+  class KillAll extends Battle {
+    constructor(opts) {
+      super(opts);
+      if (this.kind !== 'unite') return;
+      this.on('tick', () => { for (const e of this.enemies) if (e.alive && e.counted) this.kill(e, this.allyUnits[0] ?? null); });
+    }
+  }
+  const run = (keys) => {
+    const h = makeMatch({ mode: 'coop', humans: 2, bots: 0, seed: 731 });
+    h.m.BattleClass = KillAll;
+    h.start();
+    h.drive(() => h.m.phase === PHASE.PREP && h.m.round === 1, { ready: false });
+    const m = h.m;
+    const helper = h.ps('p_1');
+    // the helper fields one operator: the kills (and their coins) are credited to it, not to the leaker
+    const melee = chessOfTier(1, (c) => c.position === 'MELEE' && m.pool.has(c.chessId))[0];
+    assert.ok(melee, 'a tier-1 melee operator in the pool');
+    const unit = give(m, helper, melee, 'board', legalTileFor(m, helper, melee));
+    const id = m.addBounty(h.ps('p_0'), card);
+    assert.ok(id, 'the picker holds the bounty');
+    const mods = { hpMul: 1, atkMul: 1, speedMul: 1, slot: 'N', bountyId: id };
+    const leaked = keys.map((k) => ({ enemyKey: k, mods, lpr: 1, sourcePlayerId: 'p_0', tag: k === PARENT ? 'bounty' : null, counted: true }));
+    m.phase = PHASE.COMBAT;
+    m.fields = [];
+    m.lastResults = new Map(m.alivePlayers().map((p) => [p.playerId, {
+      leaked: p.playerId === 'p_0' ? leaked : [], perfect: p.playerId !== 'p_0', coins: 0, layerGains: {},
+      killed: 5, total: 5 + leaked.length, damageDealt: 0, unitsEnd: [],
+    }]));
+    m._afterCombat();
+    assert.equal(m.phase, PHASE.UNITE, '联防');
+    const before = helper.pendingFunds;
+    h.run(() => m.phase !== PHASE.UNITE, { maxSteps: 2e6 });
+    assert.notEqual(m.phase, PHASE.UNITE, 'the field is over');
+    const out = { coins: helper.pendingFunds - before, unit: unit.uid };
+    assert.equal(m.errorCount, 0);
+    m.dispose();
+    return out;
+  };
+  assert.equal(run([PARENT]).coins, card.coin, 'the card\'s own enemy: its coins go to the helper who killed it');
+  assert.equal(run([CHILD]).coins, 0, 'a spawn of it pays nothing in 联防 (the report: it used to pay in full)');
+  assert.equal(run([PARENT, CHILD]).coins, card.coin, 'the enemy and its spawn on one field: exactly one payout');
+});
+
+test('#3 the real sim: 磨砻 dies on the field, its two 木制瑞印 walk on and leak — and the 联防 pays no bounty for them', () => {
+  // The reported mechanic end to end, on the real stage and the real content: the card's enemy is killed (DeadSpawn 2 ×
+  // 木制瑞印) and the children walk on to the goal. Their leak record is what the 联防 planner reads.
+  // After the upstream merge (upstream §23.25, GitHub #67 / #89-2) `spawnChildren` clears the kill-bounty mods itself —
+  // `modsWithoutBounty(opts.mods ?? parent.mods)` — which is the same rule this report asked for, enforced one step
+  // earlier than the local fork's planner-side key test (kept as the second guard, unite.js). The round's other mods
+  // still travel with the child (the 联防 field validates them against the parent's schedule entry, fields.js).
+  const PARENT = 'enemy_1195_sfyin', CHILD = 'enemy_1196_msfyin';
+  const card = CARD.get('enemyeffect_11_4');
+  assert.equal(card.enemyKey, PARENT);
+  const h = makeMatch({ mode: 'coop', humans: 2, bots: 0, seed: 733, fake: true, script: () => ({ duration: 0.1 }) }).start();
+  h.drive(() => h.m.phase === PHASE.PREP && h.m.round === 1, { ready: false });
+  const m = h.m;
+  const ps = h.ps('p_0');
+  const id = m.addBounty(ps, card);
+  /** kill the card's enemy the moment it stands (its DeadSpawn leaves the two children); nothing else is touched */
+  class KillMolong extends Battle {
+    constructor(o) { super(o); this.on('tick', () => { for (const e of this.enemies) if (e.alive && e.defId === PARENT) this.kill(e, null); }); }
+  }
+  const opts = m._normalOpts(ps); // the real stage, routes and round of R1
+  const spec = buildBattleSpec({
+    ...opts, battleId: 'b:test', seed: 7,
+    spawns: [{ time: 1, enemyKey: PARENT, count: 1, routeIndex: 0, ownerPlayerId: ps.playerId,
+      mods: { hpMul: 1, atkMul: 1, speedMul: 1, slot: 'N', bountyId: id }, tag: 'bounty', bounty: { coins: card.coin, ownerPlayerId: ps.playerId } }],
+  });
+  const b = createBattleFromSpec(spec, m.ds, { BattleClass: KillMolong, recordEvents: false, quiet: true });
+  const res = b.runToEnd(4000);
+  const leaks = res.perPlayer[ps.playerId].leaked;
+  const kids = leaks.filter((l) => l.enemyKey === CHILD);
+  assert.equal(kids.length, 2, `the two 木制瑞印 leaked (${leaks.map((l) => l.enemyKey).join(', ') || 'none'})`);
+  assert.equal(kids[0].mods?.bountyId, undefined, 'a spawned child carries no kill-bounty id (upstream §23.25)');
+  assert.equal(kids[0].mods?.bountyCoins, undefined, 'and no content bounty either');
+  assert.equal(kids[0].mods?.slot, 'N', 'the round\'s other mods still travel with it');
+  assert.equal(kids[0].sourcePlayerId, ps.playerId, 'and its parent\'s source');
+  // the planner: the leaker leaked, the other player was perfect
+  const plan = planUnite(m, new Map([
+    [ps.playerId, res.perPlayer[ps.playerId]],
+    ['p_1', { perfect: true, leaked: [], killed: 5, total: 5 }],
+  ]));
+  assert.ok(plan, 'the 联防 happens');
+  assert.deepEqual(plan.leaked.map((l) => l.enemyKey), [CHILD, CHILD], 'both children re-enter');
+  for (const l of plan.leaked) {
+    assert.equal(l.bounty, null, `${l.enemyKey} is a spawn of ${PARENT}: no bounty`);
+    assert.equal(l.mods?.bountyId, undefined, 'and it never carried the id into the planner');
+  }
+  m.dispose();
 });

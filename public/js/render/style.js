@@ -131,10 +131,20 @@ export const STATUS_ICON = Object.freeze({
   healFree: 'healFree',
   // 折射 (sim buff 'ab:refraction', visible while the RES bonus is on). The tail of 'ab:refraction' hits this key.
   refraction: 'refraction',
+  // 麻痹 (sim status 'palsy', the neural burst's 3 stacks — damage.js / constants.js ELEM): the sim has always sent the
+  // status and spent a stack per normal attack, but it had no icon here, so `statusIconKey` answered null and
+  // render/units.js dropped it — the player saw no feedback at all (GitHub #171).
+  palsy: 'palsy',
+  // the two other catalogue statuses whose key had no icon either (same silence): 诱导 (an enemy walked to a point) and
+  // 暴露 / 照明 (a revealed stealth enemy). `unblockable` stays unmapped on purpose — it is a unit property the official
+  // client shows in the enemy's info panel, not a status badge.
+  attract: 'attract',
+  reveal: 'reveal',
 });
 
 /** Keyword fallbacks for namespaced / content status keys ('ab:frost', 'reed2:scorch', 'skill:shotst_shred' …). */
 const STATUS_GUESS = [
+  [/palsy|paraly/i, 'palsy'], [/attract|lure|bait|tauntpull/i, 'attract'], [/reveal|expos|illuminat|flare/i, 'reveal'],
   [/frost|chill|cold/i, 'cold'], [/freez/i, 'freeze'], [/scorch|burn|ignit|flame/i, 'burn'], [/stun|daze/i, 'stun'],
   [/sleep|slumber/i, 'sleep'], [/silenc/i, 'silence'], [/slow|slugg|bind|root|snare/i, 'slow'], [/fear|trembl/i, 'fear'],
   [/fragil|shred|expos|wanted|vulner|mark/i, 'fragile'], [/weak|down$/i, 'weaken'], [/shield|resist|guard|ward|barrier/i, 'shield'],

@@ -117,7 +117,7 @@ describe('user playtest #6: summons placed by hand (real server, headless Chrome
       assert.ok(home && at && Math.hypot(at.x - home.x, at.y - home.y) < 90, `the device card is back on its bench slot (${JSON.stringify({ home, at })})`);
       await c.shot('placed');
       // the battle: the device deploys with the board, and so does the placed drone, once (then with each S2)
-      await c.click('.readybtn');
+      await c.ready();
       await c.waitFor((s) => s.phase === 'COMBAT', 'combat', 30000);
       // the battle views (render/app.js: unit id → view with its UnitInfo) once the board has deployed
       const onField = () => c.page.evaluate(() => [...(globalThis.__SP_VIEW__?.raw?.debug?.views?.values() || [])].filter((v) => v?.info && v.alive !== false).map((v) => v.info.defId));

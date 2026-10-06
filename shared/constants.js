@@ -101,6 +101,15 @@ export function layerGainRoom(before, n) {
 }
 
 /**
+ * Limits of the debug console's setters (DESIGN §21.34): the ranges `g.dbgFunds` / `g.dbgLayers` / `g.dbgLevel` accept.
+ * `funds` is far above any legitimate 资金 (a round's income is single digits, the leftover cap two) — a test wants
+ * "plenty", not an overflow; `layers` is the official per-bond cap above, the one every in-game layer writer obeys;
+ * `level` is above the highest 调度中心 level any mode defines (the handlers clamp to the mode's own `maxShopLevel`).
+ * The client's steppers clamp to the same numbers before they send anything (ui/console.js).
+ */
+export const CONSOLE_LIMITS = Object.freeze({ funds: 9999, layers: BOND_LAYER_CAP, level: 9 });
+
+/**
  * Official boss-hit limit "限伤" (docs/research/11-limits-official.md §2): `AutoChessBattleConst.MAX_BATTLE_DAMAGE =
  * 300000`. In a boss battle outside training — our battle kinds 'boss' (Final Assault) and 'hidden' (Hidden Core) — a
  * single hit on a leader (`AutoChessBattleUtil.IsBossEnemy`: an enemyId of activity_table autoChessData.bossInfoDict
@@ -142,6 +151,7 @@ export const ERR = Object.freeze({
   ELIMINATED: 'ELIMINATED',
   SPECTATOR: 'SPECTATOR',         // a spectator seat only watches (MAX_SPECTATORS)
   INTERNAL: 'INTERNAL',
+  NO_CONSOLE: 'NO_CONSOLE',       // a g.dbg* intent from a player who may not use the debug console (DESIGN §21.34)
 });
 
 export const ERR_TEXT = {
@@ -150,7 +160,7 @@ export const ERR_TEXT = {
   WRONG_PHASE: '当前阶段无法进行该操作', NO_FUNDS: '资金不足', HAND_FULL: '整备区已满', BOARD_FULL: '已达到部署上限',
   BAD_TILE: '无法部署在该位置', BAD_TARGET: '无效的目标', SOLD_OUT: '已售出', MAX_LEVEL: '调度中心已达最高等级',
   NOT_YOUR_TURN: '尚未轮到你', ALREADY: '已完成该操作', TEMP_NOT_EMPTY: '临时整备区不为空', ELIMINATED: '你已被淘汰',
-  SPECTATOR: '观战中无法进行该操作', INTERNAL: '服务器内部错误',
+  SPECTATOR: '观战中无法进行该操作', INTERNAL: '服务器内部错误', NO_CONSOLE: '调试控制台未开启（仅本机测试可用）',
 };
 
 // ---- Emotes (交流, research 09 §4) -----------------------------------------------------------------------------

@@ -236,7 +236,8 @@ describe('1 / 5: the bench stays reachable on a notched phone; effect-only items
     const css = read('public/css/devices.css');
     assert.match(css, /\.gm__hud > \.shopbar \{ bottom: calc\(\.2rem - var\(--sa-b\)\); \}/);
     // the shop's own rule stays the desktop place (.2rem from the bottom): the inset rule only cancels the HUD inset
-    assert.match(read('public/css/screens/game-shop.css'), /\.shopbar \{\n {2}position: absolute; right: \.26rem; bottom: \.2rem;/);
+    // (the `--shopbar-row` line above it since §21.32: the bar's row is one constant height)
+    assert.match(read('public/css/screens/game-shop.css'), /\.shopbar \{\n(?:[^}]*\n)* {2}position: absolute; right: \.26rem; bottom: \.2rem;/);
   });
 
   test('ItemDetail: 调度中心不出售 + the source for the special 维式重锤 / 突变细胞, nothing for a shop item', async () => {
