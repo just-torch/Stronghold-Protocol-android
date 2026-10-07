@@ -999,7 +999,8 @@ test('拉普兰德\'s first refresh counts every manual refresh (DESIGN §21.32,
   const src = doc('server/sim/content/garrisons/meta.js');
   assert.ok(!src.includes('if (requireActive && !bonds.some((b) => ctx.bondActive(b))) return;'), 'the fork\'s payable gate is gone');
   assert.match(src, /if \(ctx\.incPieceCounter\(piece\.uid, REFRESH_CNT_KEY\) !== num\(bb\.refresh_cnt, 1\)\) return;/);
-  assert.match(src, /addAll\(ctx, bonds, num\(bb\.layer\), requireActive\)/);
+  // the upstream line the withdrawal restored: the counter decides, the layers then go out with the trait's own 已激活 flag
+  assert.match(src, /addAll\(ctx, ids\(bbStr\.bond\), num\(bb\.layer\), requireActiveOf\(garrison\)\);/);
   assert.match(src, /upstream pinned the official reading/);
   // the player-facing rule no longer promises the fork's reading, and the upstream test that pins it is in the tree
   assert.ok(!PLAYING.includes('只有真正能加层的那种刷新才算数'), 'PLAYING no longer promises the withdrawn rule');

@@ -94,10 +94,21 @@ decided). Nothing in the table above changes: 0.2.1 re-implemented no fork rule 
 * **The fork's UI strings are translated since 0.2.0**: the debug console panel, the two-press ready labels, the shop-bar
   tooltips and the refused-download toast go through `t()` / `N_()` and their English msgids live in
   `public/i18n/en.json` (the `complete` pack), so `node tools/i18n.mjs check en --strict` is at 100 %.
-* **Not obtainable from a source checkout**: the 39 summon models upstream extracts from the game client
-  (`tools/local-extract`, `spineLocal`) exist only in upstream's full release package. The fork's tree therefore keeps
-  upstream's committed `data/assets.json` and whatever `node tools/fetch-assets.mjs` could download from the community
-  mirrors; the models it could not fetch render as the summon's avatar, exactly as before 0.2.0. See `ISSUES.md` §4.
+* **The 39 summon models come from the full release package, not the source**: upstream extracts them from the game client
+  (`tools/local-extract`, `spineLocal`); the source checkout, the community mirrors and every public dump lack them. They
+  are in `Stronghold-Protocol-v0.2.1.zip` — the 449 MB **full** package, not the 23 MB `-lite` source zip nor the 2.8 MB
+  `-update` payload — so this tree took its `public/assets/local/spine/token/` (117 files = 39 × {skel, atlas, png}) and
+  its `data/local-assets.json` (62 groups, a strict superset of the fork's 23), after checking all 6443 `MANIFEST.json`
+  code entries of that package against their official sha256 (6443/6443). The files stay out of the repository (an
+  optional overlay, `docs/ASSETS.md`): a fresh checkout still needs the local client or that package.
+  `test/local-token-models.test.js` now runs its extraction check instead of skipping it. See `ISSUES.md` §4.
+* **The `-update.zip` payload doubles as a checksum oracle**: of its 138 files, 119 were already byte-identical to this
+  tree and the 18 that differ are exactly the fork's own (console, §21.x UI, i18n, docs); its `MANIFEST.json` also shows
+  the merge dropped nothing (of the 582 non-`node_modules` entries, only `packs/index.json` is absent — a runtime
+  artifact `tools/packs.mjs` writes and `server/packs.js` serves). Two cleanups came out of that check:
+  `server/sim/content/garrisons/meta.js` no longer hoists the locals the withdrawn §21.32 gate left behind (upstream's
+  one-line `addAll` again), and `package-lock.json` is upstream's own bytes — the fork's copy differed only in key order
+  and one `./` in a `bin` path.
 
 ---
 

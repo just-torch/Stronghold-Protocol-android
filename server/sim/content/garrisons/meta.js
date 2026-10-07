@@ -207,24 +207,23 @@ H.SERVER_ADD_REFRESH_CNT_MULTIPLIER_BOND_LAYER = {
 // local fork's §21.35).
 // A copy gained by a refresh's own effects (贾维's gift on every 6th refresh, or the elite that gift completes) did not
 // witness that refresh: the dispatcher runs the chess that stood there when it happened (effectsMeta.js onRefresh), so
-// her first is the next manual refresh (PR #196). [ASSUMED]: a copy bought after selling one this round is a new copy — "获得该干员后" — and fires on its own first// Every manual refresh counts, one that cannot pay out included ("players' report after 0.1.1, DESIGN §21.32" in the
+// her first is the next manual refresh (PR #196). [ASSUMED]: a copy bought after selling one this round is a new copy — "获得该干员后" — and fires on its own first
+// refresh (the server cannot tell it from any other copy; each such +4 costs her price + a refresh − the 1-fund refund,
+// and needs her in the shop again).
+// Every manual refresh counts, one that cannot pay out included ("players' report after 0.1.1, DESIGN §21.32" in the
 // fork's 0.1.x line filtered those out; withdrawn for 0.2.0 — upstream pinned the official reading against the same
 // community report of 2026-10-07: test/match/feedback5-bench-traits.test.js "a refresh made while 叙拉古 is inactive
-// spends it", docs/history/0.1.1.md §21.1 "each copy counts the manual refreshes it sees this round").
-// [ASSUMED]: a copy bought after selling one this round is a new copy — "获得该干员后" — and fires on its own first
-// refresh (the server cannot tell it from any other copy; each such +4 costs her price + a refresh − the 1-fund refund,
-// and needs her in the shop again); a refresh the 999-layer cap (BOND_LAYER_CAP) turns into a no-op still counts — a bond
-// that full can never grow again, so nothing is lost.
+// spends it", docs/history/0.1.1.md §21.1 "each copy counts the manual refreshes it sees this round"). A refresh the
+// 999-layer cap (BOND_LAYER_CAP) turns into a no-op still counts — a bond that full can never grow again, so nothing
+// is lost.
 const REFRESH_CNT_KEY = 'garrison:SERVER_GAIN_BOND_LAYER_BY_REFRESH_CNT:refreshes'; // per-piece counter (module-prefixed)
 H.SERVER_GAIN_BOND_LAYER_BY_REFRESH_CNT = {
   onRefresh(ctx, ev) {
     if (ev && ev.trigger) return;
     const { bb, bbStr, garrison, piece } = ctx.source;
     if (!piece || !Number.isInteger(piece.uid) || piece.uid <= 0) return;
-    const bonds = ids(bbStr.bond);
-    const requireActive = requireActiveOf(garrison);
     if (ctx.incPieceCounter(piece.uid, REFRESH_CNT_KEY) !== num(bb.refresh_cnt, 1)) return;
-    addAll(ctx, bonds, num(bb.layer), requireActive);
+    addAll(ctx, ids(bbStr.bond), num(bb.layer), requireActiveOf(garrison));
   },
 };
 
