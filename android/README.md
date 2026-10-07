@@ -27,12 +27,12 @@
 | 项目 | 值 |
 |---|---|
 | 文件 | `android/dist/Stronghold-Protocol-0.2.1-arm64.apk` |
-| 体积 | **630.2 MB**（APK 内 10 529 个条目；0.2.0 的自选干员素材与语音把它从 0.1.4 的 479.9 MB 推上来） |
+| 体积 | **633.6 MB**（APK 内 10 646 个条目；0.2.0 的自选干员素材与语音把它从 0.1.4 的 479.9 MB 推上来，0.2.1 又从上游完整整合包补入 39 个召唤物模型，+3.6 MB） |
 | 架构 | `arm64-v8a`（只有这一个；2016 年以后几乎所有的 Android 手机） |
 | 系统要求 | `minSdkVersion 23`（Android 6.0）／`targetSdkVersion 35`；**建议 Android 8.0 以上**，并保持「Android System WebView」/ Chrome 为较新版本 |
 | 内嵌运行时 | Node.js 24.5.0（`lib/arm64-v8a/libnode.so`，约 93 MB，`extractNativeLibs=false`，直接从 APK 加载） |
 | 内嵌服务器 | `assets/public/nodejs/`：`server/ shared/ data/ public/ node_modules/ws lan/` + `index.js` |
-| 内含素材 | `public/` 整棵树 9 666 个文件 / 约 543 MB（其中 `public/assets/**` 9 486 个文件 / 约 530 MB，含 191 名干员的战斗语音与战斗 BGM、官方 3D 棋盘贴图，前提是打包时 `public/assets/local/` 已存在） |
+| 内含素材 | `public/` 整棵树 9 783 个文件 / 约 546 MB（其中 `public/assets/**` 9 603 个文件 / 约 533 MB，含 191 名干员的战斗语音与战斗 BGM、官方 3D 棋盘贴图、39 个召唤物模型，前提是打包时 `public/assets/local/` 已存在） |
 | 服务器依赖 | 只有 `ws` |
 | 新增权限 | **无**。自动搜索走 UDP 广播，`INTERNET` 权限就够（组播才需要 `CHANGE_WIFI_MULTICAST_STATE`） |
 | 发现协议端口 | UDP `45777`（主机广播到这里，加入方监听）与 `45778`（加入方询问，主机监听），见[局域网自动发现](#局域网自动发现) |
@@ -74,7 +74,7 @@ APK 体积较大的原因是**素材必须随包分发**：主机手机要能在
   `{"t":"hello",...}` 收到了 `{"t":"welcome","playerId":…,"token":…}`。
 - **最强的那个检查：把服务器从 APK 里解出来再跑一遍**。按插件的做法（`assets/public/nodejs` →
   `<filesDir>/nodejs/public`，`assets/builtin_modules` → `<filesDir>/nodejs/builtin_modules` 并挂到
-  `NODE_PATH`）把 APK 里的那棵树提取出来（10 076 个文件 / 562.5 MB，与装配结果一致），然后：
+  `NODE_PATH`）把 APK 里的那棵树提取出来（10 193 个文件 / 566 MB，与装配结果一致），然后：
   - `require('bridge')` 经 `NODE_PATH` **确实解析到了**（在 Windows 上它走 `process.send` 分支并抛出
     「No IPC channel has been established…」，被入口的 try/catch 接住后照常继续——真机 `process.platform`
     是 `android`，会走 `_linkedBinding('nativeBridge')` 分支）；
