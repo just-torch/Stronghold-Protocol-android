@@ -1,6 +1,6 @@
 {
   "name": "stronghold-protocol-android",
-  "version": "0.1.1",
+  "version": "0.2.1",
   "private": true,
   "description": "Android app shell for 卫戍协议：盟约 (Stronghold Protocol: Covenant). Embeds a Node.js 24 runtime plus the whole game so one phone can host LAN co-op and the others join it.",
   "license": "GPL-3.0-or-later",

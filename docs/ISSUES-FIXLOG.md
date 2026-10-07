@@ -3,17 +3,18 @@
 > `ISSUES.md` 只列**仍未修复**的条目；本文件记录**已经不成立**的条目：已修 / 已判「不是 bug」/ 已闭环 / 上游已排期。动手之前先查这里，避免重复修。
 > 抓取数据（110 条 issue 的总览、分类、讨论摘要、原始数据清单）见 [`docs/ISSUES-ARCHIVE.md`](ISSUES-ARCHIVE.md)，它由抓取流水线生成——那套流水线（`.scratch/`）是维护者本机工具，没有随本分支发布；本文件与 `ISSUES.md` 是人工维护。
 > **2026-10-06：上游 v0.1.4 已并入本树**（见 §6）——它按官方把高台、阿戈尔、沉睡、缇缇、引星棘刺等一批规则改对了，本文件相应更新了判定；`ISSUES.md` 的未修复条目从 25 条降到 24 条。
+> **2026-10-07：上游 v0.2.0 与 v0.2.1 也已并入本树**（见 §7）——0.2.0 修掉 #96 / #137 / #175 / #136 / #38 / #57，并把另外 6 条做掉一半；`ISSUES.md` 的未修复条目从 24 条降到 18 条。 **（2026-10-07 更新：`GRANTED_CAP_OVERRIDE` 已随 0.2.0 删除，现行实现见 §7.1）**
 
-判定口径：`docs/DESIGN.md` 第 22–24 章与本地 §21.x 是否有对应修复条目，加上本机实测（探针用完即删，证据见本文 §7 中照录原文的第 15.4 节）。「上游已修」按维护者评论 / CHANGELOG 引用判定；标「已排期 / 未复核」的表示上游已关闭或已排入版本，但本树没有单独复核过。
+判定口径：`docs/DESIGN.md` 第 22–24 章与本地 §21.x 是否有对应修复条目，加上本机实测（探针用完即删，证据见本文 §8 中照录原文的第 15.4 节）。「上游已修」按维护者评论 / CHANGELOG 引用判定；标「已排期 / 未复核」的表示上游已关闭或已排入版本，但本树没有单独复核过。
 
 <!-- issue-total: 110 -->
-<!-- settled: 1 3 4 5 8 9 15 16 17 18 19 20 21 22 25 26 32 33 35 41 42 43 44 45 46 49 50 51 52 53 54 55 58 59 60 61 62 64 65 67 68 76 79 80 82 83 86 87 89 92 93 94 97 99 100 101 104 105 106 107 108 111 113 116 117 123 124 128 133 139 140 142 144 148 151 153 159 161 162 165 169 170 171 179 180 181 -->
+<!-- settled: 1 3 4 5 8 9 15 16 17 18 19 20 21 22 25 26 32 33 35 38 41 42 43 44 45 46 49 50 51 52 53 54 55 57 58 59 60 61 62 64 65 67 68 76 79 80 82 83 86 87 89 92 93 94 96 97 99 100 101 104 105 106 107 108 111 113 116 117 123 124 128 133 136 137 139 140 142 144 148 151 153 159 161 162 165 169 170 171 175 179 180 181 -->
 <!-- pending: -->
 <!-- post-capture: 184 -->
 
 ## 1. 本轮实测修复（本地 fork，2026-10-06）
 
-每条都有新回归测试，并记在 `docs/DESIGN.md`；逐条探针证据见本文 §7 中照录原文的第 15.4 节。
+每条都有新回归测试，并记在 `docs/DESIGN.md`；逐条探针证据见本文 §8 中照录原文的第 15.4 节。
 
 | Issue | 原优先级 | 结论与证据 |
 |---|---|---|
@@ -43,7 +44,7 @@
 
 | Issue | 结论与证据 |
 |---|---|
-| [#169](https://github.com/sganggs/Stronghold-Protocol/issues/169) | 拉普兰德本回合首次刷新必须是能加层的那次（§21.32）+ 精锐合并后再次触发（§21.35），`match/PlayerState.js` / `content/garrisons/meta.js`，配回归测试 |
+| [#169](https://github.com/sganggs/Stronghold-Protocol/issues/169) | 拉普兰德精锐合并后再次触发（§21.35，上游 0.2.0 已用同一规则实现）；本回合「首次主动刷新」按上游 0.2.0 的判定：不能加层的刷新也算掉一次（本地 §21.32 的过滤已在 v0.2.0 合并中撤回），`match/player/*` / `content/garrisons/meta.js`，配回归测试 |
 | [#179](https://github.com/sganggs/Stronghold-Protocol/issues/179) | 上游 master 的 CI 红（`test/sim/skills.test.js:437`「deploy-time passive」）在本树已按新行为改写，本机实测 17/17 通过 |
 | [#128](https://github.com/sganggs/Stronghold-Protocol/issues/128) | 观战/查看队友可见手牌、临时整备区、装备、策略与效果列（提交 `bce1827` + DESIGN §23.19） |
 
@@ -111,7 +112,43 @@
 - 手机布局（`public/css/devices.css` 的短横屏块）、按格拾取（`DRAG_HOLD_TILES`）、状态图标（palsy / attract / reveal）、盟约圆盘与人数徽标、商店条折叠、准备就绪两段确认：逐条核对仍在，且没有与上游新增的路径叠加。
 - #162 缇缇叠层：两边各修了一次，**只保留上游的那条**（`Battle.applyStatus` 的 `reenter` + 缇缇 S2 每次脉冲按新进入计），本 fork §21.44 的「garrison 每次成功施加都计数」不再存在——DESIGN 里那一节随之标注被 §24.8 取代。
 
-## 7. 抓取后的两轮复核原文（2026-10-06）
+## 7. 上游 v0.2.0 / v0.2.1 并入本树后的新判定（2026-10-07）
+
+上游 **v0.2.0**（模块大重构 + 补位 / 自选编队 / 多语言 / 黄金结果）与 **v0.2.1**（联防改回本回合战场、满潜能、更新包）在同一天先后并入本树；下面是从 `ISSUES.md` 里移走或改判的条目。证据都核过**当前工作树**的代码，不只看文档。
+
+### 7.1 上游修掉、本清单随之划掉（6 条）
+
+| Issue | 现象 | 判定与证据 |
+|---|---|---|
+| [#96](https://github.com/sganggs/Stronghold-Protocol/issues/96) | 绝食干员不吃红蒂缓回、海嗣 boss 爆条频率过快 | **已修（上游 0.2.0）**：`server/sim/damage.js` 把「生命回复速度」做成独立的 `hpRegen` 通道（不吃 `noHeal`、也不吃治疗加成），吟游者 / 调香师 / 瑕光 S2 / 铃兰 S3 / 锡人的持续回复都走它（`server/sim/professions.js`、`kits/ops/chess_char_2_14-flower.js`、`chess_char_3_12-blemsh.js` 等），CHANGELOG 0.2.0 直接写 GitHub #96，回归见 `test/content/feedback5-regen.test.js`。**子项「海嗣 boss 爆条频率」0.2.x 没有对应改动，本树也从未单独复核**（损伤模型在 `server/sim/content/enemies/dot.js`）。 |
+| [#137](https://github.com/sganggs/Stronghold-Protocol/issues/137) | 绝食干员无法对小特被动、棘刺等技能产生的治疗生效 | 与 #96 同一处修复，代码注释直接标 GitHub #137。 |
+| [#175](https://github.com/sganggs/Stronghold-Protocol/issues/175) | 华法琳特性叠层超过文案的 7 次 | **已修**（不再是「只差文案」）：主树删掉了本地那套 `GRANTED_CAP_OVERRIDE`，直接读数据的 `max_add_count_per_battle`（7 / 14），模拟与文案一致（`server/sim/content/garrisons/battle.js`、`server/match/fields.js`），`test/match/feedback1-gaps.test.js`、`test/ui/playtest3.test.js`。 |
+| [#38](https://github.com/sganggs/Stronghold-Protocol/issues/38) | 完整英文界面 | **已实现（上游 0.2.0）**：界面文字全部走 `t()`、游戏文本取官方英文数据（`public/i18n/en.json`，设置 / 标题页切换，`public/js/ui/lang.js`）。残留：玩家名、官方英文服还没有的新文本、教程图仍是中文。 |
+| [#57](https://github.com/sganggs/Stronghold-Protocol/issues/57) | 英文界面：不改游戏代码的叠加层方案 | **已闭环**：需求被上游官方英文界面取代，叠加层补丁不必再合；Alliance / Covenant 术语按官方英文数据落定为 Alliance（`public/i18n/en.json`）。 |
+| [#136](https://github.com/sganggs/Stronghold-Protocol/issues/136) | 希望能增加原版 V / VI 干员的自选 | **已实现（上游 0.2.0「自选编队」）**：5 阶 / 6 阶各 2 个自选槽（`shared/diy.js`），71 名 6★ 按官方实现技能 / 天赋 / 模组（`public/js/screens/diy.js`）。 |
+
+### 7.2 上游做掉一半、留在 `ISSUES.md` 但已改判（6 条）
+
+| Issue | 上游做掉的那半 | 仍差的那半 |
+|---|---|---|
+| [#173](https://github.com/sganggs/Stronghold-Protocol/issues/173) | 数据没载入时明确报出缺哪个文件、三个标签页都拒绝导入、已存的持有 / 自选不再被清空；分发侧的完整包 / 精简包 / 更新包、README 的两种安装方式、`npm run doctor` 的文件校验 | `file://` 直接打开仍必然失败（全站根绝对路径）；`docs/PLAYING.md` 是玩法指南、不含安装步骤 |
+| [#143](https://github.com/sganggs/Stronghold-Protocol/issues/143) | 自定义快捷键（设置 → 快捷键，`public/js/ui/gameLogic/shortcuts.js` + `test/ui/hotkeys.e2e.test.js`） | 待选区自动落位（进手牌仍只有显式 `stow()`，`server/match/player/pieces.js`）、AOE 特效按 `attackId` 命中数聚合（`public/js/render/fx/numbers.js` 的 `SPLASH_SUBS` 仍是 5 子职业白名单） |
+| [#138](https://github.com/sganggs/Stronghold-Protocol/issues/138) | 商店折叠（0.2.0 的 `prepCameraFor` / foldCamera，与本树 §21.33 合并后只留一条实现） | 拖动热区（本树是**有意**按「地上方格」拾取，§18.1 的结论，改回要先推翻它） |
+| [#154](https://github.com/sganggs/Stronghold-Protocol/issues/154) | —（观战席、房主踢人、房主离开自动转交都是 0.1.3 起的；0.2.x 未再动） | 主动转让房主、账号系统（全仓无 transfer 处理器） |
+| [#95](https://github.com/sganggs/Stronghold-Protocol/issues/95) | `server/index.js` 拆成 `server/http/*`（本树已合并） | 换 Hono（依赖表里没有，仍是 `node:http` + `ws`） |
+| [#156](https://github.com/sganggs/Stronghold-Protocol/issues/156) | 「子系统拆分」：按职责拆大文件 + `docs/ARCHITECTURE.md` + ESLint / 类型 / 导入边界检查 + 黄金结果 | monorepo、构建工具、插件扩展与整体方案 |
+
+### 7.3 逐条复核后判定不变（12 条）
+
+#172（0.2.1 只改了客户端战斗模块在重连 / 观战期间的消息顺序）、#31 / #121（人机改动只有「整备区满不买、AI 托管偏好自选、道具优先装空栏位」）、#130（未知 chess 仍静默 `return null` 只写日志，0.2.0 还多了一条「自选槽没有 pick」的静默路径）、#177（无眼球 / 闭眼相关改动）、#77、#84、#125、#131、#141、#168（`adaptLoad` 帧长 > 250 ms 早退、`pickImpostorInterval` 不数联防的 `penViews`，两个隐患原样都在）、#182。
+
+### 7.4 顺带订正
+
+- §15.3 的 #175 行引用的是本地那套 `GRANTED_CAP_OVERRIDE`（已随 0.2.0 删除）；现行实现见 §7.1。
+- #96 / #137 在本树曾记作「只差裁定」——上游 0.2.0 直接按「生命回复速度不算治疗」落地，等于采纳了 PR #135 提出的区分方式。
+- 上游这两个版本还修掉了本清单之外的号（0.2.0：#41 #49 #82 #107 #116 #124 #148 #169 #181 #187 #207 #232 #235 #236 等；0.2.1：#244 #252 #260 #262 #263 #277 #284 等），它们从来不在本树「未修复」清单里。
+
+## 8. 抓取后的两轮复核原文（2026-10-06）
 
 以下照录当时的原文（标题层级下调一级，章节号沿用原文），其中「第 2 节 / 第 5 节 / 第 6 节 / 第 10 节」等指 [`docs/ISSUES-ARCHIVE.md`](ISSUES-ARCHIVE.md) 的对应小节。
 
@@ -141,7 +178,7 @@
 | [#82](https://github.com/sganggs/Stronghold-Protocol/issues/82) | P1 | 已修 | §23.1 联防只带血量比例与技力、不带未结束的技能；CHANGELOG 0.1.3（GitHub #82） |
 | [#86](https://github.com/sganggs/Stronghold-Protocol/issues/86) | P1 | 已修 | §23.9 芬的信标送出原本那名干员、送礼者被淘汰后信标仍在（`match/builtinMeta.js`）；CHANGELOG 0.1.3（GitHub #86） |
 | [#153](https://github.com/sganggs/Stronghold-Protocol/issues/153) | P1 | 已修 | §22.6 钩索师/推击手按官方特性可放高台；§23.35 精锐歌蕾蒂娅带 HOK-Y（`shared/highGround.js`）；CHANGELOG「歌蕾蒂娅等钩索师、推击手…可以部署到高台上」 |
-| [#169](https://github.com/sganggs/Stronghold-Protocol/issues/169) | P1 | 已修（**本地 fork**） | §21.32「拉普兰德本回合的首次刷新必须是能加层的那次」+ §21.35「精锐合并后再次触发」，`match/PlayerState.js`／`content/garrisons/meta.js`，配回归测试 |
+| [#169](https://github.com/sganggs/Stronghold-Protocol/issues/169) | P1 | 已修（**上游 0.2.0** + 本地 fork 的 §21.35） | §21.35「精锐合并后再次触发」上游 0.2.0 已用同规则实现；§21.32「首次刷新必须是能加层的那次」已在 v0.2.0 合并中撤回（上游 0.2.0 明确判定不能加层的刷新也算掉，`test/match/feedback5-bench-traits.test.js`），`match/player/acquire.js`／`content/garrisons/meta.js`，配回归测试 |
 | [#179](https://github.com/sganggs/Stronghold-Protocol/issues/179) | P1 | 已修 | #109／#160 的重部署技能生命周期（提交 `ffdb129`、`8774379`）；`test/sim/skills.test.js` 本机实测 **17/17 通过**（第 437 行那条断言已按新行为改写） |
 | [#76](https://github.com/sganggs/Stronghold-Protocol/issues/76) | P3（功能） | 已实现 | §23.19 观战席：`shared/constants.js MAX_SPECTATORS = 2`，`test/ui/spectator.e2e.test.js` 通过 |
 | [#123](https://github.com/sganggs/Stronghold-Protocol/issues/123) | P3（功能） | 已实现 | 提交 `3f05c65`：`ui/gameLogic.js shortcutFor` 的 `KeyQ → retreat`、`KeyX → sell`（记录在 #114） |

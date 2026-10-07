@@ -21,6 +21,7 @@ import { getData } from '../../../data.js';
 import { COLS, DIRECT_BONUS_STACKING } from '../../constants.js';
 import { frontOf, offsetTile } from '../../dir.js';
 import { bodyInKeys, bodyDist, bodyInRadius, bodyOnTile, bodyTileReach } from '../../body.js';
+import { unitBonds } from './bonds.js';
 
 export { COLS };
 /** Where an enemy can be hit (a huge enemy's whole hit rectangle, sim/body.js) — for every range test on enemies. */
@@ -167,31 +168,12 @@ export const itemsOf = (u) => (u && Array.isArray(u.items) ? u.items : EMPTY);
 export const hasItemKey = (u, key) => itemsOf(u).some((id) => itemKeyOf(id) === key);
 export const goldenItemCount = (u) => itemsOf(u).filter(isGoldenId).length;
 
-const BONDS = new WeakMap();
 /**
  * A unit's own bonds: the chess's data bonds + bonds granted by 变形同构体 (an item with `canGiveBond` worn together
  * with an item that has a `giveBondId`; same rule as server/match/bondsMeta.js pieceBonds). Tokens / enemies: [].
+ * Implemented in ./bonds.js (a kit file may not import an index module) and re-exported here for every other caller.
  */
-export function unitBonds(u) {
-  if (!isOp(u)) return EMPTY;
-  const cached = BONDS.get(u);
-  const items = itemsOf(u);
-  const key = items.join('|');
-  if (cached && cached.key === key) return cached.bonds;
-  const out = [...(Array.isArray(u.def?.bonds) ? u.def.bonds : Array.isArray(u.def?.raw?.bonds) ? u.def.raw.bonds : [])];
-  if (items.length >= 2) {
-    const recs = items.map((id) => itemRecord(id)).filter(Boolean);
-    if (recs.some((r) => r.canGiveBond)) {
-      for (const r of recs) {
-        if (r.canGiveBond) continue;
-        if (typeof r.giveBondId === 'string' && bondRecord(r.giveBondId) && !out.includes(r.giveBondId)) out.push(r.giveBondId);
-      }
-    }
-  }
-  const bonds = Object.freeze(out);
-  BONDS.set(u, { key, bonds });
-  return bonds;
-}
+export { unitBonds };
 
 /**
  * Does `u` receive the effects of `bondId`? Own bonds (incl. 变形同构体 grants), and — 调和 (maniShip) — an operator

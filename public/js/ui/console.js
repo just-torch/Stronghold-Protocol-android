@@ -23,6 +23,7 @@ import { modeOffBonds } from './gameLogic.js';
 import { getMode } from '../data.js';
 import { actions } from './gameActions.js';
 import { CONSOLE_LIMITS } from '../../../shared/constants.js';
+import { t, N_ } from '../../../shared/i18n.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
 
@@ -30,7 +31,7 @@ const cx = (...p) => p.flat().filter(Boolean).join(' ');
 export const CONSOLE_KEY = '`';
 /** Tabs of the panel, in order. */
 export const CONSOLE_TABS = Object.freeze([
-  { id: 'chess', label: '干员' }, { id: 'items', label: '装备' }, { id: 'res', label: '资源' }, { id: 'bonds', label: '盟约' },
+  { id: 'chess', label: N_('干员') }, { id: 'items', label: N_('装备') }, { id: 'res', label: N_('资源') }, { id: 'bonds', label: N_('盟约') },
 ]);
 /** The tiers the 干员 / 装备 filter offers. */
 export const CONSOLE_TIERS = Object.freeze([1, 2, 3, 4, 5, 6]);
@@ -73,7 +74,7 @@ export function chessRow(rec, bondOf = () => null) {
 export function itemRow(rec) {
   const name = String(rec?.name || rec?.id || '');
   const rare = !!(rec?.hideInShop || rec?.shopExcluded);
-  const hay = [name, rec?.id, rec?.effectName, rec?.desc, rec?.itemType, rare ? '非商店' : '']
+  const hay = [name, rec?.id, rec?.effectName, rec?.desc, rec?.itemType, rare ? t('非商店') : '']
     .filter(Boolean).join(' ').toLowerCase();
   return { id: rec?.id ?? null, name, tier: rec?.tier ?? 0, magic: rec?.itemType === 'MAGIC', rare, desc: String(rec?.desc || ''), hay, rec };
 }
@@ -150,11 +151,11 @@ export function consoleStatus(priv) {
   const hand = (Array.isArray(priv?.hand) ? priv.hand : []).filter(Boolean).length;
   const temp = (Array.isArray(priv?.temp) ? priv.temp : []).filter(Boolean).length;
   return [
-    `资金 ${priv?.funds ?? 0}`,
-    `等级 ${priv?.shop?.level ?? 1}`,
-    `整备区 ${hand}/10`,
-    `临时 ${temp}/5`,
-    `场上 ${priv?.deployCount ?? 0}/${priv?.deployCap ?? 0}`,
+    t('资金 {0}', { 0: priv?.funds ?? 0 }),
+    t('等级 {0}', { 0: priv?.shop?.level ?? 1 }),
+    t('整备区 {hand}/10', { hand }),
+    t('临时 {temp}/5', { temp }),
+    t('场上 {0}/{1}', { 0: priv?.deployCount ?? 0, 1: priv?.deployCap ?? 0 }),
   ].join(' · ');
 }
 
@@ -162,21 +163,21 @@ export function consoleStatus(priv) {
 
 /** The commands the panel accepts (help text). */
 export const COMMAND_HELP = Object.freeze([
-  'chess <干员> [精锐] · 获得干员',
-  'item <装备> · 获得装备',
-  'funds <资金> · 设为（+20 相对）',
-  'bond <盟约> <层数> · 设为（+10 相对）',
-  'level <等级> · 设为（+1 相对）',
-  'help · 这份说明',
+  N_('chess <干员> [精锐] · 获得干员'),
+  N_('item <装备> · 获得装备'),
+  N_('funds <资金> · 设为（+20 相对）'),
+  N_('bond <盟约> <层数> · 设为（+10 相对）'),
+  N_('level <等级> · 设为（+1 相对）'),
+  N_('help · 这份说明'),
 ]);
 
-const CHESS_CMD = ['chess', '干员', 'op', 'unit'];
-const ITEM_CMD = ['item', '装备', 'equip'];
-const FUNDS_CMD = ['funds', '资金', 'money', 'gold'];
-const BOND_CMD = ['bond', '盟约', 'layers'];
-const LEVEL_CMD = ['level', '等级'];
-const HELP_CMD = ['help', '?', '帮助'];
-const ELITE_WORDS = ['精锐', 'elite', 'e', 'golden'];
+const CHESS_CMD = ['chess', N_('干员'), 'op', 'unit'];
+const ITEM_CMD = ['item', N_('装备'), 'equip'];
+const FUNDS_CMD = ['funds', N_('资金'), 'money', 'gold'];
+const BOND_CMD = ['bond', N_('盟约'), 'layers'];
+const LEVEL_CMD = ['level', N_('等级')];
+const HELP_CMD = ['help', '?', N_('帮助')];
+const ELITE_WORDS = [N_('精锐'), 'elite', 'e', 'golden'];
 
 /**
  * Resolve a name or id against a list of records: an exact id, an exact name, else the unique partial match.
@@ -217,7 +218,7 @@ export function numberArg(text, cur = 0) {
  */
 export function parseConsoleCommand(text, { gd, priv } = {}) {
   const raw = String(text ?? '').trim();
-  if (!raw) return { error: '输入一条命令' };
+  if (!raw) return { error: t('输入一条命令') };
   const parts = raw.split(/\s+/);
   const head = parts[0].toLowerCase();
   const rest = parts.slice(1);
@@ -233,48 +234,48 @@ export function parseConsoleCommand(text, { gd, priv } = {}) {
     const r = resolveRecord(chessList, term, {
       id: (c) => c.chessId, name: (c) => c.name, alias: (c) => [c.appellation, c.subProfessionName, c.profession],
     });
-    if (r.error) return { error: r.error === 'none' ? `没有干员「${term}」` : `「${term}」有多个候选：${r.options.join(' / ')}` };
+    if (r.error) return { error: r.error === 'none' ? t('没有干员「{term}」', { term }) : t('「{term}」有多个候选：{1}', { term, 1: r.options.join(' / ') }) };
     const id = grantId(r.rec, elite);
-    if (!id) return { error: `${r.rec.name} 没有精锐形态` };
-    return { t: 'g.dbgChess', fields: { chessId: id }, echo: `获得干员 ${r.rec.name}${elite ? '（精锐）' : ''}` };
+    if (!id) return { error: t('{name} 没有精锐形态', { name: r.rec.name }) };
+    return { t: 'g.dbgChess', fields: { chessId: id }, echo: t('获得干员 {name}{1}', { name: r.rec.name, 1: elite ? t('（精锐）') : '' }) };
   }
 
   if (ITEM_CMD.includes(head)) {
     const term = rest.join(' ');
     const r = resolveRecord(itemList, term, { id: (i) => i.id, name: (i) => i.name, alias: (i) => [i.effectName, i.desc] });
-    if (r.error) return { error: r.error === 'none' ? `没有装备「${term}」` : `「${term}」有多个候选：${r.options.join(' / ')}` };
-    return { t: 'g.dbgItem', fields: { itemId: r.rec.id }, echo: `获得装备 ${r.rec.name}` };
+    if (r.error) return { error: r.error === 'none' ? t('没有装备「{term}」', { term }) : t('「{term}」有多个候选：{1}', { term, 1: r.options.join(' / ') }) };
+    return { t: 'g.dbgItem', fields: { itemId: r.rec.id }, echo: t('获得装备 {name}', { name: r.rec.name }) };
   }
 
   if (FUNDS_CMD.includes(head)) {
     const n = numberArg(rest[0], priv?.funds ?? 0);
-    if (n == null) return { error: '资金需要一个数字（或 +20 / -20）' };
+    if (n == null) return { error: t('资金需要一个数字（或 +20 / -20）') };
     const to = clampFunds(n);
-    return { t: 'g.dbgFunds', fields: { funds: to }, echo: `资金 → ${to}` };
+    return { t: 'g.dbgFunds', fields: { funds: to }, echo: t('资金 → {to}', { to }) };
   }
 
   if (BOND_CMD.includes(head)) {
-    if (rest.length < 2) return { error: '盟约需要「名称 层数」（+10 / -10 相对）' };
+    if (rest.length < 2) return { error: t('盟约需要「名称 层数」（+10 / -10 相对）') };
     const r = resolveRecord(bondList, rest.slice(0, -1).join(' '), { id: (b) => b.bondId, name: (b) => b.name });
     const term = rest.slice(0, -1).join(' ');
-    if (r.error) return { error: r.error === 'none' ? `没有盟约「${term}」` : `「${term}」有几个候选：${r.options.join(' / ')}` };
+    if (r.error) return { error: r.error === 'none' ? t('没有盟约「{term}」', { term }) : t('「{term}」有几个候选：{1}', { term, 1: r.options.join(' / ') }) };
     const cur = bondRow(r.rec, priv).layers;
     const n = numberArg(rest[rest.length - 1], cur);
-    if (n == null) return { error: `「${rest[rest.length - 1]}」不是层数（+10 / -10 相对）` };
+    if (n == null) return { error: t('「{0}」不是层数（+10 / -10 相对）', { 0: rest[rest.length - 1] }) };
     const to = clampLayers(n);
-    return { t: 'g.dbgLayers', fields: { bondId: r.rec.bondId, layers: to }, echo: `${r.rec.name} 层数 → ${to}` };
+    return { t: 'g.dbgLayers', fields: { bondId: r.rec.bondId, layers: to }, echo: t('{name} 层数 → {to}', { name: r.rec.name, to }) };
   }
 
   if (LEVEL_CMD.includes(head)) {
     const cur = priv?.shop?.level ?? 1;
     const n = numberArg(rest[0], cur);
-    if (n == null) return { error: '等级需要一个数字（或 +1 / -1）' };
+    if (n == null) return { error: t('等级需要一个数字（或 +1 / -1）') };
     const max = Math.min(priv?.shop?.maxLevel ?? 6, CONSOLE_LIMITS.level);
     const to = Math.max(1, Math.min(Math.round(n), max));
-    return { t: 'g.dbgLevel', fields: { level: to }, echo: `调度中心等级 → ${to}` };
+    return { t: 'g.dbgLevel', fields: { level: to }, echo: t('调度中心等级 → {to}', { to }) };
   }
 
-  return { error: `未知命令「${parts[0]}」（help 看说明）` };
+  return { error: t('未知命令「{0}」（help 看说明）', { 0: parts[0] }) };
 }
 
 // ---- panel ---------------------------------------------------------------------------------------------------------
@@ -338,7 +339,7 @@ export function ConsolePanel({ open, onClose, pub, priv, gd }) {
     setBusy(true);
     try {
       const ok = await actions.dbg(t, fields);
-      note(ok ? echo : `${echo} · 被服务器拒绝`, ok ? 'ok' : 'bad');
+      note(ok ? echo : t('{echo} · 被服务器拒绝', { echo }), ok ? 'ok' : 'bad');
     } finally {
       setBusy(false);
     }
@@ -361,17 +362,17 @@ export function ConsolePanel({ open, onClose, pub, priv, gd }) {
   const funds = priv?.funds ?? 0;
   const level = priv?.shop?.level ?? 1;
   const maxLevel = priv?.shop?.maxLevel ?? 6;
-  const oddLabel = tab === 'items' ? '非商店' : tab === 'bonds' ? '本局禁用' : '隐藏 / 内置';
-  const oddTitle = tab === 'items' ? '非商店 / 奇术道具' : tab === 'bonds' ? '本局禁用的盟约（设置了也不会生效）' : '隐藏 / 内置干员';
+  const oddLabel = tab === 'items' ? t('非商店') : tab === 'bonds' ? t('本局禁用') : t('隐藏 / 内置');
+  const oddTitle = tab === 'items' ? t('非商店 / 奇术道具') : tab === 'bonds' ? t('本局禁用的盟约（设置了也不会生效）') : t('隐藏 / 内置干员');
 
   if (!open) return null;
   return html`<div class="modal dbgwrap" role="presentation"
       onMouseDown=${(e) => { if (e.target === e.currentTarget) onClose(); }}>
-    <div class="modal__box brackets dbgbox" role="dialog" aria-modal="true" aria-label="调试控制台" style="width:9.8rem">
+    <div class="modal__box brackets dbgbox" role="dialog" aria-modal="true" aria-label=${t('调试控制台')} style="width:9.8rem">
       <div class="modal__stripe" aria-hidden="true"></div>
       <header class="modal__head">
         <${MicroLabel}>DEBUG CONSOLE<//>
-        <h2 class="modal__title">调试控制台</h2>
+        <h2 class="modal__title">${t('调试控制台')}</h2>
       </header>
       <div class="modal__body">
         <div class="dbg">
@@ -382,35 +383,35 @@ export function ConsolePanel({ open, onClose, pub, priv, gd }) {
     
           ${tab === 'res' ? html`<div class="dbg__res">
             <div class="dbg__field">
-              <span class="dbg__label">资金<${MicroLabel}>FUNDS<//></span>
+              <span class="dbg__label">${t('资金')}<${MicroLabel}>FUNDS<//></span>
               <div class="dbg__row">
                 <span class="dbg__value num">${funds}</span>
                 ${FUNDS_STEPS.map((n) => html`<${Button} key=${`f${n}`} size="sm" variant="primary" disabled=${busy}
-                  onClick=${() => run('g.dbgFunds', { funds: fundsStep(funds, n) }, `资金 → ${fundsStep(funds, n)}`)}>+${n}<//>`)}
+                  onClick=${() => run('g.dbgFunds', { funds: fundsStep(funds, n) }, t('资金 → {0}', { 0: fundsStep(funds, n) }))}>+${n}<//>`)}
                 <${Button} size="sm" variant="secondary" disabled=${busy || funds === 0}
-                  onClick=${() => run('g.dbgFunds', { funds: 0 }, '资金 → 0')}>归零<//>
+                  onClick=${() => run('g.dbgFunds', { funds: 0 }, t('资金 → 0'))}>${t('归零')}<//>
               </div>
             </div>
             <div class="dbg__field">
-              <span class="dbg__label">调度中心等级<${MicroLabel}>SHOP LEVEL<//></span>
+              <span class="dbg__label">${t('调度中心等级')}<${MicroLabel}>SHOP LEVEL<//></span>
               <div class="dbg__row">
                 <span class="dbg__value num">${level}/${maxLevel}</span>
                 <${Button} size="sm" variant="secondary" disabled=${busy || level <= 1}
-                  onClick=${() => run('g.dbgLevel', { level: level - 1 }, `调度中心等级 → ${level - 1}`)}>−1<//>
+                  onClick=${() => run('g.dbgLevel', { level: level - 1 }, t('调度中心等级 → {0}', { 0: level - 1 }))}>−1<//>
                 <${Button} size="sm" variant="secondary" disabled=${busy || level >= maxLevel}
-                  onClick=${() => run('g.dbgLevel', { level: level + 1 }, `调度中心等级 → ${level + 1}`)}>+1<//>
+                  onClick=${() => run('g.dbgLevel', { level: level + 1 }, t('调度中心等级 → {0}', { 0: level + 1 }))}>+1<//>
                 <${Button} size="sm" variant="primary" disabled=${busy || level >= maxLevel}
-                  onClick=${() => run('g.dbgLevel', { level: maxLevel }, `调度中心等级 → ${maxLevel}`)}>满级<//>
+                  onClick=${() => run('g.dbgLevel', { level: maxLevel }, t('调度中心等级 → {maxLevel}', { maxLevel }))}>${t('满级')}<//>
               </div>
-              <p class="dbg__hint">调整等级会按该等级的卡位重掷商店（已冻结的卡保留）。</p>
+              <p class="dbg__hint">${t('调整等级会按该等级的卡位重掷商店（已冻结的卡保留）。')}</p>
             </div>
-            <p class="dbg__hint">干员与装备在「干员 / 装备」标签页，也可用下方命令行：<b>chess 银灰</b> · <b>item 苦艾</b> · <b>funds +20</b> · <b>bond 谢拉格 +10</b> · <b>level 6</b></p>
+            <p class="dbg__hint">${t('干员与装备在「干员 / 装备」标签页，也可用下方命令行：')}<b>${t('chess 银灰')}</b> · <b>${t('item 苦艾')}</b> · <b>funds +20</b> · <b>${t('bond 谢拉格 +10')}</b> · <b>level 6</b></p>
           </div>` : html`<div class="dbg__filters">
             <input class="dbg__search" type="search" value=${query} disabled=${busy}
-              placeholder=${tab === 'items' ? '搜索装备名 / 效果' : tab === 'bonds' ? '搜索盟约' : '搜索干员名 / 代号 / 盟约'}
+              placeholder=${tab === 'items' ? t('搜索装备名 / 效果') : tab === 'bonds' ? t('搜索盟约') : t('搜索干员名 / 代号 / 盟约')}
               onInput=${(e) => setQuery(e.currentTarget.value)} onKeyDown=${keyDown} />
-            ${tab === 'bonds' ? null : html`<div class="dbg__tiers" role="radiogroup" aria-label="稀有度">
-              <button type="button" class=${cx('dbg__tier', tier === 'all' && 'is-on')} onClick=${() => setTier('all')}>全部</button>
+            ${tab === 'bonds' ? null : html`<div class="dbg__tiers" role="radiogroup" aria-label=${t('稀有度')}>
+              <button type="button" class=${cx('dbg__tier', tier === 'all' && 'is-on')} onClick=${() => setTier('all')}>${t('全部')}</button>
               ${CONSOLE_TIERS.map((n) => html`<button key=${n} type="button" class=${cx('dbg__tier', `dbg__tier--${n}`, Number(tier) === n && 'is-on')}
                 onClick=${() => setTier(n)}>${n}</button>`)}
             </div>`}
@@ -419,32 +420,32 @@ export function ConsolePanel({ open, onClose, pub, priv, gd }) {
           </div>
     
           <div class="dbg__list" role="list">
-            ${rows.length === 0 ? html`<p class="dbg__empty">没有匹配的条目</p>` : null}
+            ${rows.length === 0 ? html`<p class="dbg__empty">${t('没有匹配的条目')}</p>` : null}
             ${rows.map((r) => (tab === 'bonds'
               ? html`<${BondRow} key=${r.id} row=${r} busy=${busy}
-                  onSet=${(layers) => run('g.dbgLayers', { bondId: r.id, layers }, `${r.name} 层数 → ${layers}`)} />`
+                  onSet=${(layers) => run('g.dbgLayers', { bondId: r.id, layers }, t('{name} 层数 → {layers}', { name: r.name, layers }))} />`
               : tab === 'items'
                 ? html`<${ItemRow} key=${r.id} row=${r} busy=${busy}
-                    onGrant=${() => run('g.dbgItem', { itemId: r.id }, `获得装备 ${r.name}`)} />`
+                    onGrant=${() => run('g.dbgItem', { itemId: r.id }, t('获得装备 {name}', { name: r.name }))} />`
                 : html`<${ChessRow} key=${r.id} row=${r} busy=${busy}
-                    onGrant=${(elite) => run('g.dbgChess', { chessId: grantId(r.rec, elite) }, `获得干员 ${r.name}${elite ? '（精锐）' : ''}`)} />`))}
+                    onGrant=${(elite) => run('g.dbgChess', { chessId: grantId(r.rec, elite) }, t('获得干员 {name}{1}', { name: r.name, 1: elite ? t('（精锐）') : '' }))} />`))}
           </div>`}
     
           <div class="dbg__cmd">
             <input class="dbg__input" type="text" value=${cmd} disabled=${busy}
-              placeholder="命令：chess 银灰 / item 苦艾 / funds +20 / bond 谢拉格 +10 / level 6 / help"
+              placeholder=${t('命令：chess 银灰 / item 苦艾 / funds +20 / bond 谢拉格 +10 / level 6 / help')}
               onInput=${(e) => setCmd(e.currentTarget.value)}
               onKeyDown=${(e) => { keyDown(e); if (e.key === 'Enter') onCommand(); }} />
-            <${Button} size="sm" variant="primary" disabled=${busy || !cmd.trim()} onClick=${onCommand}>执行<//>
+            <${Button} size="sm" variant="primary" disabled=${busy || !cmd.trim()} onClick=${onCommand}>${t('执行')}<//>
           </div>
           <div class="dbg__log">
             ${[...log].reverse().map((l) => html`<div key=${l.id} class=${cx('dbg__logline', `is-${l.tone}`)}>${l.text}</div>`)}
-            ${log.length === 0 ? html`<div class="dbg__logline is-hint">就绪 · 干员 / 装备 / 资金 / 盟约层数 / 调度中心等级均可直接调整</div>` : null}
+            ${log.length === 0 ? html`<div class="dbg__logline is-hint">${t('就绪 · 干员 / 装备 / 资金 / 盟约层数 / 调度中心等级均可直接调整')}</div>` : null}
           </div>
         </div>
       </div>
       <footer class="modal__actions">
-        <${Button} variant="secondary" icon="close" onClick=${onClose}>关闭<//>
+        <${Button} variant="secondary" icon="close" onClick=${onClose}>${t('关闭')}<//>
       </footer>
     </div>
   </div>`;
@@ -459,12 +460,12 @@ function ChessRow({ row, busy, onGrant }) {
       <div class="dbg__tags">
         <span class="dbg__tag">${row.sub || row.profession}</span>
         ${row.bonds.slice(0, 4).map((b) => html`<span key=${b.id} class="dbg__tag dbg__tag--bond"><${BondGlyph} bondId=${b.id} />${b.name}</span>`)}
-        ${row.rare ? html`<span class="dbg__tag dbg__tag--rare">隐藏</span>` : null}
+        ${row.rare ? html`<span class="dbg__tag dbg__tag--rare">${t('隐藏')}</span>` : null}
       </div>
     </div>
     <div class="dbg__ops">
-      <${Button} size="sm" variant="primary" disabled=${busy} onClick=${() => onGrant(false)}>获得<//>
-      ${row.goldenId ? html`<${Button} size="sm" variant="secondary" disabled=${busy} title="以精锐形态获得" onClick=${() => onGrant(true)}>精锐<//>` : null}
+      <${Button} size="sm" variant="primary" disabled=${busy} onClick=${() => onGrant(false)}>${t('获得')}<//>
+      ${row.goldenId ? html`<${Button} size="sm" variant="secondary" disabled=${busy} title=${t('以精锐形态获得')} onClick=${() => onGrant(true)}>${t('精锐')}<//>` : null}
     </div>
   </div>`;
 }
@@ -477,13 +478,13 @@ function ItemRow({ row, busy, onGrant }) {
       <div class="dbg__name">${row.name}</div>
       <div class="dbg__tags">
         <span class="dbg__tag">T${row.tier}</span>
-        ${row.magic ? html`<span class="dbg__tag dbg__tag--rare">奇术</span>` : null}
-        ${row.rare ? html`<span class="dbg__tag dbg__tag--rare">非商店</span>` : null}
+        ${row.magic ? html`<span class="dbg__tag dbg__tag--rare">${t('奇术')}</span>` : null}
+        ${row.rare ? html`<span class="dbg__tag dbg__tag--rare">${t('非商店')}</span>` : null}
         ${row.desc ? html`<span class="dbg__tag dbg__tag--desc">${row.desc}</span>` : null}
       </div>
     </div>
     <div class="dbg__ops">
-      <${Button} size="sm" variant="primary" disabled=${busy} onClick=${onGrant}>获得<//>
+      <${Button} size="sm" variant="primary" disabled=${busy} onClick=${onGrant}>${t('获得')}<//>
     </div>
   </div>`;
 }
@@ -500,17 +501,17 @@ function BondRow({ row, busy, onSet }) {
   return html`<div class=${cx('dbg__item', 'dbg__item--bond', row.off && 'is-off')} role="listitem">
     <${BondGlyph} bondId=${row.id} />
     <div class="dbg__meta">
-      <div class="dbg__name">${row.name}${row.off ? html`<span class="dbg__tag dbg__tag--rare">本局禁用</span>` : null}</div>
+      <div class="dbg__name">${row.name}${row.off ? html`<span class="dbg__tag dbg__tag--rare">${t('本局禁用')}</span>` : null}</div>
       <div class="dbg__tags">
-        <span class=${cx('dbg__tag', row.active && 'dbg__tag--on')}>${row.active ? `已激活 T${row.tier}` : '未激活'}</span>
-        <span class="dbg__tag">成员 ${row.count}${row.thresholds.length ? ` / ${row.thresholds.join('·')}` : ''}</span>
+        <span class=${cx('dbg__tag', row.active && 'dbg__tag--on')}>${row.active ? t('已激活 T{tier}', { tier: row.tier }) : t('未激活')}</span>
+        <span class="dbg__tag">${t('成员 {count}', { count: row.count })}${row.thresholds.length ? ` / ${row.thresholds.join('·')}` : ''}</span>
       </div>
     </div>
     <div class="dbg__ops dbg__ops--bond">
-      <span class="dbg__value num">层 ${row.layers}</span>
+      <span class="dbg__value num">${t('层 {layers}', { layers: row.layers })}</span>
       ${[-LAYER_STEPS[1], -LAYER_STEPS[0], LAYER_STEPS[0], LAYER_STEPS[1]].map((d) => html`<${Button} key=${d} size="sm" variant="secondary"
         disabled=${busy || (d < 0 && row.layers === 0)} onClick=${() => onSet(layerStep(row.layers, d))}>${d > 0 ? `+${d}` : d}<//>`)}
-      <input class="dbg__num" type="text" inputmode="numeric" value=${value} placeholder="设为" disabled=${busy}
+      <input class="dbg__num" type="text" inputmode="numeric" value=${value} placeholder=${t('设为')} disabled=${busy}
         onInput=${(e) => setValue(e.currentTarget.value)} onKeyDown=${(e) => { if (e.key === 'Enter') set(); }} />
       <${Button} size="sm" variant="primary" disabled=${busy || !value.trim()} onClick=${set}>✓<//>
     </div>

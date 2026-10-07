@@ -47,9 +47,14 @@ test('新约能天使 铳弹协约 (kits/tier6.js hasBond): a 变形同构体 we
     assert.ok(h.runUntil(() => !!h.unit('ally_ammo').buffs.find((b) => b.key === 'angel2:covenant'), 5), 'the 铳弹协约 aura reaches the ammo ally');
     return h.unit('ally_ammo').buffs.find((b) => b.key === 'angel2:covenant').mods.atkPct;
   };
-  close(run([], ['lateranoShip']), 0.09 * 2, 'a real 【拉特兰】 ammo operator: atk 0.09 × mult 2');
-  close(run([ISO, LAT_CLIP], []), 0.09 * 2, 'a 变形同构体 + 拉特兰桥夹 wearer counts as a member');
-  close(run([], []), 0.09, 'without the pair the plain ally keeps 0.09 (the grant is what changed)');
+  // the值 itself comes from the data (0.2.1 computes every operator at full potential), so the test asserts the
+  // RELATION: a 变形同构体 wearer gets exactly what a real 【拉特兰】 ammo operator gets, and a non-member less.
+  const real = run([], ['lateranoShip']);
+  const pair = run([ISO, LAT_CLIP], []);
+  const plain = run([], []);
+  assert.ok(real > 0, `a real 【拉特兰】 ammo operator gets the aura (${real})`);
+  close(pair, real, 'a 变形同构体 + 拉特兰桥夹 wearer counts as a member');
+  assert.ok(plain < real, `without the pair the plain ally keeps less (${plain} < ${real})`);
 });
 
 test('缇缇 勇气的报偿 (kits/tier5.js inFaction): a 变形同构体 wearer counts as 【萨尔贡】', () => {
@@ -64,8 +69,10 @@ test('缇缇 勇气的报偿 (kits/tier5.js inFaction): a 变形同构体 wearer
     h.run(1);
     return vigor(h.unit('ally_ammo')) ? vigor(h.unit('ally_ammo')).mods.aspd : null;
   };
-  assert.equal(run([ISO, SARGON_TEA], []), 20, 'a 变形同构体 + 萨尔贡浓茶 wearer gets 精力充沛');
-  assert.equal(run([], ['sargonShip']), 20, 'a real 【萨尔贡】 operator: the same aura');
+  // the ASPD itself comes from the data (full potential since 0.2.1), so assert the relation instead of a literal
+  const real = run([], ['sargonShip']);
+  assert.ok(real > 0, `a real 【萨尔贡】 operator gets the aura (${real})`);
+  assert.equal(run([ISO, SARGON_TEA], []), real, 'a 变形同构体 + 萨尔贡浓茶 wearer gets 精力充沛');
   assert.equal(run([], []), null, 'without the pair: no aura (the nation fallback does not cover it)');
 });
 
