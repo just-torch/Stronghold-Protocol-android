@@ -14,7 +14,9 @@
 //                       'freeze', × prob) · act2autochess_gar_event_onstart (every deploy) ·
 //                       act2autochess_gar_event_allyenemy_sleepstun_inrange (an enemy or operator in range ENTERS
 //                       sleep / stun). "进入…时": re-applying a running status (a refresh) is not a new entry
-//                       (engine statusApplied ctx.entered). Targets: bond_by_id / bond_self (own active bonds) / bond_actived_maxstack;
+//                       (engine statusApplied ctx.entered) — except a pulse that re-applies its own short status as a
+//                       fresh one (applyStatus `reenter`: 缇缇 S2's sleep ward, DESIGN §24.8).
+//                       Targets: bond_by_id / bond_self (own active bonds) / bond_actived_maxstack;
 //                       amounts: by_count / by_charcount_samerow / by_charlevel; conditions character_same_row /
 //                       character_same_col (≥ check_count incl. self). Gains go through support.gainLayers with
 //                       reason 'garrison', source = the trait's owner, cap = max_add_count_per_battle per (instance, bond).
@@ -309,14 +311,15 @@ const INSTALLERS = {
   },
 
   act2autochess_gar_event_allyenemy_sleepstun_inrange(battle, list) {
-    // "进入沉睡/晕眩时" (缇缇's 封护, garrison_125): every successful application counts, a refresh of a running sleep
-    // included — that refresh is where the stacks come from (her S2 re-applies sleep to the ward's surroundings every
-    // AURA_IV = 0.25 s, so a "new entry only" reading of ctx.entered could never pass the 24-per-battle cap: with four
-    // enemies standing in the ward the count stopped at 4 and the trait read as broken — GitHub issue #162, where the
-    // reporter's expectation is that the stacks climb "迅速…直至上限"). The cap (`max_add_count_per_battle`) is what
-    // bounds it. The freeze installer above keeps `entered`: its text says 「进入冻结时」 and a refresh is not an entry.
-    battle.on('statusApplied', ({ target, status }) => {
-      if (!target || (status !== 'sleep' && status !== 'stun')) return;
+    // "进入沉睡/晕眩时": a NEW entry only (engine ctx.entered) — a refresh of a running status is not an entry. 缇缇's S2
+    // 封护 re-applies sleep to the ward's surroundings every AURA_IV = 0.25 s and never removes it, and a "new entry only"
+    // reading would leave the stacks at the ±1 of each enemy in the ward (4 of 24 — GitHub #162, where the reporter's
+    // expectation is that they climb "迅速…直至上限"); v0.1.4 answers it at the SOURCE instead of here: the ward marks its
+    // own pulses as fresh entries (`reenter`, kits/tier5.js → engine applyStatus, DESIGN §24.8). Counting every
+    // application here as well would count one pulse of a two-operator ward twice, so this installer keeps `entered`.
+    // The freeze installer above reads `entered` for the same reason (its text says 「进入冻结时」).
+    battle.on('statusApplied', ({ target, status, entered }) => { // new entries only (ctx.entered; the ward re-enters itself)
+      if (!target || (status !== 'sleep' && status !== 'stun') || !entered) return;
       if (!(target.side === 'enemy' || (target.side === 'ally' && target.kind === 'op'))) return;
       for (const it of list) if (S.onField(it.unit) && S.inRange(it.unit, target)) fireGain(battle, it);
     });

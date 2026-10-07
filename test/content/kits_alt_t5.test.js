@@ -1035,6 +1035,7 @@ test('引星棘刺 S1 度算浪波 is AUTO: it fires the moment its SP fills wit
       units: [entry(id, 'skchr_thorn2_1', { row: 10, col: 3 }), { chessId: 't_low', row: 10, col: 5 }],
     });
     const u = h.unit(id);
+    assert.equal(h.b.enemies.length, 0, 'no enemy on the field');
     assert.equal(u.skill.id, 'skchr_thorn2_1');
     assert.equal(u.skill.rule, 'SP_FULL', 'an AUTO skill carries no 技能策略 (the data row says AUTO)');
     assert.equal(u.skill.manual, false);
@@ -1045,7 +1046,6 @@ test('引星棘刺 S1 度算浪波 is AUTO: it fires the moment its SP fills wit
     done(h);
   }
 });
-
 test('引星棘刺 S3 “我的海疆”: passive skill range; alchemy units on the 3 lowest-block ops debuff (不叠加) and burn enemies around them, ramping to the max after 15 s', () => {
   for (const id of pair('15')) {
     const h = run({

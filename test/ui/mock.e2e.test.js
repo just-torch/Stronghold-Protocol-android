@@ -558,7 +558,8 @@ describe('in-match UI (mock harness, headless Chrome)', { skip: !ENABLED && 'set
       if (render === 'engine') assert.ok(shown.every((x) => x[1] >= 17), 'their upper-gate enemies stand in rows 17–18');
       await page.click('.gtop__iconbtn');
       // the way back is THEIR board in prep: the same 'prep' camera the fold/watching work gives a scouted teammate in
-      // 休整期 (§23.36, and test/ui/devices.e2e.test.js asserts 'prep' for the same button on a phone) — not 'normal'
+      // 休整期 (§23.36, and test/ui/devices.e2e.test.js asserts 'prep' for the same button on a phone) — not 'normal';
+      // a scouted prep board frames like the own prep with the shop folded (PR #129)
       await page.waitForFunction(() => document.querySelector('.gm')?.dataset.camera === 'prep', { timeout: 3000 });
       assert.ok(await page.$('.gm__watching'), 'still scouting the teammate');
       await page.click('.gm__watching button');

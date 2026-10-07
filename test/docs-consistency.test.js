@@ -540,7 +540,7 @@ test('user playtest #6 follow-up: a merge consuming a deployed copy puts the eli
   assert.equal(promo.eliteTileAmongSeveralDeployed?.assumed, true);
   for (const [name, text] of [['research 01', R01], ['00-INDEX', INDEX], ['META', META], ['SIM', SIM], ['PlayerState', PS]]) assert.match(text.replace(/\s+|\/\/\s/g, ''), official, `${name} quotes PRTS`);
   assert.match(INDEX, /to \*\*that copy's board position\*\*/);
-  // the deployment order is by column since 0.1.3 (Battle.start; DESIGN §23.f4), so is the merge's tile among several copies
+  // the deployment order is by column since 0.1.3 (Battle.start; DESIGN §23.23), so is the merge's tile among several copies
   assert.match(META, /of several, the one that deploys first \(col asc, then row desc; `board\.js mergeTile`/);
   assert.ok(!/it takes a freed\s+board tile of a consumed copy only when the hand and temp are both full/.test(META), 'META: the old fallback-only wording is gone');
   assert.ok(!/only with the hand and temp both full does it take a/.test(PS), 'PlayerState header: the old fallback-only wording is gone');
@@ -1173,12 +1173,13 @@ test('the local issue list holds only unfixed issues (ISSUES.md ⇄ docs/ISSUES-
   const LIST = doc('ISSUES.md');
   const FIXLOG = doc('docs/ISSUES-FIXLOG.md');
   const group = (name) => {
-    const m = FIXLOG.match(new RegExp(`<!-- ${name}: ([\\d\\s]+) -->`));
+    const m = FIXLOG.match(new RegExp(`<!-- ${name}:\\s*([\\d\\s]*?)\\s*-->`));
     assert.ok(m, `the fix log declares "${name}"`);
-    return m[1].trim().split(/\s+/).map(Number);
+    return m[1].trim() ? m[1].trim().split(/\s+/).map(Number) : [];
   };
   const settled = group('settled');   // fixed / judged not-a-bug / closed: must never be listed again
-  const pending = group('pending');   // upstream already closed or scheduled, not re-verified here
+  const pending = group('pending');   // upstream already closed or scheduled, not re-verified here (may be empty)
+  const postCapture = group('post-capture'); // opened after the capture and already fixed (not one of the 110)
   const total = +FIXLOG.match(/<!-- issue-total: (\d+) -->/)[1];
   // the live list: one row per unfixed issue, `| P1 | [#96](…) 标题 | … |`
   const live = [...LIST.matchAll(/\| P[0-3] \| \[#(\d+)\]/g)].map((m) => +m[1]);
@@ -1189,11 +1190,13 @@ test('the local issue list holds only unfixed issues (ISSUES.md ⇄ docs/ISSUES-
   const all = [...settled, ...pending, ...live];
   assert.equal(new Set(all).size, all.length, 'settled / pending / live are disjoint');
   assert.equal(all.length, total, `the partition covers all ${total} captured issues`);
+  // an issue opened after the capture is not part of that partition, and is gone from the live list once fixed
+  assert.deepEqual(postCapture.filter((n) => all.includes(n)), [], 'post-capture issues stay out of the captured three');
   // a settled issue never comes back: not as a row, and not in the prose around the tables either
   const back = [...new Set([...LIST.matchAll(/issues\/(\d+)\)/g)].map((m) => +m[1]).filter((n) => !live.includes(n)))];
   assert.deepEqual(back, [], 'ISSUES.md refers to the issues it lists and to no other');
-  // every settled / pending issue is explained in the fix log, which itself points at the capture archive
-  for (const n of [...settled, ...pending]) assert.ok(FIXLOG.includes(`issues/${n})`), `docs/ISSUES-FIXLOG.md names #${n}`);
+  // every settled / pending / post-capture issue is explained in the fix log, which itself points at the archive
+  for (const n of [...settled, ...pending, ...postCapture]) assert.ok(FIXLOG.includes(`issues/${n})`), `docs/ISSUES-FIXLOG.md names #${n}`);
   assert.match(FIXLOG, /docs\/ISSUES-ARCHIVE\.md/);
   assert.match(LIST, /docs\/ISSUES-FIXLOG\.md/);
   assert.match(LIST, /docs\/ISSUES-ARCHIVE\.md/);

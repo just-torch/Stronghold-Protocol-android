@@ -423,12 +423,18 @@ class Client {
     await this.click('.readybtn');
     await this.page.waitForFunction(() => !!document.querySelector('.readybtn.is-armed'), { timeout: 4000 }).catch(() => {});
     await this.click('.readybtn');
-    await sleep(250);
-    if (await this.page.$('.modal__title')) {
-      const title = await this.page.$eval('.modal__title', (el) => el.textContent || '');
-      if (title.includes('剩余资金')) { await this.click('.modal__actions button', '准备就绪', { timeout: 4000 }); await sleep(250); }
-    }
+    await this.confirmFundsLeft();
     await this.waitFor((s) => s.ready || s.phase !== 'PREP', 'ready', 8000);
+  }
+
+  /** 准备 with funds left asks first (剩余资金, DESIGN §23.11): confirm it, as a player who means to start the fight does. */
+  async confirmFundsLeft() {
+    await sleep(250);
+    const asked = await this.page.evaluate(() => {
+      const t = document.querySelector('.modal__title');
+      return !!(t && t.textContent.includes('剩余资金'));
+    });
+    if (asked) await this.click('.modal__actions button', '准备就绪', { timeout: 4000 });
   }
 }
 
@@ -550,8 +556,15 @@ describe('real server + real browsers', { skip: !ENABLED && 'set SP_REAL_E2E=1 (
             await c.deployFromHand(2);
             const s2 = await c.st();
             if (s2.temp > 0) c.note(`temp not empty (${s2.temp}) — ready blocked`);
-            // 准备就绪 asks twice since the local fork (§21.38): the helper arms, confirms and answers 剩余资金
-            if (c === guest) { await c.ready({ timeout: 12000 }); await c.waitFor((x) => x.ready || x.phase !== 'PREP', 'ready (helper)', 8000); } else await c.ready();
+            // 准备就绪 asks twice since the local fork (§21.38): Space arms the button and the SECOND Space confirms —
+            // then answer the 剩余资金 question (upstream's confirmFundsLeft, §23.11). The guest stays the one seat that
+            // readies by keyboard; a single Space would only leave it armed.
+            if (c === guest) {
+              await c.page.keyboard.press('Space');
+              await c.page.keyboard.press('Space');
+              await c.confirmFundsLeft();
+              await c.waitFor((x) => x.ready || x.phase !== 'PREP', 'ready (Space)', 8000);
+            } else await c.ready();
           }
         } else if (hs.phase === 'SP_DRAFT') {
           for (const c of both) {
