@@ -277,6 +277,12 @@ services:
 
   `sudo systemctl daemon-reload && sudo systemctl enable --now stronghold`；日志 `journalctl -u stronghold -f`；防火墙 `sudo ufw allow 3000/tcp`。
 
+### 4.1 素材放在安装目录之外（本 fork）
+
+游戏素材默认从 `public/assets` 提供。本 fork 可以再指定一个「美术目录」（服务器选项 `assetsDir`，或环境变量 `SP_ASSETS_DIR`，绝对路径或相对启动目录的路径）：`/assets/**` 和去扩展名的 `/media/**` 音频**先**在这个目录里找，找不到再用自带的 `public/assets`，两边都没有才是 404；游戏代码、数据和其他文件始终来自安装目录。这样一个体积很大的素材目录可以放在别处（例如手机 App 把游戏解包在会被升级清空的目录里，素材就得放在它旁边），升级 / 重装程序时不跟着被删；目录只放了一部分也没关系，缺的那些仍由自带素材兜底。
+
+不设置时行为与以前完全一样，只服务 `public/assets`。systemd 里写成一行，例如 `Environment=SP_ASSETS_DIR=/srv/stronghold-art`。
+
 ## 5. 排错
 
 | 现象 | 处理 |

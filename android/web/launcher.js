@@ -53,6 +53,12 @@ const el = {
   hostBar: $('host-bar'),
   hostAddresses: $('host-addresses'),
   hostRival: $('host-rival'),
+  hostArt: $('host-art'),
+  artStatus: $('art-status'),
+  artBar: $('art-bar'),
+  artHint: $('art-hint'),
+  btnArtRetry: $('btn-art-retry'),
+  btnArtSkip: $('btn-art-skip'),
   addrList: $('addr-list'),
   joinAddr: $('join-addr'),
   joinError: $('join-error'),
@@ -135,6 +141,123 @@ function fatal(message, detail) {
 }
 
 const shortError = (err) => String(err?.message ?? err ?? '').slice(0, 160);
+
+// ---------------------------------------------------------------------------------------------------
+// first-launch art download (the slim build ships no art; the Node side fetches it — see
+// docs/FORK-DEVIATIONS.md "首启下载素材"). The events arrive while the host card is on screen, and the download runs
+// in the Node process: entering the game does not stop it.
+// ---------------------------------------------------------------------------------------------------
+/** The last art event, plus what the card needs to render it. */
+const art = { phase: 'idle', bytes: 0, totalBytes: 0, partIndex: 0, parts: 0, speedBps: 0, etaMs: null, files: 0, message: '' };
+
+const mb = (bytes) => (bytes >= 100 * (1 << 20) ? String(Math.round(bytes / (1 << 20))) : (bytes / (1 << 20)).toFixed(1));
+/** "3 分 20 秒" / "45 秒" / "1 小时 5 分". */
+function duration(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s} 秒`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} 分 ${s % 60} 秒`;
+  return `${Math.floor(m / 60)} 小时 ${m % 60} 分`;
+}
+
+/** The payload of a `NodeJS` channel event: one JSON string in `args[0]` (the Node side stringifies everything). */
+function eventPayload(ev) {
+  try { return JSON.parse(ev?.args?.[0] ?? '{}'); } catch { return {}; }
+}
+
+/** Everything the art card says is derived from this one function, so the states cannot drift apart. */
+function renderArt() {
+  const a = art;
+  const active = a.phase !== 'idle';
+  el.hostArt.classList.toggle('hidden', !active);
+  if (!active) return;
+
+  const done = a.totalBytes > 0 && a.bytes >= a.totalBytes;
+  const percent = a.totalBytes > 0 ? (a.bytes / a.totalBytes) * 100 : 0;
+  const indeterminate = a.phase === 'manifest' || a.phase === 'index' || a.phase === 'verify'
+    || a.phase === 'fallback' || a.phase === 'community';
+  el.artBar.classList.toggle('indeterminate', indeterminate);
+  el.artBar.style.width = indeterminate ? '40%' : `${Math.max(0, Math.min(100, percent))}%`;
+
+  const tries = [];
+  el.btnArtRetry.classList.toggle('hidden', a.phase !== 'error');
+  el.btnArtSkip.classList.toggle('hidden', a.phase === 'done' || a.phase === 'skipped' || a.phase === 'error');
+
+  switch (a.phase) {
+    case 'manifest':
+    case 'index':
+      el.artStatus.textContent = '正在连接素材源…';
+      el.artHint.textContent = '首次启动需要下载游戏素材（图片与语音，约 500 MB），只需下载一次。';
+      break;
+    case 'download':
+      el.artStatus.textContent = `正在下载游戏素材 ${mb(a.bytes)} / ${mb(a.totalBytes)} MB${a.parts > 1 ? `（第 ${a.partIndex}/${a.parts} 个分卷）` : ''}`;
+      tries.push(a.speedBps > 0 ? `${(a.speedBps / (1 << 20)).toFixed(1)} MB/s` : '正在连接…');
+      if (a.etaMs != null) tries.push(`剩余约 ${duration(a.etaMs)}`);
+      tries.push('只需下载一次：之后更新应用不用重下');
+      tries.push('请保持本应用在前台，切到后台可能被系统中断');
+      el.artHint.textContent = tries.join(' · ');
+      break;
+    case 'unpack':
+      el.artStatus.textContent = `正在解包素材（第 ${a.partIndex}/${a.parts} 个分卷，已完成 ${a.files} 个文件）`;
+      el.artHint.textContent = '解包完成后服务器会立刻提供素材，不用重新启动。';
+      break;
+    case 'verify':
+      el.artStatus.textContent = '正在校验已下载的素材…';
+      el.artHint.textContent = '';
+      break;
+    case 'retry':
+      el.artStatus.textContent = `第 ${a.partIndex}/${a.parts} 个分卷下载失败，正在重试…`;
+      el.artHint.textContent = String(a.message || '').slice(0, 160);
+      break;
+    case 'fallback':
+      el.artStatus.textContent = '素材包连不上，改用社区素材源…';
+      el.artHint.textContent = '社区源逐个文件下载，速度取决于网络；这一步会比素材包慢很多。';
+      break;
+    case 'community':
+      el.artStatus.textContent = a.totalFiles
+        ? `正在从社区源补齐素材：${a.files} / ${a.totalFiles} 个文件`
+        : '正在从社区源下载素材…';
+      el.artHint.textContent = '3D 战场场景等需要素材包的内容这次拿不到，会显示占位图。';
+      break;
+    case 'done':
+      if (a.status === 'community') {
+        el.artStatus.textContent = `素材已就绪（社区源：${a.files} 个文件）`;
+        el.artHint.textContent = '3D 战场场景等需要素材包的内容暂缺，会显示占位图；下次启动会先重试素材包。';
+      } else {
+        el.artStatus.textContent = `素材已就绪（${a.files} 个文件）`;
+        el.artHint.textContent = done ? '现在进入游戏就能看到完整的画面与语音。' : '';
+      }
+      break;
+    case 'skipped':
+      el.artStatus.textContent = '已跳过素材下载';
+      el.artHint.textContent = '缺失的画面会显示占位图；下次点「建立主机」时会接着下载。';
+      break;
+    case 'error':
+      el.artStatus.textContent = '素材下载失败';
+      el.artHint.textContent = `${String(a.message || '').slice(0, 200)}——可以重试；也可以先进入游戏，缺的素材会显示占位图，下次启动接着下载。`;
+      break;
+    default:
+      el.artStatus.textContent = '正在检查游戏素材…';
+      el.artHint.textContent = '';
+  }
+}
+
+/** Ask the Node side to do something (the engine cannot be restarted, so art retries go over this channel). */
+function sendToNode(eventName, ...args) {
+  try { NodeJS?.send({ eventName, args }); } catch { /* the plugin may be absent on a desktop page */ }
+}
+
+if (NodeJS) {
+  // Attached at page load: the events are not retained for late subscribers, and the download starts with the server.
+  NodeJS.addListener('art-progress', (ev) => { Object.assign(art, eventPayload(ev)); renderArt(); });
+  NodeJS.addListener('art-done', (ev) => { Object.assign(art, eventPayload(ev), { phase: 'done' }); renderArt(); });
+  NodeJS.addListener('art-skipped', (ev) => { Object.assign(art, eventPayload(ev), { phase: 'skipped' }); renderArt(); });
+  NodeJS.addListener('art-error', (ev) => {
+    const info = eventPayload(ev);
+    if (info.code === 'E_CANCELLED') { art.phase = 'skipped'; } else { Object.assign(art, info, { phase: 'error' }); }
+    renderArt();
+  });
+}
 
 // ---------------------------------------------------------------------------------------------------
 // address handling
@@ -504,7 +627,8 @@ async function host() {
   el.hostAddresses.classList.add('hidden');
   el.hostRival.classList.add('hidden');
   setBar(true);
-  startElapsed('正在准备游戏文件（首次启动需要解压素材，请耐心等待）');
+  startElapsed('正在准备游戏文件（首次启动较慢，请耐心等待）');
+  renderArt();
   // Keep seeking while hosting: not to join anything, but to warn about the other phone that also tapped host.
   startDiscovery();
 
@@ -592,6 +716,18 @@ el.btnCopy.addEventListener('click', async () => {
     catch { el.hostStatus.textContent = '请长按上面的地址手动复制。'; }
     ta.remove();
   }
+});
+
+// Art download (the slim build): retry after a failure, or stop it and play with placeholders.
+el.btnArtRetry.addEventListener('click', () => {
+  art.phase = 'manifest';
+  renderArt();
+  sendToNode('retry-art');
+});
+el.btnArtSkip.addEventListener('click', () => {
+  art.phase = 'skipped';
+  renderArt();
+  sendToNode('skip-art');
 });
 
 // Android hardware back button: leave the app when we are on the chooser.

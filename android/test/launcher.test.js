@@ -19,7 +19,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // android/test/ -> android/ (the Capacitor project root) -> the game repository root
 const APP = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -280,8 +280,14 @@ describe('android assembler: the beacon is shipped', { skip }, () => {
     assert.match(build, /\[ValidateSet\('release', 'devtest'\)\]\[string\]\$Variant = 'release'/, 'the variant switch');
     assert.match(build, /'assembleDevtest'/, 'the devtest task');
     assert.match(build, /--console=1/, 'devtest forces the console on');
-    assert.match(build, /-dev-arm64\.apk/, 'its own artifact name');
+    assert.match(build, /-dev-arm64\$\(\$slimSuffix\)\.apk/, 'its own artifact name');
     assert.match(build, /\$gameVersion = \(Get-Content/, 'the artifact name follows package.json, not a literal version');
+    // -NoArt (the slim APK): the switch, the staged tree without the art and the -slim artifact name beside it
+    assert.match(build, /\[switch\]\$NoArt/, 'the slim switch');
+    assert.match(build, /if \(\$NoArt\) \{ \$assembleArgs \+= '--slim' \}/, 'the slim build stages without the art');
+    assert.match(build, /\$slimSuffix = if \(\$NoArt\) \{ '-slim' \} else \{ '' \}/, 'and names its own artifact');
+    assert.match(script, /const SLIM = process\.argv\.includes\('--slim'\) \|\| process\.argv\.includes\('--no-art'\)/);
+    assert.match(script, /slim: dropped public\/assets from the staged tree/, 'the assembler reports what it dropped');
 
     // the native project: the second build type, its application id suffix and its label overlay
     const gradle = readFileSync(path.join(APP, 'android', 'app', 'build.gradle'), 'utf8');
@@ -289,5 +295,63 @@ describe('android assembler: the beacon is shipped', { skip }, () => {
     const label = readFileSync(path.join(APP, 'android', 'app', 'src', 'devtest', 'res', 'values', 'strings.xml'), 'utf8');
     for (const name of ['app_name', 'title_activity_main']) assert.match(label, new RegExp(`<string name="${name}">卫戍协议：盟约·测试</string>`), name);
     assert.match(readFileSync(path.join(APP, 'android', 'app', 'src', 'main', 'res', 'values', 'strings.xml'), 'utf8'), /<string name="app_name">卫戍协议：盟约<\/string>/);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------
+// First-launch art download (the slim build, docs/FORK-DEVIATIONS.md "首启下载素材"). The APK ships no game art, the
+// Node side downloads the parts published with the release into <files>/nodejs/art, and this page shows the progress.
+// A phone that cannot reach the parts falls back to the community sources, so both routes are wired here.
+// ---------------------------------------------------------------------------------------------------
+describe('android slim build: first-launch art download', { skip }, () => {
+  const source = readFileSync(LAUNCHER, 'utf8');
+  const html = readFileSync(path.join(WEB, 'index.html'), 'utf8');
+  const template = path.join(APP, 'scripts', 'nodejs-template');
+
+  test('the host card has a place for the download', () => {
+    for (const id of ['host-art', 'art-status', 'art-bar', 'art-hint', 'btn-art-retry', 'btn-art-skip']) {
+      assert.ok(html.includes(`id="${id}"`), `index.html is missing #${id}`);
+    }
+  });
+
+  test('the page listens for the Node side events and can retry or skip', () => {
+    // The engine cannot be restarted (the plugin starts it once), so a retry is a message to the Node process.
+    for (const event of ['art-progress', 'art-done', 'art-error', 'art-skipped']) {
+      assert.ok(source.includes(`NodeJS.addListener('${event}'`), `launcher.js does not listen for ${event}`);
+    }
+    assert.match(source, /sendToNode\('retry-art'\)/, 'retry goes to the Node side');
+    assert.match(source, /sendToNode\('skip-art'\)/, 'and so does skip');
+    assert.match(source, /E_CANCELLED/, 'a cancelled download is not an error');
+    assert.match(source, /社区素材源|社区源/, 'the community fallback is explained to the user');
+  });
+
+  test('the entry point points the server at the art directory and never fails to start the server', () => {
+    const entry = readFileSync(path.join(template, 'index.js'), 'utf8');
+    assert.match(entry, /SP_ASSETS_DIR = artDir/, 'the server is told where the art is');
+    assert.match(entry, /artDirFrom\(bridge \? path\.resolve\(process\.cwd\(\), '\.\.', 'art'\) : ''\)/, 'beside the unpacked tree, outside the plugin\'s clean-up');
+    assert.match(entry, /void prepareArt\('start'\)/, 'the download runs after the room is up, so server-ready is not delayed');
+    assert.match(entry, /channel\.on\('retry-art'/, 'the Node side accepts a retry');
+    assert.match(entry, /fillFromCommunity/, 'the community fallback is reachable');
+  });
+
+  test('the downloader verifies what it writes', async () => {
+    const { ensureArt, artComplete, isSafeRel, ArtError } = await import(pathToFileURL(path.join(template, 'assets.mjs')).href);
+    assert.equal(typeof ensureArt, 'function');
+    assert.equal(typeof artComplete, 'function');
+    assert.equal(ArtError.prototype instanceof Error, true);
+    assert.ok(isSafeRel('audio/bgm/act1.mp3'));
+    for (const bad of ['../x', '/x', 'a/../../b', 'a\\b', '', 'a//b', './a']) assert.equal(isSafeRel(bad), false, bad);
+    const text = readFileSync(path.join(template, 'assets.mjs'), 'utf8');
+    assert.match(text, /sha256\(rec\.data\)/, 'every unpacked file is hashed against the index');
+    assert.match(text, /sha256\(await fsp\.readFile\(tmp\)\)/, 'and every part against the manifest');
+    assert.match(text, /range: `bytes=\$\{have\}-`/, 'an interrupted part resumes with a Range request');
+    assert.match(text, /E_DISK/, 'not enough free space is a distinct, explainable failure');
+  });
+
+  test('the community fallback is staged only where it is needed', () => {
+    const script = readFileSync(path.join(APP, 'scripts', 'assemble-nodejs.mjs'), 'utf8');
+    assert.match(script, /await mirror\(path\.join\(REPO, 'tools'\), path\.join\(NODEJS, 'tools'\)\)/, 'the fetch-assets pipeline is staged');
+    assert.match(script, /nodePackageClosure\('@pixi-spine\/runtime-3\.8'\)/, 'with the Spine parser it needs');
+    assert.match(readFileSync(path.join(ROOT, 'tools', 'fetch-assets.mjs'), 'utf8'), /export async function main\(argv = process\.argv\.slice\(2\)\)/, 'fetch-assets can be driven in-process');
   });
 });

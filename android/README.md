@@ -38,6 +38,7 @@
 | 发现协议端口 | UDP `45777`（主机广播到这里，加入方监听）与 `45778`（加入方询问，主机监听），见[局域网自动发现](#局域网自动发现) |
 | 签名 | 自签名，v1 + v2 方案（`android/android/stronghold-release.jks`，由构建脚本自动生成） |
 | 应用名 / 包名 | 卫戍协议：盟约 / `io.github.sganggs.strongholdprotocol` |
+| slim 变体 | `android/dist/Stronghold-Protocol-0.2.5-arm64-slim.apk`，**40.6 MB**（不含 `public/assets`，首启在应用内下载 502.5 MB 素材包），见[素材包与首启下载](#素材包与首启下载-slim-变体2026-10-13) |
 
 另外还可以构建一份**测试版 APK**（`-Variant devtest`，见[测试版 APK](#测试版-apkadjacent)）：同一个游戏、另一个包名
 （`…strongholdprotocol.dev`）、应用名「卫戍协议：盟约·测试」、版本号 `0.2.5-dev`，**可以和正式版同时装在手机上**，
@@ -58,6 +59,60 @@ APK 体积较大的原因是**素材必须随包分发**：主机手机要能在
 
 `.png`（302 MB → 100.0 %）、`.mp3`（192 MB → 99.5 %）、`.webp`（9 MB → 100 %）留在 `noCompress`：再压没有一点收益，只会拖慢那次拷贝。
 再想小只能动内容：全部 PNG 转 WebP 大约还能省 60–80 MB，但要改写约 5000 个素材路径与 716 个 Spine 图集，属于单独一轮的工作。
+
+### 素材包与首启下载（`-slim` 变体，2026-10-13）
+
+561.6 MB 里 **520.8 MB 是 `public/assets`**（12 634 个文件 / 659.6 MB 原始），其余全部——内嵌 Node 运行时、客户端、服务器、
+数据、字体——只有 **37.9 MB**。所以另出一个 **slim 变体**：APK 里不含素材，**40.6 MB**，首次「建立主机」时在应用内下载素材包
+（**502.5 MB / 11 个分卷**），存进应用私有目录。正式包继续照原样发布，两者包名相同（同一台手机装的是其中一个）。
+
+| | 正式包 | slim 变体 |
+|---|---|---|
+| 安装包 | 561.6 MB | **40.6 MB** |
+| 首次启动 | 解包约 695 MB（几十秒） | 服务器几秒就绪，素材在后台下载（502.5 MB；4G 下约 10–30 分钟） |
+| 每次更新 | 重新下载约 561 MB | 约 40 MB（素材不用重下） |
+| 占用空间 | APK 561 MB + 解压 695 MB ≈ 1.26 GB | APK 41 MB + 代码与素材约 700 MB ≈ 0.75 GB |
+| 离线 | 装完即玩 | 首次必须联网；下载完成后同样离线可用（联机时由主机提供素材，客人不需要自己的） |
+
+流程与保证：
+
+1. 点「建立主机」后服务器**立刻**起来（同一 Wi-Fi 的朋友马上能加入，`server-ready` 不被下载拖延），素材在后台按分卷下载。
+2. 每个分卷先按 `assets-pack-0.2.5.json` 里的 sha256 校验整体，解开时**逐个文件**再对一遍 `assets-index-0.2.5.json` 里的
+   sha256（写 `*.part-tmp` 再改名），对不上就重下该分卷；网络中断、切后台被系统杀掉都只损失当前分卷，重进应用会**断点续传**
+   （HTTP `Range`）。清单里多出来的路径、`..`、缺文件、包对不上当前版本，都会在写盘前拒绝。
+3. 下载状态写在 `<素材目录>/.sp-pack.json`：下次启动发现完整就整段跳过（写这个文件之前已经逐文件校验过，所以不必每次重算
+   660 MB 的 sha256；`SP_ART_VERIFY=1` 可以强制全量校验）。
+4. 素材目录在 `public/` **之外**：插件在每次**应用更新**时会删掉整个解包目录重拷（`copyNodeProjectFromAPK` 的 `isAppUpdated()`），
+   放在 `public/assets` 里的素材会跟着丢。服务器用 `SP_ASSETS_DIR` 把 `/assets/**` 与 `/media/**` 指到 `<files>/nodejs/art`，
+   找不到再回落到包内 `public/assets`（这一条是仓库侧的改动，见 `docs/FORK-DEVIATIONS.md` §21.52 与 `docs/DEPLOY.md` §4.1）。
+5. 启动页给出进度（已下 / 总量 / 速度 / 剩余）、**重试**与**暂时跳过**：下载期间就能「进入游戏」（缺的图是占位图），
+   失败后可重试或跳过，下载在 Node 进程里跑，进入游戏不会中断它。
+6. 素材包连不上时自动回退到**社区素材源**（`SP_ASSET_SOURCE=auto`，即复用仓库的 `tools/fetch-assets.mjs`，逐个文件从社区镜像抓；
+   slim 包因此额外带约 9 MB 的 JS：`tools/`、研究表、Spine 解析器依赖闭包）。这条路拿不到 `local/**`——11 张官方战场场景与
+   mesh 材质属于本机客户端提取物，共 84.7 MB——那部分保持占位图，界面会说明「素材不完整」，下次启动仍会先试素材包。
+   已知代价：下载只在应用处于前台时进行（被系统杀掉不会丢已下好的分卷，但要重新进应用继续），且需要约 700 MB 空闲空间。
+
+维护者：构建与发布。
+
+```bash
+# 1. 打素材包：public/assets → android/dist/art/（11 个 .part + 索引 + manifest，并把 base 写进 App 里的地址文件）
+node android/scripts/pack-art.mjs --base https://github.com/just-torch/Stronghold-Protocol-android/releases/download/v0.2.5-fork.1/
+#    先看一眼计划：node android/scripts/pack-art.mjs --dry-run
+
+# 2. 装配 slim 树（不含 public/assets，另加社区回退所需的 tools/ 与研究表、Spine 解析器）
+node android/scripts/assemble-nodejs.mjs --slim
+
+# 3. 出包 → android/dist/Stronghold-Protocol-<版本>-arm64-slim.apk
+pwsh -NoProfile -File android/scripts/build-apk.ps1 -NoArt -SkipAssemble
+```
+
+发布时把 `android/dist/art/` 里的 11 个 `.part`、`assets-index-0.2.5.json`、`assets-pack-0.2.5.json` 与 slim APK 一起作为
+**同一个 Release** 的资产上传（App 内置的地址来自 `android/scripts/nodejs-template/asset-pack.json`，可用 `pack-art.mjs --base …`
+重写；运行时也能用 `SP_PACK_BASE` 覆盖，逗号分隔多个镜像，默认第二个镜像就是 `gh-proxy.com`）。**换了素材或版本号必须重打包**：
+清单、索引与 App 内置的版本号三者对不上时，App 会拒绝这个包（而不是写进半套素材）。
+本地验证脚本（`.scratch/`，不随包分发）：`test-slim-e2e.mjs`（真包全流程 + 断点续传 + 服务器逐字节比对）、
+`test-art-negatives.mjs`（截断 / 索引被改 / 版本不符 / 源全挂 / 校验发现损坏 / 社区回退接线）、
+`test-slim-apk.mjs`（解出 APK、按插件的 cwd 跑包里的入口点、下载、二次启动、再从服务器取字节）。
 
 
 ## 验证情况
@@ -102,6 +157,20 @@ APK 体积较大的原因是**素材必须随包分发**：主机手机要能在
 - **真机跑通（2026-10-06，SM-C7000 / Android 8.0）**：把系统 WebView 从 ROM 自带的 66 升到 138 之后，
   这台机器上从启动器一路点到选人全部正常（截图见[兼容性](#兼容性)）。在这之前跑不了是 WebView 太老，
   不是打包问题——同一个 APK、同一台机器，只换了 WebView。
+- **slim 变体的首启下载（2026-10-13，桌面上跑的三段验证）**：`.scratch/test-slim-e2e.mjs` 用真素材包在本地起了一个
+  HTTP 服务（第一个 base 故意写成死端口，验证换源），下载 502.5 MB / 11 个分卷、解出 12 634 个文件 / 659.6 MB
+  共 34–38 秒，**每个文件与仓库里的 `public/assets` 逐字节相同**；包内集合恰好等于仓库素材减去 35 个
+  `local/scene/**/*.png` 源图（26.4 MB）；第二次运行整段跳过；把某个分卷只留 3 MB 再跑会**断点续传**；
+  最后让服务器带 `SP_ASSETS_DIR` 起来，抽样取 `.skel` / `.mp3` / `.webp` / `.bin` / `.png` 与磁盘字节一致，
+  包内客户端仍从 `publicDir` 提供，`/media/…` 走素材目录，缺失素材 404、`/sim/nodeData.js` 仍 404。
+  `.scratch/test-art-negatives.mjs` 覆盖失败路径：**忽略 `Range` 的服务器**（代理常见）最终仍是正确分卷、
+  截断的分卷与「与索引不符的文件」在重试预算后报 `E_CORRUPT`、包版本与 App 不符被拒、源全挂报 `E_NETWORK`、
+  校验能发现被改动的文件、社区回退在缺 `tools/` 时给出明确原因并能在进程内跑通 `fetch-assets` 的 `main(argv)`。
+  `.scratch/test-slim-apk.mjs` 把 **slim APK 本身**解开，按插件的 cwd（`…/nodejs/public`）跑包里的入口点：
+  服务器先起来（`[sp] listening on …`），素材在后台下完 12 634 个文件，随后 `/assets/` 提供的字节与仓库一致；
+  第二次启动打印「art complete … 0.0 s」且不再取任何分卷。
+- **仍未验证**：真机上的实际下载（这里没有 arm64 设备；`libnode.so` 只有 arm64），以及 Android 在前台/后台切换、
+  网络切换（Wi-Fi ↔ 移动数据）、存储不足时的实际表现。
 
 ### 自动搜索的验证
 
@@ -458,7 +527,15 @@ pwsh -File android\scripts\build-apk.ps1 -SkipSync        # 跳过第 2 步
 pwsh -File android\scripts\build-apk.ps1 -DebugBuild      # 出 debuggable 的 APK
 pwsh -File android\scripts\build-apk.ps1 -Clean           # 先 gradle clean
 pwsh -File android\scripts\build-apk.ps1 -Variant devtest  # 出可共存的测试版 APK（见下）
+pwsh -File android\scripts\build-apk.ps1 -NoArt           # 出 slim 变体（不含素材，首启在应用内下载，见上）
 ```
+
+### slim 变体（不含素材的 40.6 MB 包）
+
+`-NoArt` 装配时跳过 `public/assets`，产物是 `android/dist/Stronghold-Protocol-<版本>-arm64-slim.apk`；它需要配一份素材包
+（`android/dist/art/`，11 个分卷 + 索引 + manifest）放在**同一个 Release** 上，见
+[素材包与首启下载](#素材包与首启下载-slim-变体2026-10-13) 一节的构建与发布命令。`-NoArt` 与 `-Variant devtest` 可以叠加
+（产物名 `…-dev-arm64-slim.apk`）。`public/assets` 缺失时也能装配 slim 树（正式包则必须先 `npm run setup`）。
 
 ### 测试版 APK（可与正式版共存）
 
@@ -576,9 +653,15 @@ AIA 自动补齐，OpenSSL（Node）和 JDK 都不会。所以 `build-apk.ps1` �
 | `android/android/app/src/main/java/…/lan/LanDiscoveryPlugin.java` | 是 | Capacitor 桥：`start` / `stop` / `getHosts` / `status` |
 | `android/android/app/src/devtest/res/values/strings.xml` | 是 | 测试版 build type 的应用名覆盖（`-Variant devtest`） |
 | `android/scripts/setup-sdk.ps1` | 是 | 安装 Android SDK / NDK / CMake |
-| `android/scripts/assemble-nodejs.mjs` | 是 | 装配 `android/web/nodejs` |
-| `android/scripts/build-apk.ps1` | 是 | 一键构建（含 Gradle 获取与校验、签名） |
+| `android/scripts/assemble-nodejs.mjs` | 是 | 装配 `android/web/nodejs`（`--slim` 装配不含素材的 slim 树） |
+| `android/scripts/art-set.mjs` | 是 | 「哪些素材随包走」的唯一规则（被装配与打包共用） |
+| `android/scripts/pack-art.mjs` | 是 | 打素材包（分卷 + 索引 + manifest + App 内置地址） |
+| `android/scripts/build-apk.ps1` | 是 | 一键构建（含 Gradle 获取与校验、签名；`-NoArt` 出 slim 包） |
 | `android/scripts/nodejs-template/` | 是 | 内嵌服务器的入口 `index.js`、`package.json` 与 `lan/`（广播端 + 协议） |
+| `android/scripts/nodejs-template/assets.mjs` | 是 | 首启素材下载：分卷下载 / 校验 / 解包 / 断点续传 / 进度 |
+| `android/scripts/nodejs-template/art-container.mjs` | 是 | 素材分卷的容器格式（`SPART1`：gzip 里的记录流）读写 |
+| `android/scripts/nodejs-template/community.mjs` | 是 | 回退路线：在进程内驱动 `tools/fetch-assets.mjs` |
+| `android/scripts/nodejs-template/asset-pack.json` | 是 | 素材包的地址与 manifest 名（随包分发，可用 `SP_PACK_BASE` 覆盖） |
 | `android/scripts/nodejs-template/lan/protocol.mjs` | 是 | 广播协议的**规范实现**：端口、报文编解码、房间列表 |
 | `android/scripts/nodejs-template/lan/net.mjs` | 是 | 广播地址计算（`255.255.255.255` + 每张网卡的子网定向广播） |
 | `android/scripts/nodejs-template/lan/announce.mjs` | 是 | 广播端（主机侧） |

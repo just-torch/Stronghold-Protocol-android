@@ -1,13 +1,15 @@
 // server/index.js — process entry & boot (DESIGN §1, §2). Plain node:http + ws, no framework: startServer() below
 // wires the modules under server/http/, in this order —
 //
-//   http/config.js     ROOT, the served directories, the environment (PORT 3000, HOST '::' dual-stack, TRUST_PROXY auto, DEBUG),
-//                      which startServer() options go to net.js / lobby.js, the console logger
+//   http/config.js     ROOT, the served directories (incl. the optional art directory, assetsDir / SP_ASSETS_DIR), the
+//                      environment (PORT 3000, HOST '::' dual-stack, TRUST_PROXY auto, DEBUG), which startServer() options
+//                      go to net.js / lobby.js, the console logger
 //   http/websocket.js  session wiring (SessionRegistry → Lobby → Network) and the WebSocket at /ws (maxPayload 64 KB;
 //                      refused at upgrade with 404 / 429 per network / 503)
-//   http/static.js     the static mounts (/ → public/, /data/, /shared/, /sim/ `.js` only), the /data.js browser stand-in,
-//                      the content packs (/packs/index.json, /packs/<id>/<file> — the registry is packs.js)
-//   http/media.js      /media/bgm/act1 → public/assets/audio/bgm/act1.mp3 (audio addressed without its extension)
+//   http/static.js     the static mounts (/ → public/, /assets/ from the art directory first, /data/, /shared/, /sim/
+//                      `.js` only), the /data.js browser stand-in, the content packs (/packs/index.json,
+//                      /packs/<id>/<file> — the registry is packs.js)
+//   http/media.js      /media/bgm/act1 → <art dir or public>/assets/audio/bgm/act1.mp3 (audio addressed without its extension)
 //   http/files.js      one file → response: MIME, gzip + memory cache, ETag / Last-Modified / 304, Cache-Control, ranges
 //   http/buildTag.js   the build tag of the served browser runtime (/healthz `build`, public/js/ui/buildGuard.js)
 //   http/routes.js     the request listener: security headers, 414 / 400 / 405, GET /healthz → JSON status, else static
@@ -45,7 +47,7 @@ export {
  * Build and start the HTTP + WebSocket server.
  * @param {{
  *   port?: number, host?: string, quiet?: boolean, log?: object,
- *   publicDir?: string, dataDir?: string, sharedDir?: string, packsDir?: string,
+ *   publicDir?: string, dataDir?: string, sharedDir?: string, packsDir?: string, assetsDir?: string,
  *   MatchClass?: Function, seedFn?: () => number,
  *   lobbyGraceMs?: number, reconnectWindowMs?: number, heartbeatMs?: number, helloTimeoutMs?: number,
  *   ratePerSec?: number, rateBurst?: number, maxConnections?: number, maxRooms?: number,
@@ -61,7 +63,7 @@ export {
 export async function startServer(opts = {}) {
   const { port, host } = listenAddress(opts);
   const log = opts.log || makeLogger(!!opts.quiet);
-  const { publicDir, dataDir, sharedDir, packsDir } = serveDirs(opts);
+  const { publicDir, dataDir, sharedDir, packsDir, assetsDir } = serveDirs(opts);
 
   // The process-wide singleton serves the default data dir; a custom dir (tests) gets its own copy.
   const data = opts.dataDir ? loadData(dataDir, { log }) : getData({ dir: dataDir, log });
@@ -75,7 +77,7 @@ export async function startServer(opts = {}) {
   // content packs (docs/PACKS.md): scanned now — the start log names them — and again whenever their folders change
   const packs = createPackRegistry({ publicDir, dataDir, packsDir }, { log });
   packs.refresh(true);
-  const serveStatic = createStaticHandler({ publicDir, dataDir, sharedDir, packsDir, packs, log });
+  const serveStatic = createStaticHandler({ publicDir, dataDir, sharedDir, packsDir, assetsDir, packs, log });
   const startedAt = Date.now();
   // The tag is per process (see buildTag): read the browser runtime once, here, not on every /healthz.
   resetBuildTag();

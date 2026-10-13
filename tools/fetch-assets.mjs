@@ -56,10 +56,14 @@
 //                                    [--dry-run] [--refresh-index] [--prune]
 //                                    [--allow-shrink] [--add-only] [--strict]
 //                                    [--local-spines] [--help]
+//
+// SP_ASSETS_DIR moves the art directory (default public/assets) somewhere else, and main(argv) is exported so a
+// program that cannot spawn a second Node process can run a fetch in-process: the Android app's community fallback
+// (android/scripts/nodejs-template/community.mjs, docs/FORK-DEVIATIONS.md "首启下载素材").
 
 import { readFile, writeFile, mkdir, rename, readdir, unlink } from 'node:fs/promises';
 import { existsSync, realpathSync } from 'node:fs';
-import { dirname, join, relative, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Downloader } from './assets/downloader.mjs';
 import { restartForEnvProxy } from './assets/env-proxy.mjs';
@@ -77,7 +81,11 @@ import { fontJobs, buildFonts } from './assets/fonts.mjs';
 import { skelParserAvailable } from './assets/skel.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const ASSETS = join(ROOT, 'public', 'assets');
+// The art directory, normally public/assets of this checkout. `SP_ASSETS_DIR` points it somewhere else: the Android
+// app keeps the art it downloaded in `<files>/nodejs/art`, a directory the Capacitor plugin does not delete when the
+// APK changes (docs/FORK-DEVIATIONS.md "首启下载素材"), and the community fallback of that download runs this file
+// there. Everything else (fonts, the manifest, the caches) stays in the checkout.
+const ASSETS = process.env.SP_ASSETS_DIR ? resolve(process.env.SP_ASSETS_DIR) : join(ROOT, 'public', 'assets');
 const FONTS = join(ROOT, 'public', 'fonts');
 const CACHE = join(ROOT, '.cache');
 const MANIFEST = join(ROOT, 'data', 'assets.json');
@@ -374,8 +382,14 @@ async function syncLocalSpines(opts, kind) {
   return committed;
 }
 
-async function main() {
-  const opts = parseArgs(process.argv.slice(2));
+/**
+ * Run one fetch. Exported with an explicit argv so another program can drive it in-process — the Android app has no
+ * second Node binary to spawn, so its community fallback imports this module and calls main() (docs/FORK-DEVIATIONS.md
+ * "首启下载素材"). `node tools/fetch-assets.mjs …` still runs it exactly as before.
+ * @param {string[]} [argv] the command line after the script name
+ */
+export async function main(argv = process.argv.slice(2)) {
+  const opts = parseArgs(argv);
   if (opts.help) { log(HELP); return 0; }
   const t0 = Date.now();
   log(`[assets] root ${ROOT}`);

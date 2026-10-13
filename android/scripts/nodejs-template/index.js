@@ -7,16 +7,31 @@
 // Hosting is `lan/host.mjs`: the game server plus the UDP room beacon that lets other phones find this one (see
 // lan/protocol.mjs for why that beacon has to exist at all).
 //
+// Game art (public/assets): the slim APK ships none of it — it is ~520 MB of the ~560 MB package. This file therefore
+// points the server at an art directory *beside* the unpacked tree and, once the server is up, downloads and unpacks
+// the parts published with the release (assets.mjs; docs/FORK-DEVIATIONS.md "首启下载素材"). That directory has to
+// live outside `<files>/nodejs/public`, because the plugin deletes that whole tree whenever the APK version changes;
+// `<files>/nodejs/art` survives. A phone whose art is already there skips the download entirely. The server keeps
+// running whatever happens: files that are missing make the client draw its placeholders, and the launcher page
+// decides what to tell the user.
+//
 // Communication with the launcher page goes over the plugin's built-in `bridge` module (a native CommonJS builtin
 // that is only present inside the app, hence the createRequire + try/catch so the same file also runs under plain
 // `node index.js` on a desktop for debugging).
 //
-// Env in:  SP_PORT (game server port, default 3000), SP_HOST_NAME (label shown on the other phone).
+// Env in:  SP_PORT (game server port, default 3000), SP_HOST_NAME (label shown on the other phone), SP_ART_DIR (the
+// art directory; inside the app the default is `<cwd>/../art`), SP_SKIP_ART=1 (never download art this run),
+// SP_PACK_BASE (pack source URLs, comma separated), SP_ASSET_SOURCE=auto|pack|community.
 
 import { createRequire } from 'node:module';
+import fs from 'node:fs';
+import path from 'node:path';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 
 import { startHost } from './lan/host.mjs';
+import { ensureArt, artDirFrom, packBases, readPackConfig } from './assets.mjs';
+import { fillFromCommunity } from './community.mjs';
 
 /**
  * Debug console (DESIGN §21.33), the switch this BUILD staged: `'auto'` = the server's own default (loopback clients
@@ -29,8 +44,9 @@ const consoleMode = '__SP_CONSOLE__';
 if ((consoleMode === '0' || consoleMode === '1') && !process.env.SP_CONSOLE) process.env.SP_CONSOLE = consoleMode;
 
 const require = createRequire(import.meta.url);
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-/** @type {{ channel?: { send: (eventName: string, ...args: unknown[]) => void } } | null} */
+/** @type {{ channel?: { send: (eventName: string, ...args: unknown[]) => void, on: (eventName: string, cb: (...a: unknown[]) => void) => void } } | null} */
 let bridge = null;
 try {
   bridge = require('bridge');
@@ -53,6 +69,132 @@ function send(eventName, ...args) {
 const port = Number(process.env.SP_PORT || process.env.PORT || 3000);
 const hostName = process.env.SP_HOST_NAME || '';
 
+// ---------------------------------------------------------------------------------------------------
+// game art (public/assets): point the server at the durable directory, then fill it in the background
+// ---------------------------------------------------------------------------------------------------
+/** This app's version, i.e. the version of the art pack it needs — the staged package.json is this app's own. */
+const APP_VERSION = (() => {
+  try { return String(JSON.parse(fs.readFileSync(path.join(HERE, 'package.json'), 'utf8')).version || ''); } catch { return ''; }
+})();
+/**
+ * Inside the app the server runs with its working directory on the unpacked `public/`, so the art directory is its
+ * sibling; on a desktop (`node index.js`, no bridge) there is no override at all — the repository's own public/assets
+ * is served, exactly as before.
+ */
+const artDir = artDirFrom(bridge ? path.resolve(process.cwd(), '..', 'art') : '');
+if (artDir) process.env.SP_ASSETS_DIR = artDir;
+const pack = readPackConfig({ dir: HERE });
+const bases = packBases(pack.bases);
+/** Where the art may come from: `pack` (our own release parts), `community` (the dumps of the official client) or `auto`. */
+const SOURCE = (process.env.SP_ASSET_SOURCE || 'auto').toLowerCase();
+
+let cancelArt = new AbortController();
+let artRun = null;
+
+/** One line per state change for `adb logcat`; the launcher gets the same information as JSON events. */
+function artLog(message) { console.log(`[art] ${message}`); }
+
+/**
+ * Download + unpack the art when it is not there yet. Never throws: a failure goes to the launcher and the server
+ * keeps serving whatever is on disk (the client draws placeholders for what is missing).
+ *
+ * The pack is the fast path (ten part files, already post-processed, verified per file). When it cannot be reached at
+ * all — no network to the release, a mirror that answers with something else — the community fallback fetches the same
+ * art from the sources a PC install uses. It cannot provide `assets/local/**` (those come from a local Arknights
+ * client), so a community-only phone keeps the placeholder board and a later pack download fills it in.
+ *
+ * @param {'start'|'retry'} why
+ */
+function prepareArt(why) {
+  if (artRun) return artRun;
+  artRun = (async () => {
+    if (process.env.SP_SKIP_ART === '1') { send('art-skipped', JSON.stringify({ reason: 'SP_SKIP_ART', artDir })); return; }
+    if (!artDir) { send('art-skipped', JSON.stringify({ reason: 'no art directory', artDir })); return; }
+
+    // ---- 1. our own pack -------------------------------------------------------------------------
+    let packError = null;
+    if (SOURCE !== 'community') {
+      if (!bases.length || !pack.manifest) {
+        packError = Object.assign(new Error(`没有配置素材包来源（缺少 ${pack.file}）`), { code: 'E_CONFIG' });
+      } else {
+        try {
+          const res = await ensureArt({
+            artDir,
+            bases,
+            manifestName: pack.manifest,
+            app: APP_VERSION,
+            log: artLog,
+            signal: cancelArt.signal,
+            onProgress: (p) => send('art-progress', JSON.stringify({ ...p, why, artDir })),
+          });
+          console.log(`[sp] art ${res.status}: ${res.files} files, ${Math.round(res.rawBytes / (1 << 20))} MB, ${res.seconds.toFixed(1)} s`);
+          send('art-done', JSON.stringify({ status: res.status, files: res.files, rawBytes: res.rawBytes, bytes: res.bytes, seconds: res.seconds, why, artDir }));
+          return;
+        } catch (err) {
+          if (err?.code === 'E_CANCELLED') { artLog('cancelled — the server keeps serving what is on disk'); send('art-skipped', JSON.stringify({ reason: 'cancelled', artDir })); return; }
+          packError = err;
+          console.error('[sp] the art pack failed:', err);
+          artLog(`pack failed (${err?.code || 'E_UNKNOWN'}): ${err?.message ?? err}`);
+        }
+      }
+    }
+
+    if (SOURCE === 'pack') {
+      send('art-error', JSON.stringify({ code: packError?.code || 'E_UNKNOWN', message: String(packError?.message ?? packError ?? 'no pack source'), why, artDir }));
+      return;
+    }
+
+    // ---- 2. the community sources -----------------------------------------------------------------
+    send('art-progress', JSON.stringify({ phase: 'fallback', why, artDir, message: String(packError?.message ?? '') }));
+    const t0 = Date.now();
+    const res = await fillFromCommunity({
+      artDir,
+      index: packError?.index || null,
+      log: artLog,
+      signal: cancelArt.signal,
+      onProgress: (p) => send('art-progress', JSON.stringify({ ...p, why, artDir })),
+    });
+    const seconds = (Date.now() - t0) / 1000;
+    if (cancelArt.signal.aborted) { send('art-skipped', JSON.stringify({ reason: 'cancelled', artDir })); return; }
+    if (res.code === 0 && res.files > 0) {
+      // Complete for everything the community sources cover — the local-client art (assets/local/**) is not part of
+      // it; the launcher says so, and the next launch retries the pack for the rest.
+      send('art-done', JSON.stringify({ status: 'community', files: res.files, rawBytes: 0, bytes: 0, seconds, partial: res.total > res.files, why, artDir }));
+      return;
+    }
+    const reason = res.reason || (res.total ? `社区素材源只补齐了 ${res.files}/${res.total} 个文件` : '社区素材源没有可用的文件');
+    send('art-error', JSON.stringify({
+      code: 'E_PARTIAL',
+      message: `${reason}；素材包本身的错误：${String(packError?.message ?? '无').slice(0, 200)}`,
+      why,
+      artDir,
+      files: res.files,
+      total: res.total,
+    }));
+  })().catch((err) => {
+    console.error('[sp] the art step failed unexpectedly:', err);
+    send('art-error', JSON.stringify({ code: 'E_UNKNOWN', message: String(err?.message ?? err), why, artDir }));
+  }).finally(() => { artRun = null; });
+  return artRun;
+}
+
+// The launcher can ask again after a failure and can stop a download that is taking too long; the server keeps
+// running either way. The Node engine itself cannot be restarted (the plugin starts it once), so this is the retry.
+if (channel?.on) {
+  channel.on('retry-art', () => {
+    cancelArt = new AbortController();
+    artLog('retry requested by the launcher');
+    void prepareArt('retry');
+  });
+  channel.on('skip-art', () => {
+    artLog('cancelled by the launcher');
+    cancelArt.abort();
+  });
+}
+
+// ---------------------------------------------------------------------------------------------------
+// the game server
+// ---------------------------------------------------------------------------------------------------
 try {
   // 0.0.0.0 so the other phones on the same Wi-Fi can reach this one.
   const host = await startHost({ port, name: hostName, log: (message) => console.log(message) });
@@ -69,6 +211,7 @@ try {
     local: `http://127.0.0.1:${srv.port}`,
     lan: host.lan,
     name: host.name,
+    assets: { dir: artDir || null, pack: pack.manifest || null, sources: bases.length },
     announce: announcer
       ? {
         id: announcer.id,
@@ -78,6 +221,10 @@ try {
       }
       : null,
   }));
+
+  // Only now: the room is up and joinable while the art arrives, and `server-ready` is not delayed by a download
+  // that can take many minutes.
+  void prepareArt('start');
 } catch (err) {
   const message = err?.code === 'EADDRINUSE'
     ? `端口 ${port} 已被占用（可能已有一个服务器在运行）`

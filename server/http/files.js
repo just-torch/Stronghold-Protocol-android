@@ -67,7 +67,6 @@ const GZIP_CACHE_MAX_TOTAL = 96 << 20;
 const LONG_CACHE = 'public, max-age=86400';          // 1 day
 const IMMUTABLE_CACHE = 'public, max-age=31536000, immutable';
 const LONG_CACHE_DIRS = ['assets', 'fonts', 'vendor']; // first path segment under public/
-
 const gzipAsync = promisify(zlib.gzip);
 
 // ---------------------------------------------------------------------------------------------------
@@ -186,7 +185,9 @@ function ifRangeMatches(req, etag, lastModified) {
 function cacheControlFor(ext, mountName, segments, query) {
   if (ext === '.html' || ext === '.htm') return 'no-cache';
   if (/(^|&)v=/.test(query)) return IMMUTABLE_CACHE;
-  if (mountName === 'public' && segments.length > 1 && LONG_CACHE_DIRS.includes(segments[0])) return LONG_CACHE;
+  // `public` is the `/` mount; `assets` is the external art directory's mount of `/assets/…` (server/http/static.js),
+  // which serves the same URLs — an external copy of an asset is that asset.
+  if ((mountName === 'public' || mountName === 'assets') && segments.length > 1 && LONG_CACHE_DIRS.includes(segments[0])) return LONG_CACHE;
   return 'no-cache';
 }
 

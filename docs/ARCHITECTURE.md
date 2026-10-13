@@ -25,7 +25,10 @@ effects), [DATA.md](DATA.md) (generated data), [ASSETS.md](ASSETS.md) (art and a
 
 - **The server** is one Node process: plain `node:http` plus `ws`, no framework (`server/index.js` wires
   `server/http/`). It serves the static client, the generated data and the sim's source files, and runs every room and
-  match in memory — rounds, shop, economy, bots, validation. Nothing is written to disk.
+  match in memory — rounds, shop, economy, bots, validation. Nothing is written to disk. The directories it serves are
+  `public/` (`/`), `data/` (`/data/`), `shared/` (`/shared/`), `server/sim/` (`/sim/`) and the content packs (`packs/`);
+  a fork addition lets `/assets/**` and the audio route `/media/**` come from an art directory outside the install
+  (`assetsDir` / `SP_ASSETS_DIR`, server/http/config.js) with `public/assets` as the fallback — DEPLOY.md §4.1.
 - **The browser** loads native ES modules with no bundler and no build step; the libraries are vendored into
   `public/vendor/` by `tools/vendor.mjs` on `npm install`.
 - **The battle simulation** (`server/sim/`) is pure ESM without any Node API, served read-only at `/sim/`. Both sides

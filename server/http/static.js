@@ -2,6 +2,9 @@
 // (i18n-ignore-file: the error pages are bilingual by design, 中文 · English — docs/I18N.md)
 //
 //     /        → public/      (index.html for directories)
+//     /assets/ → the external art directory (SP_ASSETS_DIR / the assetsDir option) first, then public/assets
+//                — a fork addition, so downloaded art can live outside the install; with no external directory
+//                the mount does not exist and /assets/… is served from public/ exactly as before (docs/DEPLOY.md)
 //     /data/   → data/        (generated game data)
 //     /shared/ → shared/      (ESM shared with the browser)
 //     /sim/    → server/sim/  (the battle simulation, read-only, `.js` only — client-side
@@ -11,7 +14,8 @@
 //                /sim/simdata.js setSimData). No other server file is ever served.
 //     /media/bgm/act1 → public/assets/audio/bgm/act1.mp3 — the same audio files, addressed
 //                **without** an extension so download managers (IDM / 迅雷 …) stop popping a
-//                "下载文件信息" dialog for every BGM track (media.js, shared/media.js, public/js/media.js)
+//                "下载文件信息" dialog for every BGM track (media.js, shared/media.js, public/js/media.js);
+//                resolved in the external art directory first, then public/assets
 //     /packs/index.json → the content packs of this server (server/packs.js: the language packs of
 //                public/i18n/ and the pack folders of packs/, re-read when they change; never cached)
 //     /packs/<id>/<file> → a file of a pack folder — only one its manifest names (server/packs.js servable)
@@ -25,7 +29,7 @@ import { MEDIA_PREFIX } from '../../shared/media.js';
 import { ROOT, noopLog } from './config.js';
 import { sendError, sendJson } from './common.js';
 import { MIME, GzipCache, isNotModified, serveFile } from './files.js';
-import { serveMedia } from './media.js';
+import { mediaRoots, serveMedia } from './media.js';
 import { createPackRegistry } from '../packs.js';
 import { PACKS_URL, PACK_INDEX_FILE } from '../../shared/packs.js';
 
@@ -39,6 +43,99 @@ export function resetData() {}
 `;
 /** Files under server/sim that are never served (Node-only). */
 const SIM_PRIVATE = new Set(['nodedata.js']); // lower-case (compared case-insensitively)
+/** "No such file here" — the failures that let a mount continue with the next directory (mount.dirs). */
+const MISSING_CODES = ['ENOENT', 'ENOTDIR', 'EISDIR', 'ENAMETOOLONG'];
+/** Every other stat failure keeps its answer (EACCES / EPERM 403, anything else 500) — no fallback. */
+const HTTP_ERROR_CODES = ['EACCES', 'EPERM'];
+
+/**
+ * Did the stat miss at `dir`'s own level? A plain "no such file" from the candidate path — `dir` itself, the file under
+ * it or its index.html — counts; the synthetic errors our own checks raise carry no path and count too. A failure
+ * inside a subdirectory of the candidate (a symlink loop, a permission wall on the way) answers for this directory.
+ * @param {any} e @param {string} dir
+ */
+const isNotFoundIn = (e, dir) => {
+  if (!e || e.code !== 'ENOENT') return false;
+  if (e.path == null || !dir) return true;
+  const missed = path.resolve(String(e.path));
+  const root = path.resolve(dir);
+  return missed === root || missed.startsWith(root + path.sep);
+};
+
+/**
+ * May the request move on to the mount's next directory? Only a plain miss of this directory's own candidate path:
+ * a permission or I/O answer (EACCES / EPERM / anything else) and a failure deeper down in a subdirectory keep their
+ * answer here, exactly as the single-directory version did.
+ * @param {any} e @param {string} dir
+ */
+const canFallBack = (e, dir) => !!e && MISSING_CODES.includes(e.code) && !HTTP_ERROR_CODES.includes(e.code) && isNotFoundIn(e, dir);
+
+/**
+ * Resolve one request against one directory of a mount: the on-disk path of the file to serve, or null when an answer
+ * was already sent (301 towards a directory without its trailing slash).
+ * @param {import('node:http').IncomingMessage} req
+ * @param {import('node:http').ServerResponse} res
+ * @param {string} decoded the decoded request path (only for its trailing slash)
+ * @param {string} query
+ * @param {string[]} segments the request's path segments under the mount prefix
+ * @param {string} dir the directory to look in
+ * @param {{ prefix: string, name: string, deny?: Set<string> }} mount
+ * @returns {Promise<{ absPath: string, stat: import('node:fs').Stats, segments: string[] } | null>}
+ * @throws {any} the stat failure itself (see the handler: miss / 403 / 500)
+ */
+async function resolveMountFile(req, res, decoded, query, segments, dir, mount) {
+  let absPath = path.join(dir, ...segments);
+  if (absPath !== dir && !absPath.startsWith(dir + path.sep)) { sendError(req, res, 403, '禁止访问 · Forbidden'); return null; }
+  let stat = await fsp.stat(absPath);
+  let viaDirectory = false;
+  if (stat.isDirectory()) {
+    if (!decoded.endsWith('/')) {
+      // Built from normalized segments (never from the raw path) so "//host" can't become an open redirect.
+      const loc = (mount.prefix + segments.map(encodeURIComponent).join('/') + '/').replace(/\/{2,}/g, '/');
+      res.writeHead(301, { Location: loc + (query ? `?${query}` : ''), 'Cache-Control': 'no-cache', 'Content-Length': 0 });
+      res.end();
+      return null;
+    }
+    absPath = path.join(absPath, 'index.html');
+    segments = [...segments, 'index.html'];
+    viaDirectory = true;
+    stat = await fsp.stat(absPath);
+  }
+  // Not a regular file, or a file addressed like a directory ("/app.js/") → 404.
+  if (!stat.isFile() || (decoded.endsWith('/') && !viaDirectory)) {
+    throw Object.assign(new Error('not a file'), { code: 'ENOENT' });
+  }
+  if (mount.deny) {
+    // the on-disk name decides (case-insensitive file systems, Windows 8.3 short names like NODEDA~1.JS)
+    const real = await fsp.realpath(absPath);
+    if (mount.deny.has(path.basename(real).toLowerCase())) throw Object.assign(new Error('private'), { code: 'ENOENT' });
+  }
+  return { absPath, stat, segments };
+}
+
+/** The 404 / 403 / 500 answer of a stat failure that is not a fallback miss. */
+function answerStatFailure(req, res, e, decoded, log) {
+  if (e && MISSING_CODES.includes(e.code)) {
+    sendError(req, res, 404, '页面不存在 · Not found', decoded.length <= 200 ? decoded : '');
+  } else if (e && HTTP_ERROR_CODES.includes(e.code)) {
+    sendError(req, res, 403, '禁止访问 · Forbidden');
+  } else {
+    log.error('[http] stat failed', e);
+    sendError(req, res, 500, '服务器内部错误 · Internal error');
+  }
+}
+
+/**
+ * Optional local-client art (DESIGN §13): an install without data/local-assets.json gets the empty manifest instead of
+ * a 404, so browsers don't log an error on every page load. Clients treat empty groups as "no local art".
+ * @returns {boolean} true when this was that request and the answer has been sent.
+ */
+function answerEmptyLocalArt(req, res, e, mount, segments) {
+  if (!(e && e.code === 'ENOENT' && mount.name === 'data' && segments.length === 1 && segments[0] === LOCAL_ART_MANIFEST)) return false;
+  res.writeHead(200, { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-cache', 'Content-Length': EMPTY_LOCAL_ART.length });
+  res.end(req.method === 'HEAD' ? undefined : EMPTY_LOCAL_ART);
+  return true;
+}
 
 // ---------------------------------------------------------------------------------------------------
 // Static file handler
@@ -51,11 +148,13 @@ const EMPTY_LOCAL_ART = Buffer.from(JSON.stringify({ version: 1, source: 'none',
 /**
  * Create the static request handler.
  * @param {{ publicDir: string, dataDir: string, sharedDir: string, simDir?: string, packsDir?: string,
- *   packs?: ReturnType<typeof createPackRegistry>, log?: object }} dirs
+ *   assetsDir?: string, packs?: ReturnType<typeof createPackRegistry>, log?: object }} dirs
  *   packs: the server's pack registry (default: one over publicDir, dataDir and packsDir — ROOT/packs)
+ *   assetsDir: optional art directory outside the install — `/assets/…` and `/media/…` are served from it first
+ *     and fall back to `<publicDir>/assets`; '' (the default) means the mount does not exist
  * @returns {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, rawPath: string, query: string) => Promise<void>}
  */
-export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = path.join(ROOT, 'server', 'sim'), packsDir = path.join(ROOT, 'packs'), packs = null, log = noopLog }) {
+export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = path.join(ROOT, 'server', 'sim'), packsDir = path.join(ROOT, 'packs'), assetsDir = '', packs = null, log = noopLog }) {
   const registry = packs || createPackRegistry({ publicDir, dataDir, packsDir }, { log: /** @type {any} */ (log) });
   const mounts = [
     { prefix: '/data/', name: 'data', dir: path.resolve(dataDir) },
@@ -64,6 +163,18 @@ export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = pa
     { prefix: '/sim/', name: 'sim', dir: path.resolve(simDir), only: new Set(['.js']), deny: SIM_PRIVATE },
     { prefix: '/', name: 'public', dir: path.resolve(publicDir) },
   ];
+  const audioRoots = mediaRoots(publicDir, assetsDir);
+  // The art of the installed client. With an external art directory (SP_ASSETS_DIR / the assetsDir option) it is a
+  // mount of its own, ahead of the `/` public mount: stuff downloaded into it wins, and anything it does not hold
+  // still comes out of the bundled public/assets — `dir` with `dirs` as its fallback, so a partial or missing
+  // external directory is not an error. Without one there is no such mount and `/assets/…` stays a plain file under `/`.
+  if (assetsDir) {
+    const assetsRoot = path.resolve(assetsDir);
+    mounts.splice(3, 0, {
+      prefix: '/assets/', name: 'assets', dir: assetsRoot,
+      dirs: [assetsRoot, path.resolve(publicDir, 'assets')],
+    });
+  }
   const shimBody = Buffer.from(DATA_SHIM_JS);
   const shimTag = `"shim-${shimBody.length.toString(16)}"`;
   const gzipCache = new GzipCache();
@@ -94,7 +205,7 @@ export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = pa
     }
     // Extension-less audio (download-manager avoidance): /media/bgm/act1 → /assets/audio/bgm/act1.mp3
     if (decoded.startsWith(MEDIA_PREFIX)) {
-      await serveMedia(req, res, decoded.slice(MEDIA_PREFIX.length), query, publicDir, gzipCache, log);
+      await serveMedia(req, res, decoded.slice(MEDIA_PREFIX.length), query, audioRoots, gzipCache, log);
       return;
     }
     // Bare mount paths (e.g. "/data") → treat as the mount directory.
@@ -109,51 +220,42 @@ export function createStaticHandler({ publicDir, dataDir, sharedDir, simDir = pa
       sendError(req, res, 404, '页面不存在 · Not found');
       return;
     }
-    let absPath = path.join(mount.dir, ...segments);
-    if (absPath !== mount.dir && !absPath.startsWith(mount.dir + path.sep)) { sendError(req, res, 403, '禁止访问 · Forbidden'); return; }
-
-    let stat;
-    let viaDirectory = false;
-    try {
-      stat = await fsp.stat(absPath);
-      if (stat.isDirectory()) {
-        if (!decoded.endsWith('/')) {
-          // Built from normalized segments (never from the raw path) so "//host" can't become an open redirect.
-          const loc = (mount.prefix + segments.map(encodeURIComponent).join('/') + '/').replace(/\/{2,}/g, '/');
-          res.writeHead(301, { Location: loc + (query ? `?${query}` : ''), 'Cache-Control': 'no-cache', 'Content-Length': 0 });
-          res.end();
-          return;
+    // How many directories this mount reads: one, or — with an external art directory — the external one first and the
+    // bundled public/assets as the fallback. A request that simply has nothing in one directory (ENOENT / ENOTDIR /
+    // EISDIR / ENAMETOOLONG, and nothing our own checks turned down) moves on to the next; a permission / I/O answer
+    // or a path that failed a check keeps its answer for this directory, exactly as it always did.
+    const dirs = mount.dirs || [mount.dir];
+    let file = null;
+    let lastMiss = null;
+    if (dirs.length === 1) {
+      try {
+        file = await resolveMountFile(req, res, decoded, query, segments, dirs[0], mount);
+      } catch (e) {
+        if (!answerEmptyLocalArt(req, res, e, mount, segments)) answerStatFailure(req, res, e, decoded, log);
+        return;
+      }
+      if (!file) return;
+    } else {
+      for (const dir of dirs) {
+        try {
+          file = await resolveMountFile(req, res, decoded, query, segments.slice(), dir, mount);
+        } catch (e) {
+          if (!canFallBack(e, dir)) { answerStatFailure(req, res, e, decoded, log); return; }
+          lastMiss = e;
+          continue;
         }
-        absPath = path.join(absPath, 'index.html');
-        segments.push('index.html');
-        viaDirectory = true;
-        stat = await fsp.stat(absPath);
+        if (!file) return; // a response was sent (301 towards the directory)
+        break;
       }
-      // Not a regular file, or a file addressed like a directory ("/app.js/") → 404.
-      if (!stat.isFile() || (decoded.endsWith('/') && !viaDirectory)) {
-        throw Object.assign(new Error('not a file'), { code: 'ENOENT' });
+      // Nothing in any of them: the miss of the last (the bundled public/assets) is the mount's normal answer.
+      if (!file) {
+        if (!answerEmptyLocalArt(req, res, lastMiss, mount, segments)) answerStatFailure(req, res, lastMiss, decoded, log);
+        return;
       }
-      if (mount.deny) {
-        // the on-disk name decides (case-insensitive file systems, Windows 8.3 short names like NODEDA~1.JS)
-        const real = await fsp.realpath(absPath);
-        if (mount.deny.has(path.basename(real).toLowerCase())) throw Object.assign(new Error('private'), { code: 'ENOENT' });
-      }
-    } catch (e) {
-      if (e && e.code === 'ENOENT' && mount.name === 'data' && segments.length === 1 && segments[0] === LOCAL_ART_MANIFEST) {
-        // Optional local-client art (DESIGN §13): an install without it gets an empty manifest instead of a 404,
-        // so browsers don't log an error on every page load. Clients treat empty groups as "no local art".
-        res.writeHead(200, { 'Content-Type': MIME['.json'], 'Cache-Control': 'no-cache', 'Content-Length': EMPTY_LOCAL_ART.length });
-        res.end(req.method === 'HEAD' ? undefined : EMPTY_LOCAL_ART);
-      } else if (e && (e.code === 'ENOENT' || e.code === 'ENOTDIR' || e.code === 'EISDIR' || e.code === 'ENAMETOOLONG')) {
-        sendError(req, res, 404, '页面不存在 · Not found', decoded.length <= 200 ? decoded : '');
-      } else if (e && (e.code === 'EACCES' || e.code === 'EPERM')) {
-        sendError(req, res, 403, '禁止访问 · Forbidden');
-      } else {
-        log.error('[http] stat failed', e);
-        sendError(req, res, 500, '服务器内部错误 · Internal error');
-      }
-      return;
     }
-    await serveFile(req, res, absPath, stat, mount.name, segments, query, gzipCache, log);
+    // The file keeps the cache policy of the public path the client asked for: files.js keys the long cache on the
+    // first segment, which for `/assets/…` is `assets` — the request path, whatever directory it came from.
+    const cacheSegments = mount.name === 'assets' ? ['assets', ...file.segments] : file.segments;
+    await serveFile(req, res, file.absPath, file.stat, mount.name, cacheSegments, query, gzipCache, log);
   };
 }

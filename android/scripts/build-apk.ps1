@@ -11,6 +11,12 @@
 #   pwsh -NoProfile -File android\scripts\build-apk.ps1 -DebugBuild     # debuggable APK instead of a release one
 #   pwsh -NoProfile -File android\scripts\build-apk.ps1 -SkipAssemble   # reuse the existing web/nodejs tree
 #   pwsh -NoProfile -File android\scripts\build-apk.ps1 -Clean
+#   pwsh -NoProfile -File android\scripts\build-apk.ps1 -NoArt          # slim APK (~40 MB): art is downloaded on first launch
+#
+# -NoArt stages the game without public/assets and names the output …-arm64-slim.apk. The app then downloads the art
+# parts published with the release into <files>/nodejs/art on first launch (nodejs-template/assets.mjs; the parts are
+# built by android\scripts\pack-art.mjs and must be uploaded next to the APK). The full APK stays the default: both
+# are published, and they install side by side only as different apps (same applicationId → one replaces the other).
 #
 # -Variant release (default) builds the game as it ships: application id io.github.sganggs.strongholdprotocol, the
 # staged server on its own debug-console default ('auto' — a loopback client, i.e. the app's own WebView, gets the
@@ -25,6 +31,8 @@ param(
   [switch]$SkipAssemble,
   [switch]$Clean,
   [switch]$SkipSync,
+  # -NoArt: the slim APK — no public/assets inside, the app downloads the art on first launch (dist/…-slim.apk).
+  [switch]$NoArt,
   # release = the shipped app; devtest = the side-by-side test app (see the header).
   [ValidateSet('release', 'devtest')][string]$Variant = 'release'
 )
@@ -107,9 +115,10 @@ keyPassword=$storePass
 # 1. stage the game
 # ---------------------------------------------------------------------------------------------------
 if (-not $SkipAssemble) {
-  Step "Staging the game into android/web/nodejs (console: $(if ($Variant -eq 'devtest') { '1 (test app: every client)' } else { 'auto (the server''s default)' }))"
+  Step "Staging the game into android/web/nodejs (console: $(if ($Variant -eq 'devtest') { '1 (test app: every client)' } else { 'auto (the server''s default)' })$(if ($NoArt) { ', slim: no game art' } else { '' }))"
   $assembleArgs = @((Join-Path $PSScriptRoot 'assemble-nodejs.mjs'))
   $assembleArgs += if ($Variant -eq 'devtest') { '--console=1' } else { '--console=auto' }
+  if ($NoArt) { $assembleArgs += '--slim' }
   & node @assembleArgs
   if ($LASTEXITCODE -ne 0) { throw "assemble-nodejs.mjs failed with exit code $LASTEXITCODE" }
 } else {
@@ -279,7 +288,9 @@ if ($best) {
   New-Item -ItemType Directory -Force -Path $outDir | Out-Null
   # the game's own version (package.json — the same one the merged upstream tree carries, e.g. 0.1.3), never a literal
   $gameVersion = (Get-Content (Join-Path (Split-Path -Parent $AndroidRoot) 'package.json') -Raw | ConvertFrom-Json).version
-  $name = if ($Variant -eq 'devtest') { "Stronghold-Protocol-$gameVersion-dev-arm64.apk" } else { "Stronghold-Protocol-$gameVersion-arm64.apk" }
+  # -NoArt names the output "-slim": it installs next to the full APK and downloads the art on first launch.
+  $slimSuffix = if ($NoArt) { '-slim' } else { '' }
+  $name = if ($Variant -eq 'devtest') { "Stronghold-Protocol-$gameVersion-dev-arm64$($slimSuffix).apk" } else { "Stronghold-Protocol-$gameVersion-arm64$($slimSuffix).apk" }
   $target = Join-Path $outDir $name
   Copy-Item $best.FullName $target -Force
   Write-Host "`nAPK ready: $target" -ForegroundColor Green

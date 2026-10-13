@@ -5,7 +5,10 @@
 //     peers such as a local cloudflared; '1' always; '0' never) → net.js trustProxy;
 //   * DEBUG → the console logger's debug level;
 //   * the served directories (public/, data/, shared/ and the content packs' packs/ of this repository unless the
-//     options name others), and which startServer() options are handed on to net.js Network and lobby.js Lobby.
+//     options name others), and which startServer() options are handed on to net.js Network and lobby.js Lobby;
+//   * SP_ASSETS_DIR (`assetsDir`), an optional second art directory: `/assets/…` and `/media/…` are looked up there
+//     first and fall back to public/assets — a fork addition, so downloaded art can live outside the install
+//     (docs/DEPLOY.md); unset it and the server serves public/assets exactly as before.
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -52,8 +55,10 @@ export function bindCandidates(host) {
 }
 
 /**
- * The directories the static server reads (packsDir: the pack folders, server/packs.js).
- * @param {{ publicDir?: string, dataDir?: string, sharedDir?: string, packsDir?: string }} opts
+ * The directories the static server reads (packsDir: the pack folders, server/packs.js;
+ * assetsDir: optional, an art directory outside the install — '' means the feature is off and only
+ * public/assets is served).
+ * @param {{ publicDir?: string, dataDir?: string, sharedDir?: string, packsDir?: string, assetsDir?: string }} opts
  */
 export function serveDirs(opts) {
   return {
@@ -61,6 +66,7 @@ export function serveDirs(opts) {
     dataDir: opts.dataDir || path.join(ROOT, 'data'),
     sharedDir: opts.sharedDir || path.join(ROOT, 'shared'),
     packsDir: opts.packsDir || path.join(ROOT, 'packs'),
+    assetsDir: opts.assetsDir || process.env.SP_ASSETS_DIR || '',
   };
 }
 
