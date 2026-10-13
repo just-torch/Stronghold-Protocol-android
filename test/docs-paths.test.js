@@ -12,6 +12,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { designText, DESIGN_DIRS } from './helpers/designDocs.js';
+import { PLAYER_MARKDOWN, rewritePlayerDoc, selectTracked, trackedFiles } from '../tools/package.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 /**
@@ -170,4 +171,34 @@ test('DESIGN: every "DESIGN §N" cited in the repository (code comments, tests, 
   }
   assert.ok(cited >= 700, `only ${cited} citations found — is the scan broken?`);
   assert.deepEqual(bad, [], 'citations of a section or subsection with no heading');
+});
+
+test('shipped markdown: a source link exists or is releases/latest, and the packaged copy only links to shipped files', () => {
+  // tools/package.mjs takes tracked files (git ls-files) because the release zip is built from the index. This fork's
+  // working tree carries no `.git` (see repoFiles above), so fall back to the same directory walk there: without it
+  // the whole test throws before it can check anything, and the walk already skips what a release does not ship.
+  let tracked;
+  try { tracked = trackedFiles(ROOT); } catch { tracked = repoFiles().split('\n').filter(Boolean); }
+  const shipped = new Set(selectTracked(tracked).keep);
+  const version = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
+  assert.ok(PLAYER_MARKDOWN.length >= 6, PLAYER_MARKDOWN.join(' '));
+  for (const rel of PLAYER_MARKDOWN) {
+    const md = readFileSync(join(ROOT, rel), 'utf8');
+    for (const m of md.matchAll(/\]\(([^)\s]+)\)/g)) {
+      const href = m[1];
+      if (/^(?:[a-z]+:|#)/i.test(href)) continue;
+      const raw = href.replace(/#.*$/, '');
+      const norm = normalize(join(dirname(rel), raw)).split('\\').join('/');
+      if (norm.startsWith('..')) assert.match(norm, /^(?:\.\.\/)+releases\/latest$/, `${rel} → ${href}`);
+      else assert.ok(existsSync(join(ROOT, norm)), `${rel} → ${href}`);
+    }
+    const next = rewritePlayerDoc(md, rel, shipped, version);
+    for (const m of next.matchAll(/\]\(([^)\s]+)\)/g)) {
+      const href = m[1];
+      if (/^(?:[a-z][a-z0-9+.-]*:|#)/i.test(href)) continue;
+      const raw = href.replace(/#.*$/, '');
+      const norm = normalize(join(dirname(rel), raw)).split('\\').join('/');
+      assert.ok(shipped.has(norm), `${rel} packaged link ${href} (${norm}) is not in the zip`);
+    }
+  }
 });

@@ -29,7 +29,7 @@ carries a **v0.2.0 status** line under its heading. The table is the summary:
 | §21.31 | 变形同构体 counts for operator talents and tokens | **keep (port)**: upstream's `inFaction` (kits/shared/tier5.js) still reads the raw record, so the four talent / token sites need the fork's `unitBonds` reading — see §21.43 for the second half |
 | §21.32 | 拉普兰德's first refresh must be one that can pay out | **withdrawn in the v0.2.0 merge**: the `requireActive` gate is gone — upstream pinned the official reading of the same community report (`test/match/feedback5-bench-traits.test.js`: "a refresh made while 叙拉古 is inactive spends it"); see the §21.32 note below |
 | §21.33 | The shop bar's row is one box in every state, and `C` folds it | **keep, partly overlapping**: upstream 0.2.0 has the shop fold and the shop-collapsed camera (public issue #5, §10) but no `--shopbar-row` constant and no `C` shortcut; port the rest |
-| §21.34 | The debug console (`g.dbg*`) | **keep (fork-only)**: upstream has no console — `server/match/console.js`, `ui/console.js`, `shared/constants.js CONSOLE_LIMITS` / `ERR.NO_CONSOLE` and the five protocol messages are all this fork's (its `docs/PLAYING.md` section is **§12** after the merge — upstream's §11 is 快捷键) |
+| §21.34 | The debug console (`g.dbg*`) | **keep (fork-only)**: upstream has no console — `server/match/console.js`, `ui/console.js`, `shared/constants.js CONSOLE_LIMITS` / `ERR.NO_CONSOLE` and the five protocol messages are all this fork's (its `docs/PLAYING.md` section is **§14** after the v0.2.5 merge: 0.2.2–0.2.5 added §12 反馈问题 and §13 统计（本机）after upstream's §11 快捷键) |
 | §21.35 | A promoted 拉普兰德 fires again | **superseded by upstream** (GitHub #169, [history/0.2.0.md](history/0.2.0.md), META.md "an elite merged in a round is a new piece"): 0.2.0 made a merged elite a newly gained piece whose per-piece counters start at 0 — the same rule |
 | §21.36 | The bond strip's discs are bigger, the count chip sits outside | **keep (fork-only)**: upstream's `.bslot .bond` is the old size and has no count chip |
 | §21.37 | A bounty enemy's content-spawned child carries no bounty | **superseded**: upstream's §23.25 ([history/0.1.3.md](history/0.1.3.md), already in v0.1.4) fixed the same pair of files; the fork's own `[ASSUMED]` note survives in the entry |
@@ -45,7 +45,7 @@ carries a **v0.2.0 status** line under its heading. The table is the summary:
 | §21.47 | 引星棘刺 S1 is an AUTO skill that fires when SP fills | **superseded by upstream** (GitHub #124 → CHANGELOG.md, §25.7) |
 | §21.48 | 不屈 banks a refused landing instead of spending the roll | **keep (port)**: upstream's 不屈 banks only the 傀儡师 switch (`u.mem.indomFreeDeploy`) and still spends the roll when `battle.redeploy` refuses |
 | §21.49 | 麻痹, 诱导 and 暴露 have status icons | **keep (fork-only)**: upstream's `STATUS_ICON` / `STATUS_KEYS` have no `palsy` / `attract` / `reveal` |
-| §21.50 | The newer snapshot owns "is this unit on the field" | **keep (fork-only)**: upstream's `syncBattle` still revives from the interpolated (older) sample |
+| §21.50 | The newer snapshot owns "is this unit on the field" | **keep (fork-only)**: upstream hoisted the revive into `units.js syncView(v, s, t)`, which still stands a view up from the interpolated (older) sample |
 | §21.51 | 导出 says so when the browser refuses the download | **keep (fork-only)**: upstream's `downloadText` is deliberately a silent no-op ("复制 stays available") |
 
 Appendix A lists the fork's edits that sit *inside* upstream's own sections (§6.3, §8.2, §8.3, §19.8, §21.1, §21.11,
@@ -109,6 +109,71 @@ decided). Nothing in the table above changes: 0.2.1 re-implemented no fork rule 
   `server/sim/content/garrisons/meta.js` no longer hoists the locals the withdrawn §21.32 gate left behind (upstream's
   one-line `addAll` again), and `package-lock.json` is upstream's own bytes — the fork's copy differed only in key order
   and one `./` in a `bin` path.
+
+## Merge notes (v0.2.5, this tree)
+
+v0.2.5 is four releases on top of the tree the v0.2.1 merge left (0.2.2 → 0.2.5; [history/0.2.2.md](history/0.2.2.md),
+[0.2.3](history/0.2.3.md), [0.2.4](history/0.2.4.md), [0.2.5](history/0.2.5.md)). Nothing in the table below changes:
+upstream re-implemented no fork rule and dropped none. The merge was resolved against the **v0.2.1 tag's source** (base)
+with the **v0.2.5 tag's source** as theirs — 704 files identical, 407 upstream-only changes, 200 new upstream files, 23
+fork files upstream never touches, 104 fork-only files, and 61 changed on both sides (21 of them needed a decision).
+
+* **What 0.2.2–0.2.5 bring**: 教鞭's personal bounty choice (`offerBountyChoice`, `m.private.personalChoice`), 潜能 /
+  练度 per operator (`shared/potential.js`, `atPotential`), the PWA (icons, `public/manifest.json`, `public/js/pwa.js`), the
+   **文字大小** setting (`--t`), the 统计 screen, the shared equipment stock, the developer simulation checker
+  (`public/dev/sim-check.html`, `tools/sim-check.mjs`), 潜能 in the shop, the IPv6 dual-stack bind, bot emotes,
+  `AGENTS.md` / `CLAUDE.md`, and 100+ new test files. All of it is upstream's.
+* **The conflicts the fork decided** (the rest auto-merged):
+  * `public/js/ui/hud.js`, `public/js/screens/game.js`, `public/js/ui/gameActions.js` — 教鞭's `personalChoice` gate and
+    the host's `room.removeSpectator` land next to the fork's two-press ready (§21.38): one `ReadyToggle` keeps `armed` /
+    `data-armed` / the amber 再点一次确认 and folds in upstream's `ready-why` element and choice reason; `TopBar` takes
+    upstream's spectator props alongside `readyArmed`; the `live` ref carries `hasPersonalChoice` **and** the console flags.
+  * `public/js/render/app.js` — upstream hoisted the per-view revive/sync into `syncView`; the fork's §21.50 down-list
+    guard rides along as `syncView(v, s, renderT, downIds)`, and the slide-start block (PR #380) sits beside it.
+  * `server/sim/content/kits/shared/tier5.js` / `tier6.js` / `content/tokens.js` — the fork's `unitBonds` import plus
+    upstream's new `hypot` / `atPotential`.
+  * `kits/ops/chess_char_4_01-rmixer.js` — the fork's `isLaterano` (§21.31 / §21.43) with upstream's new "latest
+    deployed ally" ordering for 教鞭.
+  * `server/lobby.js` — the fork's `console` seat flag plus upstream's `ops` (潜能 / 练度) seat field, `checkLoadoutOps` /
+    `cultivationCharIds` and `isLoopbackIp` side by side.
+  * `public/i18n/en.json` — merged at key level: v0.2.5's 1205 keys in their order, then the fork's own 78 msgids.
+  * `test/ui/playtest2.real.e2e.test.js` — upstream's new 教鞭 round-trip block, readying through the fork's two-press
+    `client.ready()` instead of `click('.readybtn')`.
+  * docs — upstream's new text with the fork's own parts re-appended: the §21.30–§21.51 row in `docs/DESIGN.md` (§27–§30
+    kept), the console section in `docs/PLAYING.md` — **§12 → §14**, since 0.2.2–0.2.5 added §12 反馈问题 and §13 统计（本机）
+    — the 重刷本局 paragraph stays, plus the `addBounty` bounty-child sentence in
+    `docs/META.md`, the two-press ready sentence in 休整期, and the measured asset figures in `docs/DEPLOY.md`.
+* **The golden corpus**: `npm run golden:update` recomputed all 287 scenarios (upstream's count; the fork's 18-match
+  corpus grew by upstream's two new `-coverage-` matches). Exactly **three** moved, all of them §21.31 / §21.43:
+  `bond-kjeragShip-high` (`.hooks.statusApplied` 1579 → 1892, `.events.status` 20 → 21 — upstream's −1 with the fork's
+  +313 on top), `bond-victoriaShip-high` (194 → 388, upstream's 194 exactly doubled by the membership reading), and
+  upstream's new `coop2-NORMAL-1-coverage-standins`, where the same reading lifts round 13's activated layers
+  (kazimierzShip 34 → 50, kjeragShip 80 → 96, swiftShip 129 → 145) so the team clears round 14 and wins instead of
+  losing at 13. `roster` / `fields` / `standins` / `diy` stay byte-identical to upstream's.
+* **Upstream tests the fork had to adapt** (they pin upstream's own values, not the fork's rules — never the reverse):
+  * `test/ui/text-scale.test.js` — `.bslot .bond__name` is `.15rem` here (§21.36 / §21.39), and the fork's
+    `public/css/screens/game-console.css` joins `NOT_SCALED` (a test panel that deliberately does not follow the text step).
+  * `test/docs-paths.test.js` and `test/package-player.test.js` — upstream's new "shipped markdown" / "packaged
+    package.json" checks call `git ls-files`, which a working tree without `.git` cannot answer; they fall back to
+    `test/helpers/repoFiles.js`, the same walk the fork's own repository scan already used.
+  * `test/scene-assets.test.js` — upstream builds its root with `new URL(import.meta.url).pathname`, which is `D:\D:\…`
+    on Windows; the fork uses `fileURLToPath` (upstream runs that test only on POSIX CI).
+* **Assets**: `data/assets.json` grew to 10963 URLs (10956 files, 581 MB, 192 JP voice characters). **2971** of them were
+  missing in this tree; all 2971 came out of the **full** `Stronghold-Protocol-v0.2.5.zip` (579 MB) after its 6476 code
+  entries were checked against its own `MANIFEST.json` (6476/6476 sha256) — the new operator `char_4231_clemnt`, 255 new
+  sfx, and the 2702-file **JP voice set** — so every manifest path is on disk again. The optional local overlay grew the
+  same way: the package's `data/local-assets.json` (75 groups vs the fork's 62) adds the 11 official battlefield **scene**
+  bundles plus `scene/tex` and a 40th summon model, `token_10031_swire2_gdtrap` (`public/assets/local` ≈ 109 MB). None of
+  it is in the repository. See `ISSUES.md` §4.
+* **`public/i18n/*`**: the fork's 78 msgids now exist in zh-TW / ja / ko as well (upstream never had them, and all four
+  packs declare `complete`), so `node tools/i18n.mjs check --all --strict` is 100 % clean in every language. The wording
+  follows each pack's own terminology (整備區 / 整備エリア / 정비 구역, 調度中心 / 管理センター / 보급센터, 盟約 / 盟約 /
+  맹약) and the official names in `data/i18n/<lang>.json` (イェラグ / 쉐라그, シルバーアッシュ / 실버애쉬).
+* **`eslint.config.js`** ignores `.scratch/**` (the fork's local merge tooling and the trees it imports from) and the
+  `android/` build outputs, so `npm run lint` is 0 errors on this machine instead of tripping over build products.
+* **Known upstream nit kept as-is**: `node tools/check-imports.mjs` lists three `sim-node` violations in
+  `server/sim/nodeData.js` (a Node-only loader the sim never ships) in the pristine v0.2.5 tag too; the checker is
+  non-strict by default, so `npm run ci` is unaffected.
 
 ---
 
@@ -348,11 +413,11 @@ User: 「给每个卫戍干员都加语音」, then, after the first build, 「�
 - **Now**: `palsy → palsy`, `attract → attract`, `reveal → reveal` with their own atlas glyphs (a bolt, a bent arrow, an eye) and keyword fallbacks for namespaced keys (`ab:palsy`, `skill:attract_point`). Measured: every key of the sim's `STATUS` catalogue now resolves to a frame the atlas draws, `unblockable` excepted.
 - Tests: `test/render/tiles.test.js` (`every status the sim can apply has an icon, and 麻痹 is one of them` — reconciles the sim's whole catalogue against the client's map, which is the check that was missing; the pre-existing "every `STATUS_ICON` value is drawn in the atlas" loop covers the new frames).
 
-### 21.50 The newer snapshot owns "is this unit on the field" (GitHub issue #100, P2, 2026-10-06) — `render/app.js` (`syncBattle`), `test/render/downelem.browser.test.js`
+### 21.50 The newer snapshot owns "is this unit on the field" (GitHub issue #100, P2, 2026-10-06) — `render/app.js` (`syncBattle`), `render/units.js` (`syncView`, after the v0.2.5 merge), `test/render/downelem.browser.test.js`
 
 - **Reported** (GitHub #100, open): 「重锤击晕泡泡后会出现倒地和起身循环的抽搐动画」. The maintainer could not reproduce it and asked for a recording.
 - **Cause**: `syncBattle` drives a view from two sources that disagree for one snapshot interval: `interp.sample` interpolates the **previous** snapshot, `interp.downAt` returns the **newest** one's 倒地 list, and the two blocks run in that order. A unit knocked out while stunned is the case that shows it — its last living frame has `hp > 0` with the STUN anim, so the sample keeps satisfying `s.anim !== ANIM.DIE && s.hp > 0` and the view is revived; `setDown` (which runs later in the same frame) then calls `die()` again and clears `dying`, re-arming the revive for the next render frame. At 16 ms frames against ~100 ms snapshots that is six stand-up / lie-down cycles per snapshot.
-- **Now**: the down list is read before the sample loop and the revive yields to it — a unit the newest snapshot lists as 倒地 is not stood up by a stale sample; the next frame, whose sample carries the redeploy, brings it back as before. No other path changes: `setDown` still owns the pose and the ring, and a redeploy seen only in a snapshot still revives (the sample reaches it a frame later).
+- **Now**: the down list is read before the sample loop and the revive yields to it — a unit the newest snapshot lists as 倒地 is not stood up by a stale sample; the next frame, whose sample carries the redeploy, brings it back as before. No other path changes: `setDown` still owns the pose and the ring, and a redeploy seen only in a snapshot still revives (the sample reaches it a frame later). Upstream v0.2.5 hoisted this per-view step into `render/units.js syncView(v, s, t)`, so the revive the fork guards now lives there: the id set travels as a fourth argument, `syncView(v, s, renderT, downIds)`, and `syncView` skips the revive for a view on that list.
 - Tests: `test/render/downelem.browser.test.js` (the knocked-down countdown / DP / redeploy phase, unchanged and passing with `RENDER_E2E=1`).
 - [ASSUMED]: the twitch itself. No recording of the report exists, and the fix is an ordering change — "the newest snapshot decides who is on the field" — that is right by construction rather than by observation; the browser test still passes, and no new assertion pins the loop because the harness cannot see a `die()` that is immediately undone.
 
@@ -497,7 +562,7 @@ Cited so a reviewer can check a "superseded" line without searching: upstream ta
 | §21.41 (rotate hint / primary pointer) | upstream's `public/js/ui/device.js` has no `pointerCoarse` / primary-pointer handling |
 | §21.48 (不屈 banks a refused landing) | upstream's `content/bonds/addon/battle.js` (不屈) sets `u.mem[ID.indom] = battle.time` and then calls `battle.redeploy(u, { free: true })`; a `false` return does nothing — `u.mem.indomFreeDeploy` is banked only by the 傀儡师 `dollSwap` branch |
 | §21.49 (麻痹 / 诱导 / 暴露 icons) | upstream's `render/style.js STATUS_ICON` and `render/textures.js STATUS_KEYS` (23 keys) have no `palsy` / `attract` / `reveal`; the keyword fallback does not cover them either |
-| §21.50 (the newer snapshot owns the field) | upstream's `public/js/render/app.js syncBattle` reads `interp.downAt(renderT)` **after** the sample loop (the fork moved it before and made the revive yield to it); no `downIds` |
+| §21.50 (the newer snapshot owns the field) | upstream's per-view step `public/js/render/units.js syncView(v, s, t)` revives on `s.anim !== ANIM.DIE && s.hp > 0` with no down-list argument (v0.2.2+ hoisted it out of `app.js syncBattle`, which reads `interp.downAt(renderT)` for its own `setDown` pass); the fork passes `downIds` as a 4th parameter |
 | §21.51 (导出 tells the player) | upstream's `public/js/screens/loadout.js`: "Save `text` as a download. **Silent no-op** when the browser refuses downloads — 复制 stays available" — upstream's GitHub #173 fix (§25.22.3) addresses a different item of the issue (a 干员调配 tab without game data) |
 
 **Known duplicates inside this fork's own block** (they were written in a chapter 21 that still had room, and some

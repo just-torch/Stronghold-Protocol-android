@@ -39,6 +39,10 @@ const rules = {
   'preserve-caught-error': 'warn',
 };
 
+// ECMA-262 §21.3.2: the Math functions whose results are "implementation-approximated".
+const APPROXIMATED_MATH = ['acos', 'acosh', 'asin', 'asinh', 'atan', 'atanh', 'atan2', 'cbrt', 'cos', 'cosh', 'exp',
+  'expm1', 'hypot', 'log', 'log1p', 'log10', 'log2', 'pow', 'sin', 'sinh', 'tan', 'tanh'];
+
 const nodeFiles = [
   'server/**/*.js',
   'shared/**/*.js',
@@ -59,6 +63,23 @@ export default [
       'public/dev/**',
       '.cache/**',
       'coverage/**',
+      // this fork keeps its local merge tooling and the trees it imports under .scratch (git-ignored, never shipped,
+      // present only on the maintainer's machine); nothing there belongs to the repository's source. Upstream has no
+      // such directory, so this line is a fork addition (docs/FORK-DEVIATIONS.md).
+      '.scratch/**',
+      // the fork's Android build (android/ is a fork-only tree): the Gradle project's output, the staged WebView
+      // assets (a copy of public/ plus node/), the copied SDK/NDK and the bundled Node runtime are build products, not
+      // source — upstream has no android/ at all.
+      'android/.build/**',
+      'android/dist/**',
+      'android/node_modules/**',
+      'android/web/nodejs/**',
+      'android/web/vendor/**',
+      'android/android/build/**',
+      'android/android/app/build/**',
+      'android/android/.gradle/**',
+      'android/android/.cxx/**',
+      'android/android/capacitor-cordova-android-plugins/**',
     ],
   },
   {
@@ -78,6 +99,20 @@ export default [
       globals: { ...globals.browser, process: 'readonly' },
     },
     rules,
+  },
+  {
+    // The sim runs in every player's browser and on the server, and must give the same bits everywhere. ECMA-262
+    // leaves these Math functions (and **) implementation-approximated: engines differ in the last bits.
+    files: ['server/sim/**/*.js'],
+    rules: {
+      'no-restricted-properties': ['error', ...APPROXIMATED_MATH.map((property) => ({
+        object: 'Math', property, message: 'implementation-approximated (engines differ in the last bits): use server/sim/detmath.js',
+      }))],
+      'no-restricted-syntax': ['error',
+        { selector: "BinaryExpression[operator='**']", message: 'implementation-approximated: use powi from server/sim/detmath.js' },
+        { selector: "AssignmentExpression[operator='**=']", message: 'implementation-approximated: use powi from server/sim/detmath.js' },
+      ],
+    },
   },
   {
     // Node test runner, plus browser tests whose page.evaluate callbacks use DOM globals.
