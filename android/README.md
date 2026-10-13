@@ -108,7 +108,8 @@ pwsh -NoProfile -File android/scripts/build-apk.ps1 -NoArt -SkipAssemble
 
 发布时把 `android/dist/art/` 里的 11 个 `.part`、`assets-index-0.2.5.json`、`assets-pack-0.2.5.json` 与 slim APK 一起作为
 **同一个 Release** 的资产上传（App 内置的地址来自 `android/scripts/nodejs-template/asset-pack.json`，可用 `pack-art.mjs --base …`
-重写；运行时也能用 `SP_PACK_BASE` 覆盖，逗号分隔多个镜像，默认第二个镜像就是 `gh-proxy.com`）。**换了素材或版本号必须重打包**：
+重写；运行时也能用 `SP_PACK_BASE` 覆盖，逗号分隔多个镜像：**按顺序试，先 `gh-proxy.com` 镜像再直连 GitHub**——这台机器上直连
+`github.com` 会一直挂着（不是拒绝），而清单/索引这类小文件 30 秒就换源，所以镜像放前面，镜像挂了再回直连）。**换了素材或版本号必须重打包**：
 清单、索引与 App 内置的版本号三者对不上时，App 会拒绝这个包（而不是写进半套素材）。
 本地验证脚本（`.scratch/`，不随包分发）：`test-slim-e2e.mjs`（真包全流程 + 断点续传 + 服务器逐字节比对）、
 `test-art-negatives.mjs`（截断 / 索引被改 / 版本不符 / 源全挂 / 校验发现损坏 / 社区回退接线）、

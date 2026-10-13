@@ -41,6 +41,12 @@ const DEFAULT_RETRIES = 3;
 const MAX_REDIRECTS = 5;
 /** How often progress is reported while bytes flow. */
 const PROGRESS_MS = 200;
+/**
+ * Timeout for the two small files (manifest, index). Short on purpose: the bases are tried in order, and a source
+ * that hangs instead of refusing (github.com from a phone network, see asset-pack.json) must not cost a minute
+ * before the next one is tried. A part gets the longer MAX_REDIRECTS-timeout below: it is 50 MB, not 3 KB.
+ */
+const SMALL_FILE_TIMEOUT_MS = 30_000;
 
 /** An error the caller can act on: `code` is one of E_CONFIG / E_NETWORK / E_CORRUPT / E_DISK / E_CANCELLED. */
 export class ArtError extends Error {
@@ -179,7 +185,7 @@ async function fetchJsonFromBases(bases, name, { signal, onTry } = {}) {
     const url = `${base}${name}`;
     try {
       onTry?.(url);
-      const buf = await httpGetBuffer(url, { signal });
+      const buf = await httpGetBuffer(url, { signal, timeoutMs: SMALL_FILE_TIMEOUT_MS });
       return { json: JSON.parse(buf.toString('utf8')), url, bytes: buf.length };
     } catch (err) {
       errors.push(`${url}: ${err.message}`);
@@ -255,13 +261,13 @@ export async function ensureArt({ artDir, bases, manifestName, app = '', log = (
 
   // 2. the index (needed even for the "already complete" check: it says what the tree must hold)
   onProgress({ phase: 'index', bytes: 0, totalBytes: 0 });
-  const indexBuf = await httpGetBuffer(new URL(manifest.index.name, manifestUrl).toString(), { signal })
+  const indexBuf = await httpGetBuffer(new URL(manifest.index.name, manifestUrl).toString(), { signal, timeoutMs: SMALL_FILE_TIMEOUT_MS })
     .catch(async (err) => {
       // the index may live on another base than the manifest did (mirrors of the same release)
       for (const base of bases) {
         try {
           // eslint-disable-next-line no-await-in-loop
-          return await httpGetBuffer(`${base}${manifest.index.name}`, { signal });
+          return await httpGetBuffer(`${base}${manifest.index.name}`, { signal, timeoutMs: SMALL_FILE_TIMEOUT_MS });
         } catch { /* try the next base */ }
       }
       throw err;
