@@ -27,12 +27,12 @@
 | 项目 | 值 |
 |---|---|
 | 文件 | `android/dist/Stronghold-Protocol-0.2.5-arm64.apk` |
-| 体积 | **787.6 MB**（APK 内 13 756 个条目；0.2.0 的自选干员素材与语音把它从 0.1.4 的 479.9 MB 推上来，0.2.1 补入 39 个召唤物模型 +3.6 MB，0.2.5 又随素材清单补入新干员、255 个音效与整套日文语音 +91 MB，加上本地叠加层的 11 张官方战场场景（光源贴图的 `.webp` 与 `.png` 源图）+58 MB） |
+| 体积 | **561.6 MB**（APK 内 13 721 个条目；0.2.0 的自选干员素材与语音把它从 0.1.4 的 479.9 MB 推上来，0.2.1 补入 39 个召唤物模型 +3.6 MB，0.2.5 又随素材清单补入新干员、255 个音效与整套日文语音 +91 MB、本地叠加层 11 张官方战场场景 +61 MB；随后一轮压缩去掉 237 MB，见下） |
 | 架构 | `arm64-v8a`（只有这一个；2016 年以后几乎所有的 Android 手机） |
 | 系统要求 | `minSdkVersion 23`（Android 6.0）／`targetSdkVersion 35`；**建议 Android 8.0 以上**，并保持「Android System WebView」/ Chrome 为较新版本 |
-| 内嵌运行时 | Node.js 24.5.0（`lib/arm64-v8a/libnode.so`，约 93 MB，`extractNativeLibs=false`，直接从 APK 加载） |
+| 内嵌运行时 | Node.js 24.5.0（`lib/arm64-v8a/libnode.so`，约 92 MB；0.2.5 起压缩存放，装机时由系统解压到私有 `lib/arm64/`） |
 | 内嵌服务器 | `assets/public/nodejs/`：`server/ shared/ data/ public/ node_modules/ws lan/` + `index.js` |
-| 内含素材 | `public/` 整棵树 12 886 个文件 / 约 700 MB（其中 `public/assets/**` 12 669 个文件 / 约 686 MB，含 192 名干员的中文与日文两套战斗语音、战斗 BGM、官方 3D 棋盘贴图、11 张官方战场场景（`/assets/local/scene/**`，2 688 个日文语音、92 个场景文件与 120 个召唤物模型文件都在包里）与 40 个召唤物模型，前提是打包时 `public/assets/local/` 已存在） |
+| 内含素材 | 打包进 APK 的 `public/` 是 12 851 个文件 / 约 673 MB（其中 `public/assets/**` 12 634 个文件 / 约 660 MB：192 名干员的中文与日文两套战斗语音、战斗 BGM、官方 3D 棋盘贴图、11 张官方战场场景（`/assets/local/scene/**` 的 `.webp` + `.bin`，57 个文件）、2 688 个日文语音与 120 个召唤物模型文件）与 40 个召唤物模型；仓库里还多 35 个场景 `.png` 源图 26 MB，打包时剔除——客户端只读 `.webp`。前提是打包时 `public/assets/local/` 已存在 |
 | 服务器依赖 | 只有 `ws` |
 | 新增权限 | **无**。自动搜索走 UDP 广播，`INTERNET` 权限就够（组播才需要 `CHANGE_WIFI_MULTICAST_STATE`） |
 | 发现协议端口 | UDP `45777`（主机广播到这里，加入方监听）与 `45778`（加入方询问，主机监听），见[局域网自动发现](#局域网自动发现) |
@@ -46,6 +46,20 @@
 APK 体积较大的原因是**素材必须随包分发**：主机手机要能在完全离线、不联外网的情况下把素材发给同一 Wi-Fi 里的
 其他玩家。这和 Releases 里的「整合包」是同一个思路。
 
+### 体积是怎么压下来的（2026-10-13）
+
+第一版 0.2.5 包 787.6 MB。按每个条目「压缩后 / 原始」实测了一遍，只有三类值得动，且**没有改任何素材内容**：
+
+| 手段 | 省下 | 代价 |
+|---|---|---|
+| `.skel`（151 MB）与 `.bin`（27 MB）不再放进 `noCompress`：deflate -9 后是原体积的 20.7 % / 32.4 % | **−138 MB** | 插件用 `AssetManager.open`（流）拷贝解压出来的那棵树，压缩条目会被透明解压——每个版本更新后的首次「建立主机」多解压约 178 MB，慢几秒 |
+| 打包时剔除 11 张战场场景的 35 个 `.png` 光源贴图源图（`assemble-nodejs.mjs`，只剔暂存树，仓库保留给提取测试） | **−26 MB** | 无：`data/local-assets.json` 在 `local/scene` 下只列 35 个 `.webp`、11 个 `.bin`、11 个 `.json`，客户端从不请求那个 `.png` |
+| `packaging { jniLibs { useLegacyPackaging = true } }`：三个 arm64 库（92 MB）改为压缩存放，装机时由系统解到 `/data/app/<包名>/lib/arm64/` | **−64 MB** | `/data` 多占约 92 MB、安装稍慢（`extractNativeLibs` 从 `false` 变 `true`）；原来是从 APK 直接 mmap |
+
+`.png`（302 MB → 100.0 %）、`.mp3`（192 MB → 99.5 %）、`.webp`（9 MB → 100 %）留在 `noCompress`：再压没有一点收益，只会拖慢那次拷贝。
+再想小只能动内容：全部 PNG 转 WebP 大约还能省 60–80 MB，但要改写约 5000 个素材路径与 716 个 Spine 图集，属于单独一轮的工作。
+
+
 ## 验证情况
 
 打包完成后做过的检查（这个 App 只能跑在 arm64 真机上：`libnode.so` 只有 arm64 版本，x86 模拟器装不了）：
@@ -56,14 +70,15 @@ APK 体积较大的原因是**素材必须随包分发**：主机手机要能在
   `hardwareAccelerated=true`，release 包里没有 `debuggable`。
 - `apksigner verify`：v1 + v2 签名通过，签名者 `CN=Stronghold Protocol Fan Build`。
 - `zipalign -c 4` 与 `zipalign -c -P 16 4` 都通过：**16 KB 页对齐**也满足，Android 15 起 arm64 设备用
-  16 KB 内存页，未对齐的 `libnode.so` 会装不上。
+  16 KB 内存页；未对齐的 `libnode.so` 会装不上（0.2.5 起三个 `.so` 改为压缩存放、装机时由系统解压到
+  `/data/app/<包名>/lib/arm64/`，对齐由安装器按设备页大小完成——见下面的[体积](#成品)一节的取舍）。
 - `classes.dex` 里能查到 `MainActivity`、`NodeProcess` 与
   `net/hampoelz/capacitor/nodejs/CapacitorNodeJSPlugin`（也就是 `capacitor.plugins.json` 指向的那个类），
   说明插件类没有被裁掉。
 - APK 内容清点：`lib/arm64-v8a/{libnode.so, libnative-lib.so, libc++_shared.so}`、
   `assets/builtin_modules/bridge/**`（Node 侧 `require('bridge')` 用）、`assets/public/{index.html,launcher.js,launcher.css,vendor/*}`、
   `assets/public/nodejs/**`（含自动搜索用的 `lan/{protocol,net,announce,host}.mjs`）、
-  `assets/public/nodejs/public/assets/**` 12 669 个素材（含日文语音、官方战场场景与召唤物模型）、`assets/capacitor.config.json`
+  `assets/public/nodejs/public/assets/**` 12 634 个素材（含日文语音、官方战场场景与召唤物模型）、`assets/capacitor.config.json`
   里 `server.allowNavigation: ["*"]` 与 `startMode: "manual"` 都在。
 - `classes.dex` 里也能查到 `io/github/sganggs/strongholdprotocol/lan/{LanDiscoveryPlugin,LanDiscoveryCore}`
   与 `getHosts`（`@PluginMethod`），且 `assets/public/index.html` 里搜到的房间列表 DOM（`card-lan` /
@@ -74,7 +89,7 @@ APK 体积较大的原因是**素材必须随包分发**：主机手机要能在
   `{"t":"hello",...}` 收到了 `{"t":"welcome","playerId":…,"token":…}`。
 - **最强的那个检查：把服务器从 APK 里解出来再跑一遍**。按插件的做法（`assets/public/nodejs` →
   `<filesDir>/nodejs/public`，`assets/builtin_modules` → `<filesDir>/nodejs/builtin_modules` 并挂到
-  `NODE_PATH`）把 APK 里的那棵树提取出来（13 303 个文件 / 721 MB，与装配结果一致），然后：
+  `NODE_PATH`）把 APK 里的那棵树提取出来（13 268 个文件 / 695 MB，与装配结果一致），然后：
   - `require('bridge')` 经 `NODE_PATH` **确实解析到了**（在 Windows 上它走 `process.send` 分支并抛出
     「No IPC channel has been established…」，被入口的 try/catch 接住后照常继续——真机 `process.platform`
     是 `android`，会走 `_linkedBinding('nativeBridge')` 分支）；
@@ -108,7 +123,7 @@ Java 那份挪到桌面 JVM 上、对着真正的 JS 广播端跑，等于在没
 另外用 `node android/scripts/lan-tool.mjs announce` + `scan` 做过一次跨进程实测：一个进程当主机、另一个进程搜索，
 在 `192.168.43.253` 与 `26.42.62.124` 两个网卡上都搜到了，房间码与人数字段正确。
 
-- **仍未验证**的部分（只能在真机上确认）：Android 的 `AssetManager` 把约 700 MB 素材解压到私有目录的实际过程、
+- **仍未验证**的部分（只能在真机上确认）：Android 的 `AssetManager` 把约 673 MB 素材解压到私有目录的实际过程、
   WebView 从启动器导航到局域网地址、**Capacitor 把 `LanDiscovery` 插件暴露给启动器页面的那一段**、手机 Wi-Fi 上
   的 UDP 广播收发、以及真机上的完整对局。见[排错](#排错)。
 
@@ -117,7 +132,7 @@ Java 那份挪到桌面 JVM 上、对着真正的 JS 广播端跑，等于在没
 1. 把 APK 传到手机（数据线、微信文件传输、网盘、`adb install` 都行）。
 2. 在手机上点开安装。系统会提示「来自未知来源的应用」，按提示允许（这是自签名 APK 的正常提示）。
    - 用 `adb`：`adb install -r android\dist\Stronghold-Protocol-0.2.5-arm64.apk`
-3. 首次启动会稍慢：点「建立主机」后，应用要把约 700 MB 的游戏文件从 APK 里解压到自己的私有目录
+3. 首次启动会稍慢：点「建立主机」后，应用要把约 695 MB 的游戏文件从 APK 里解压到自己的私有目录
    （界面上会显示「正在准备游戏文件（已用 N 秒）」）。**这一步每个版本只做一次**，之后再启动就很快。
 
 ## 怎么联机
@@ -249,7 +264,7 @@ netsh advfirewall firewall add rule name="Stronghold Protocol 3000" dir=in actio
   房号 / 模式 / 难度 / 人数 / 是否对局中放进广播里，于是加入方可以一键 `?room=ABCD` 直接进房
   （`public/js/main.js` 本来就会记住并自动加入 `?room=`）。所有读取都包在 `try/catch` 里，以后大厅内部结构变了
   只会退化成「不显示房号」，不会把主机拖崩。
-- **搜索端为什么会话在 Java 里**（而不是复用内嵌的 Node）：`NodeJS.start()` 每次都会把约 700 MB 素材从 APK
+- **搜索端为什么会话在 Java 里**（而不是复用内嵌的 Node）：`NodeJS.start()` 每次都会把约 673 MB 素材从 APK
   复制到私有目录——插件的 `FileOperations.CopyAssetDir` 对每个文件无条件重写，没有任何「已存在就跳过」的判断。
   而加入方本来是**最轻**的路径（不需要服务器），如果为了听一个 UDP 包就先解压整个游戏，体验会明显变差。所以
   搜索端是 `LanDiscoveryCore.java`（只用 `java.net`，不依赖 Android，也就能在桌面 JVM 上验证）
@@ -264,7 +279,7 @@ netsh advfirewall firewall add rule name="Stronghold Protocol 3000" dir=in actio
 | **UDP 广播**（采用） | 同一个子网内几乎总是通的；**不需要任何新权限**（`INTERNET` 就够，只有组播才需要 `CHANGE_WIFI_MULTICAST_STATE`）；报文里能带房号等结构化信息 |
 | mDNS / Android `NsdManager` | 能跨子网、更「标准」，但 Android 上多播被 AP 过滤 / 省电模式掐掉的情况很多，`NsdManager` 历史上 bug 不少，而且解析服务还得自己写。收益（跨子网）对本项目意义不大——跨子网本来就该手输地址或走 VPN |
 | 网段扫描 + HTTP 探测 | 在 WebView 里做不了：跨源 `fetch` 的响应体读不到（`/healthz` 没有 CORS 头），`mode:'no-cors'` 只能知道「有东西应答」，分不清是不是游戏服务器；254 个并发请求在手机上也又慢又费电 |
-| 让内嵌 Node 同时当搜索端 | 可行但代价大：见上面的 700 MB 复制问题。加入方不该为了搜索先解压游戏 |
+| 让内嵌 Node 同时当搜索端 | 可行但代价大：见上面的 695 MB 复制问题。加入方不该为了搜索先解压游戏 |
 
 **可靠的部分**（已验证，见[自动搜索的验证](#自动搜索的验证)）：报文格式、解析、广播地址计算、超时与去重、
 「真服务器 + 真广播端 + 真房间码」这条链，以及 Java 那份代码在桌面 JVM 上对着真 JS 广播端的行为。
@@ -408,8 +423,8 @@ README 公布校验和；同一批构建在 [JonaNorman/WebViewPackage](https://
 - Node.js 22 或 24
 - JDK 17 以上（构建脚本会自动从 `PATH` 上找 `java`）
 - 仓库根目录已经执行过 `npm install` 和 `npm run setup`（需要 `public/assets`，约 686 MB）
-- **磁盘**：`android/.build/`（Android SDK + NDK + Gradle，约 4 GB）+ `android/web/nodejs`（约 721 MB）
-  + `android/android/app/src/main/assets/public`（又一份约 721 MB）+ 构建中间产物。建议预留 12 GB。
+- **磁盘**：`android/.build/`（Android SDK + NDK + Gradle，约 4 GB）+ `android/web/nodejs`（约 695 MB）
+  + `android/android/app/src/main/assets/public`（又一份约 695 MB）+ 构建中间产物。建议预留 12 GB。
 
 > 不需要预装 Android Studio。下面的脚本会把 Android SDK、NDK、CMake、Gradle 全部装到仓库内的
 > `android/.build/`，不写用户目录，也不需要管理员权限；不需要时删掉 `android/.build/` 即可。
@@ -532,7 +547,7 @@ AIA 自动补齐，OpenSSL（Node）和 JDK 都不会。所以 `build-apk.ps1` �
   `data/`、`public/` 保持同级，它就当自己是原版项目，默认端口 3000、监听 `0.0.0.0`。自动搜索也没有动它：
   广播端是 `web/nodejs/lan/` 里新增的独立模块，只**读**大厅的公开字段（见[局域网自动发现](#局域网自动发现)）。
 - **两件事在 Android 侧，两件事在 Node 侧**：游戏服务器和广播端在 Node 里；启动器界面和 UDP 搜索在 WebView / Java 里。
-  这样加入方（不跑服务器的那台）不需要先解压 700 MB 素材就能搜到主机。
+  这样加入方（不跑服务器的那台）不需要先解压 673 MB 素材就能搜到主机。
 - **启动顺序**：启动器页面（Capacitor 本地页面）先 `NodeJS.start()`，插件把 APK 里的
   `assets/public/nodejs/**` 解压到 `/data/data/<包名>/files/nodejs/public/`，然后启动 Node；Node 侧用内置的
   `bridge` 模块把 `server-ready`（含端口、局域网地址、主机名、广播状态）回传给启动器；启动器再把 WebView 导航到
@@ -596,7 +611,7 @@ AIA 自动补齐，OpenSSL（Node）和 JDK 都不会。所以 `build-apk.ps1` �
 | 装了但提示「应用未安装」 | 多半是机型不是 arm64，或者 APK 传输过程中损坏（重新传一次，必要时比对文件大小） |
 | 首页静态字画出来了，但点「建立主机」没反应（只有一个聚焦环） | 系统 WebView 太老（< Chrome 80）：前端用了可选链 / 空值合并，整机脚本都不执行。跑 `node android\scripts\device-cdp.mjs --default` 一眼就能看出来（`SyntaxError` + 一堆 `undefined`），然后按[升级系统 WebView](#升级系统-webview没有-play-商店的机型)侧载一个新包 |
 | 启动后全黑 / 弹「Android System WebView 已停止运行」 | 装的是**只有 arm32** 的 WebView 包，64 位进程加载不了（logcat 里是 `UnsatisfiedLinkError ... is 32-bit instead of 64-bit`）。换成带 arm64 的包重装；确认 `dumpsys package com.google.android.webview` 里 `secondaryCpuAbi=arm64-v8a` |
-| 点「建立主机」后一直停在准备界面 | 首次解压约 700 MB，低端机可能要 1–3 分钟，界面会显示已用秒数。超过 5 分钟仍未进入再看下一行 |
+| 点「建立主机」后一直停在准备界面 | 首次解压约 695 MB，低端机可能要 1–3 分钟，界面会显示已用秒数。超过 5 分钟仍未进入再看下一行 |
 | 启动失败，提示端口被占用 | 通常是上一次的服务器还在跑：从最近任务里彻底划掉应用再重开 |
 | 朋友打不开地址 | 确认用的是 `192.168.x.x` 而不是 `127.0.0.1`；确认在同一个 Wi-Fi；访客网络 / 酒店 Wi-Fi 常有「AP 隔离」；确认地址里的 `:3000` 没丢 |
 | 主机自己进不去局域网地址 | 用主机卡片下方的「改用本机地址进入」进游戏；朋友仍用上面列出的局域网地址 |

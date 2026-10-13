@@ -162,6 +162,27 @@ for (const d of MIRRORED) {
   log(`     now ${after.files} files, ${human(after.bytes)}`);
 }
 
+// The 11 official battlefield scenes ship a lightmap twice: the `.webp` the browser loads and the `.png` the extractor
+// wrote beside it. `data/local-assets.json` names 35 `.webp`, 11 `.bin` and 11 `.json` under local/scene and no `.png`
+// at all, so the sources are 26 MB of APK that no client ever requests (the repository keeps them: the extraction test
+// checks a .png beside every .webp). Drop them from the staged copy only.
+{
+  const sceneDir = path.join(NODEJS, 'public', 'assets', 'local', 'scene');
+  let files = 0, bytes = 0;
+  const walk = async (d) => {
+    let entries;
+    try { entries = await fsp.readdir(d, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) { await walk(p); } else if (e.isFile() && e.name.toLowerCase().endsWith('.png')) {
+        try { bytes += (await fsp.stat(p)).size; await fsp.rm(p); files++; } catch { /* ignore */ }
+      }
+    }
+  };
+  await walk(sceneDir);
+  log(`  dropped ${files} local/scene .png source image(s) (${human(bytes)}) — the client loads the .webp`);
+}
+
 // ---------------------------------------------------------------------------------------------------
 // 3. the server's only runtime dependency
 // ---------------------------------------------------------------------------------------------------

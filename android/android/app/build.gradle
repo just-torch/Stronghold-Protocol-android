@@ -42,10 +42,24 @@ android {
         }
     }
     androidResources {
-        // The APK carries ~330 MB of game art that the capacitor-nodejs plugin copies out of the APK into the
-        // app's private storage on first launch. These types are already compressed, so deflating them again only
-        // slows that first-run copy down (and Android's own installer would have to inflate them first).
-        noCompress += ['png', 'jpg', 'jpeg', 'webp', 'gif', 'mp3', 'ogg', 'm4a', 'aac', 'skel', 'bin', 'woff2']
+        // The APK carries ~700 MB of game art that the capacitor-nodejs plugin copies out of the APK into the app's
+        // private storage (once per app update: FileOperations.CopyAsset uses AssetManager.open, a stream, so a
+        // deflated entry is inflated transparently). These types are already compressed, so deflating them again would
+        // only slow that copy down for no gain — measured on the 0.2.5 tree: .png 302 MB → 100.0 % of its size,
+        // .mp3 192 MB → 99.5 %, .webp 9 MB → 100 %.
+        // NOT excluded, because they do compress well (deflate -9, measured on the real files):
+        //   .skel 151 MB → 20.7 % (~119 MB off the download), .bin 27 MB → 32.4 % (~19 MB)
+        noCompress += ['png', 'jpg', 'jpeg', 'webp', 'gif', 'mp3', 'ogg', 'm4a', 'aac', 'woff2']
+    }
+    packaging {
+        // `libnode.so` (91 MB) and the other two arm64 libraries: stored uncompressed they are mapped straight out of
+        // the APK (the AGP default, android:extractNativeLibs="false"), which starts fastest but costs 92 MB of
+        // download. Legacy packaging compresses them (~30 % of their size — ~64 MB off the download) and lets the
+        // installer unpack them into /data/app/<pkg>/lib/arm64 on install (+92 MB on the device, a slower install).
+        // Chosen for the smaller download; System.loadLibrary finds the extracted copy as it always did.
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
     buildTypes {
         release {
