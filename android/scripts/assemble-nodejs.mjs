@@ -60,6 +60,8 @@ const SLIM = process.argv.includes('--slim') || process.argv.includes('--no-art'
 const consoleArg = (process.argv.find((a) => a.startsWith('--console=')) || '').slice('--console='.length);
 const CONSOLE = ['auto', '0', '1'].includes(consoleArg) ? consoleArg : 'auto';
 const CONSOLE_TOKEN = '__SP_CONSOLE__';
+/** Baked into the staged entry point like the console token: '1' = a slim build (downloads the art on first launch). */
+const SLIM_TOKEN = '__SP_SLIM__';
 const log = (...a) => console.log(...a);
 
 /** Directories copied verbatim from the repository into web/nodejs/. */
@@ -188,8 +190,9 @@ await copyTemplate(TEMPLATE, NODEJS);
   const entry = path.join(NODEJS, 'index.js');
   const src = await fsp.readFile(entry, 'utf8');
   if (!src.includes(CONSOLE_TOKEN)) fail(`${entry} does not carry ${CONSOLE_TOKEN} — the template and this script disagree`);
-  await fsp.writeFile(entry, src.split(CONSOLE_TOKEN).join(CONSOLE));
-  log(`  index.js: SP_CONSOLE = ${CONSOLE === 'auto' ? "'auto' (the server's default: loopback clients only)" : CONSOLE}`);
+  if (!src.includes(SLIM_TOKEN)) fail(`${entry} does not carry ${SLIM_TOKEN} — the template and this script disagree`);
+  await fsp.writeFile(entry, src.split(CONSOLE_TOKEN).join(CONSOLE).split(SLIM_TOKEN).join(SLIM ? '1' : '0'));
+  log(`  index.js: SP_CONSOLE = ${CONSOLE === 'auto' ? "'auto' (the server's default: loopback clients only)" : CONSOLE}, slim = ${SLIM ? '1 (first launch downloads the art)' : '0 (the art is inside this APK)'}`);
 }
 
 // ---------------------------------------------------------------------------------------------------

@@ -288,6 +288,9 @@ describe('android assembler: the beacon is shipped', { skip }, () => {
     assert.match(build, /\$slimSuffix = if \(\$NoArt\) \{ '-slim' \} else \{ '' \}/, 'and names its own artifact');
     assert.match(script, /const SLIM = process\.argv\.includes\('--slim'\) \|\| process\.argv\.includes\('--no-art'\)/);
     assert.match(script, /slim: dropped public\/assets from the staged tree/, 'the assembler reports what it dropped');
+    assert.match(script, /const SLIM_TOKEN = '__SP_SLIM__';/, 'and stamps the build type into the staged entry point');
+    assert.match(script, /split\(SLIM_TOKEN\)\.join\(SLIM \? '1' : '0'\)/, 'the staged copy gets the value');
+    assert.match(build, /staged build type ok: slim=/, 'the build compares the staged tree with -NoArt');
 
     // the native project: the second build type, its application id suffix and its label overlay
     const gradle = readFileSync(path.join(APP, 'android', 'app', 'build.gradle'), 'utf8');
@@ -328,10 +331,13 @@ describe('android slim build: first-launch art download', { skip }, () => {
   test('the entry point points the server at the art directory and never fails to start the server', () => {
     const entry = readFileSync(path.join(template, 'index.js'), 'utf8');
     assert.match(entry, /SP_ASSETS_DIR = artDir/, 'the server is told where the art is');
-    assert.match(entry, /artDirFrom\(bridge \? path\.resolve\(process\.cwd\(\), '\.\.', 'art'\) : ''\)/, 'beside the unpacked tree, outside the plugin\'s clean-up');
+    assert.match(entry, /const slimBuild = '__SP_SLIM__' === '1';/, 'the slim token sits in the template');
+    assert.match(entry, /artDirFrom\(slimBuild && bridge \? path\.resolve\(process\.cwd\(\), '\.\.', 'art'\) : ''\)/, 'beside the unpacked tree, outside the plugin\'s clean-up — and only in a slim build');
     assert.match(entry, /void prepareArt\('start'\)/, 'the download runs after the room is up, so server-ready is not delayed');
     assert.match(entry, /channel\.on\('retry-art'/, 'the Node side accepts a retry');
     assert.match(entry, /fillFromCommunity/, 'the community fallback is reachable');
+    // A full build must not look for art outside itself: the 561 MB APK would otherwise wait for a 502 MB download.
+    assert.match(entry, /this build ships the art/, 'and a full build reports that it needs no download');
   });
 
   test('the downloader verifies what it writes', async () => {

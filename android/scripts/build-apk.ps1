@@ -135,6 +135,15 @@ if (-not $SkipAssemble) {
     } else {
       Info "staged console mode ok: SP_CONSOLE='$got'"
     }
+    # The staged tree also carries whether this is the slim build (no art inside, downloaded on first launch). A full
+    # build from a slim-staged tree would ship an APK that downloads 500 MB it claims to contain — refuse it, the same
+    # way a wrong console mode is at least reported.
+    $slimStaged = Select-String -Path $stagedEntry -Pattern "^const slimBuild = '(.+)' === '1';" | Select-Object -First 1
+    $slimGot = if ($slimStaged) { $slimStaged.Matches[0].Groups[1].Value } else { '(none)' }
+    if ($slimGot -ne $(if ($NoArt) { '1' } else { '0' })) {
+      throw "the staged web/nodejs/index.js carries slim='$slimGot' but this build needs '$(if ($NoArt) { '1' } else { '0' })' (-NoArt: $NoArt) — rerun without -SkipAssemble (node android\scripts\assemble-nodejs.mjs$(if ($NoArt) { ' --slim' } else { '' }))"
+    }
+    Info "staged build type ok: slim='$slimGot'"
   }
 }
 

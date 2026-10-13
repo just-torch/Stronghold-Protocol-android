@@ -72,16 +72,24 @@ const hostName = process.env.SP_HOST_NAME || '';
 // ---------------------------------------------------------------------------------------------------
 // game art (public/assets): point the server at the durable directory, then fill it in the background
 // ---------------------------------------------------------------------------------------------------
+/**
+ * The build this file was staged into: `assemble-nodejs.mjs --slim` (build-apk.ps1 -NoArt) rewrites the token below
+ * to `'1'`. Only a slim build downloads art: the full APK carries `public/assets` inside itself, and pointing the
+ * server at an empty `<files>/nodejs/art` there would make it wait for a 502 MB download it does not need. An
+ * unrewritten token (running this file straight out of the source tree) means "not slim", like the console token.
+ */
+const slimBuild = '__SP_SLIM__' === '1';
 /** This app's version, i.e. the version of the art pack it needs — the staged package.json is this app's own. */
 const APP_VERSION = (() => {
   try { return String(JSON.parse(fs.readFileSync(path.join(HERE, 'package.json'), 'utf8')).version || ''); } catch { return ''; }
 })();
 /**
- * Inside the app the server runs with its working directory on the unpacked `public/`, so the art directory is its
- * sibling; on a desktop (`node index.js`, no bridge) there is no override at all — the repository's own public/assets
- * is served, exactly as before.
+ * Inside a slim build the server runs with its working directory on the unpacked `public/`, so the art directory is
+ * its sibling (outside the tree the Capacitor plugin deletes on an app update). `SP_ART_DIR` always wins, which is how
+ * the same file is tested on a desktop; without it — the full build, or a desktop run — `SP_ASSETS_DIR` stays unset
+ * and the server serves the bundled `public/assets` exactly as before.
  */
-const artDir = artDirFrom(bridge ? path.resolve(process.cwd(), '..', 'art') : '');
+const artDir = artDirFrom(slimBuild && bridge ? path.resolve(process.cwd(), '..', 'art') : '');
 if (artDir) process.env.SP_ASSETS_DIR = artDir;
 const pack = readPackConfig({ dir: HERE });
 const bases = packBases(pack.bases);
@@ -109,7 +117,7 @@ function prepareArt(why) {
   if (artRun) return artRun;
   artRun = (async () => {
     if (process.env.SP_SKIP_ART === '1') { send('art-skipped', JSON.stringify({ reason: 'SP_SKIP_ART', artDir })); return; }
-    if (!artDir) { send('art-skipped', JSON.stringify({ reason: 'no art directory', artDir })); return; }
+    if (!artDir) { send('art-skipped', JSON.stringify({ reason: slimBuild ? 'no art directory' : 'this build ships the art', artDir })); return; }
 
     // ---- 1. our own pack -------------------------------------------------------------------------
     let packError = null;
