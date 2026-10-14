@@ -1,0 +1,9 @@
+{
+  "format": 1,
+  "app": "0.2.5",
+  "manifest": "assets-pack-0.2.5.json",
+  "bases": [
+    "https://gh-proxy.com/https://github.com/just-torch/Stronghold-Protocol-android/releases/download/assets-0.2.5/",
+    "https://github.com/just-torch/Stronghold-Protocol-android/releases/download/assets-0.2.5/"
+  ]
+}

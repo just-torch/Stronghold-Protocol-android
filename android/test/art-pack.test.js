@@ -24,8 +24,9 @@ import {
 } from '../scripts/nodejs-template/art-container.mjs';
 import { ASSETS_REL, isPrunedAsset, listArtFiles } from '../scripts/art-set.mjs';
 import {
-  buildArtPack, planParts, parseArgs, writeAssetPackJson, readAppVersion,
+  buildArtPack, planParts, parseArgs, writeAssetPackJson, readAppVersion, pointerPayload, readArtId,
 } from '../scripts/pack-art.mjs';
+import { canonicalJson, artIdFrom } from '../scripts/nodejs-template/art-id.mjs';
 
 const APP = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = path.resolve(APP, '..');
@@ -464,8 +465,44 @@ describe('art packer', () => {
   test('asset-pack.json is static apart from the fields it is given', async () => {
     const file = path.join(root, 'asset-pack.json');
     const { payload } = await writeAssetPackJson({ app: '9.9.9', bases: ['https://a.invalid/', 'https://b.invalid/'], manifestName: 'assets-pack-9.9.9.json', file });
-    assert.deepEqual(payload, { format: 1, app: '9.9.9', manifest: 'assets-pack-9.9.9.json', bases: ['https://a.invalid/', 'https://b.invalid/'] });
+    assert.deepEqual(payload, { format: 1, app: '9.9.9', manifest: 'assets-pack-9.9.9.json', bases: ['https://a.invalid/', 'https://b.invalid/'], pointers: [] });
     assert.deepEqual(JSON.parse(await fsp.readFile(file, 'utf8')), payload);
+
+    // The pointer URLs the app reads before it uses the baked-in bases (moving the parts without a new APK).
+    const withPointers = await writeAssetPackJson({
+      app: '9.9.9', bases: ['https://a.invalid/'], manifestName: 'assets-pack-9.9.9.json', file,
+      pointers: ['https://p.invalid/pack.json', 'https://q.invalid/pack.json'],
+    });
+    assert.deepEqual(withPointers.payload.pointers, ['https://p.invalid/pack.json', 'https://q.invalid/pack.json']);
+  });
+
+  test('the pack names the art it holds, and the pointer payload is the small subset the app reads', async () => {
+    const { manifest } = await buildArtPack({ assetsRoot: assets, outDir, app: '9.9.9', partBytes: 1 << 20, artId: 'abcdef123456', log: () => {} });
+    assert.equal(manifest.artId, 'abcdef123456', 'the art id lands in the manifest');
+    assert.equal(manifest.app, '9.9.9', 'and the app version stays as information');
+    const index = JSON.parse(await fsp.readFile(path.join(outDir, manifest.index.name), 'utf8'));
+    assert.equal(index.artId, 'abcdef123456', 'and in the index too');
+    assert.deepEqual(pointerPayload({ app: '9.9.9', manifestName: manifest.index.name, bases: ['https://a.invalid/'] }), {
+      format: 1, app: '9.9.9', manifest: manifest.index.name, bases: ['https://a.invalid/'],
+    });
+  });
+
+  test('the art id ignores formatting, follows content, and covers the local overlay', () => {
+    // Same documents, different key order / whitespace → same id (a reformat must not invalidate a pack on phones).
+    const a = artIdFrom({ assets: { hash: 'aaa111bbb222' }, local: { count: 2, groups: { scene: { a: { path: '/x' }, b: { path: '/y' } } } } });
+    const b = artIdFrom({ assets: { hash: 'aaa111bbb222' }, local: { groups: { scene: { b: { path: '/y' }, a: { path: '/x' } } }, count: 2 } });
+    assert.equal(a, b);
+    assert.match(a, /^[0-9a-f]{12}$/);
+    // A different official manifest, or a different local overlay, is a different art set.
+    assert.notEqual(a, artIdFrom({ assets: { hash: 'aaa111bbb223' }, local: { count: 2, groups: { scene: { a: { path: '/x' }, b: { path: '/y' } } } } }));
+    assert.notEqual(a, artIdFrom({ assets: { hash: 'aaa111bbb222' }, local: { count: 3, groups: { scene: { a: { path: '/x' }, b: { path: '/y' } } } } }));
+    assert.notEqual(a, artIdFrom({ assets: { hash: 'aaa111bbb222' }, local: { count: 2, groups: { scene: { a: { path: '/x' } } } } }));
+    // No manifest at all → no id (the app then falls back to comparing app versions).
+    assert.equal(artIdFrom({}), '');
+    assert.equal(canonicalJson({ b: 1, a: [2, { d: 3, c: 4 }] }), '{"a":[2,{"c":4,"d":3}],"b":1}');
+    // The repository's own manifests have one, and it is what pack-art writes.
+    const real = readArtId(REPO);
+    assert.match(real, /^[0-9a-f]{12}$/, `data/assets.json + data/local-assets.json must yield an art id, got ${real}`);
   });
 
   test('the CLI --help path works end to end', () => {

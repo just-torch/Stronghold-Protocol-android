@@ -38,7 +38,7 @@
 | 发现协议端口 | UDP `45777`（主机广播到这里，加入方监听）与 `45778`（加入方询问，主机监听），见[局域网自动发现](#局域网自动发现) |
 | 签名 | 自签名，v1 + v2 方案（`android/android/stronghold-release.jks`，由构建脚本自动生成） |
 | 应用名 / 包名 | 卫戍协议：盟约 / `io.github.sganggs.strongholdprotocol` |
-| slim 变体 | `android/dist/Stronghold-Protocol-0.2.5-arm64-slim.apk`，**40.6 MB**（不含 `public/assets`，首启在应用内下载 502.5 MB 素材包），见[素材包与首启下载](#素材包与首启下载-slim-变体2026-10-13) |
+| slim 变体 | `android/dist/Stronghold-Protocol-0.2.5-arm64-slim.apk`，**40.6 MB**（不含 `public/assets`，首启在应用内下载 502.5 MB 素材包，素材包在**单独的** [assets-0.2.5](https://github.com/just-torch/Stronghold-Protocol-android/releases/tag/assets-0.2.5) 发布里），见[素材包与首启下载](#素材包与首启下载-slim-变体2026-10-13) |
 
 另外还可以构建一份**测试版 APK**（`-Variant devtest`，见[测试版 APK](#测试版-apkadjacent)）：同一个游戏、另一个包名
 （`…strongholdprotocol.dev`）、应用名「卫戍协议：盟约·测试」、版本号 `0.2.5-dev`，**可以和正式版同时装在手机上**，
@@ -87,7 +87,8 @@ APK 体积较大的原因是**素材必须随包分发**：主机手机要能在
    找不到再回落到包内 `public/assets`（这一条是仓库侧的改动，见 `docs/FORK-DEVIATIONS.md` §21.52 与 `docs/DEPLOY.md` §4.1）。
 5. 启动页给出进度（已下 / 总量 / 速度 / 剩余）、**重试**与**暂时跳过**：下载期间就能「进入游戏」（缺的图是占位图），
    失败后可重试或跳过，下载在 Node 进程里跑，进入游戏不会中断它。
-6. 素材包连不上时自动回退到**社区素材源**（`SP_ASSET_SOURCE=auto`，即复用仓库的 `tools/fetch-assets.mjs`，逐个文件从社区镜像抓；
+6. 素材来源按优先级取：`SP_PACK_BASE`（调试/维护用）＞ **指针文件** `pack.json`（`android` 分支根目录，约 200 字节；**换托管只改它，不用重发 APK**）＞ 包内烙进去的地址。指针与清单/索引都是小文件（10 秒 / 30 秒没回应就换下一个源），全都失败就回落到包内地址，**指针挂了不是错误**。
+7. 素材包连不上时自动回退到**社区素材源**（`SP_ASSET_SOURCE=auto`，即复用仓库的 `tools/fetch-assets.mjs`，逐个文件从社区镜像抓；
    slim 包因此额外带约 9 MB 的 JS：`tools/`、研究表、Spine 解析器依赖闭包）。这条路拿不到 `local/**`——11 张官方战场场景与
    mesh 材质属于本机客户端提取物，共 84.7 MB——那部分保持占位图，界面会说明「素材不完整」，下次启动仍会先试素材包。
    已知代价：下载只在应用处于前台时进行（被系统杀掉不会丢已下好的分卷，但要重新进应用继续），且需要约 700 MB 空闲空间。
@@ -95,9 +96,11 @@ APK 体积较大的原因是**素材必须随包分发**：主机手机要能在
 维护者：构建与发布。
 
 ```bash
-# 1. 打素材包：public/assets → android/dist/art/（11 个 .part + 索引 + manifest，并把 base 写进 App 里的地址文件）
-node android/scripts/pack-art.mjs --base https://github.com/just-torch/Stronghold-Protocol-android/releases/download/v0.2.5-fork.1/
-#    先看一眼计划：node android/scripts/pack-art.mjs --dry-run
+# 1. 打素材包：public/assets → android/dist/art/（11 个 .part + 索引 + manifest），同时写出包内地址文件与指针文件。
+#    --base 是素材托管地址（按顺序试，镜像放前面）；--pointer 是「换托管只改它」的小文件地址；
+#    --pointer-out 把指针内容写到仓库根目录的 pack.json（提交到 android 分支即生效）。
+node android/scripts/pack-art.mjs   --base https://gh-proxy.com/https://github.com/just-torch/Stronghold-Protocol-android/releases/download/assets-0.2.5/   --base https://github.com/just-torch/Stronghold-Protocol-android/releases/download/assets-0.2.5/   --pointer https://gh-proxy.com/https://raw.githubusercontent.com/just-torch/Stronghold-Protocol-android/android/pack.json   --pointer https://cdn.jsdelivr.net/gh/just-torch/Stronghold-Protocol-android@android/pack.json   --pointer-out pack.json
+#    先看一眼计划：node android/scripts/pack-art.mjs --dry-run（会打印素材身份 artId）
 
 # 2. 装配 slim 树（不含 public/assets，另加社区回退所需的 tools/ 与研究表、Spine 解析器）
 node android/scripts/assemble-nodejs.mjs --slim
@@ -106,11 +109,17 @@ node android/scripts/assemble-nodejs.mjs --slim
 pwsh -NoProfile -File android/scripts/build-apk.ps1 -NoArt -SkipAssemble
 ```
 
-发布时把 `android/dist/art/` 里的 11 个 `.part`、`assets-index-0.2.5.json`、`assets-pack-0.2.5.json` 与 slim APK 一起作为
-**同一个 Release** 的资产上传（App 内置的地址来自 `android/scripts/nodejs-template/asset-pack.json`，可用 `pack-art.mjs --base …`
-重写；运行时也能用 `SP_PACK_BASE` 覆盖，逗号分隔多个镜像：**按顺序试，先 `gh-proxy.com` 镜像再直连 GitHub**——这台机器上直连
-`github.com` 会一直挂着（不是拒绝），而清单/索引这类小文件 30 秒就换源，所以镜像放前面，镜像挂了再回直连）。**换了素材或版本号必须重打包**：
-清单、索引与 App 内置的版本号三者对不上时，App 会拒绝这个包（而不是写进半套素材）。
+发布分两处，**素材不再放 App 的发布里**：
+
+- **素材包**：把 `android/dist/art/` 里的 11 个 `.part` + `assets-index-0.2.5.json` + `assets-pack-0.2.5.json` 传到一个**单独的**
+  release/tag（当前是 `assets-0.2.5`），然后发布它（草稿状态下匿名下载不了，App 会拿不到）。换托管只需改分支根目录的
+  `pack.json` 并提交，**不用重发 APK**；包内的地址（`android/scripts/nodejs-template/asset-pack.json`）是它读不到指针时的兜底。
+- **App**：slim APK 与正式 APK 一起放在 `v0.2.5-fork.1` 这类发布里。
+
+**素材没变就不用重传素材包**：App 按**素材身份** `artId` 判断，而不是版本号。`artId` 是 `data/assets.json` 的 `hash` 与
+`data/local-assets.json` 的 `count`/`groups` 规范化后的 sha1 前 12 位（`android/scripts/nodejs-template/art-id.mjs`，两边同一份代码）。
+只改代码的版本更新（`data/assets.json` 与本地叠加层都不变）会算出同一个 `artId`，装过的人**一个字节都不用重下**；真的换了素材
+才会算出新 id，App 会自动重新下载（旧素材在被放弃前不会被当成完整的）。
 本地验证脚本（`.scratch/`，不随包分发）：`test-slim-e2e.mjs`（真包全流程 + 断点续传 + 服务器逐字节比对）、
 `test-art-negatives.mjs`（截断 / 索引被改 / 版本不符 / 源全挂 / 校验发现损坏 / 社区回退接线）、
 `test-slim-apk.mjs`（解出 APK、按插件的 cwd 跑包里的入口点、下载、二次启动、再从服务器取字节）。

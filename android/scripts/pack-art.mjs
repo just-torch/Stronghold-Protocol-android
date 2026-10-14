@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url';
 
 import { ASSETS_REL, listArtFiles } from './art-set.mjs';
 import { CONTAINER, DEFAULT_CODEC, writePart } from './nodejs-template/art-container.mjs';
+import { artIdFrom } from './nodejs-template/art-id.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 /** The Capacitor project root (this file lives in android/scripts/). */
@@ -44,6 +45,8 @@ Options:
   --part-bytes <n>       raw payload per part (default ${DEFAULT_PART_BYTES} = 64 MiB); a single bigger file gets a part of its own
   --app <version>        app version used in the file names and the manifests (default: version in android/package.json)
   --base <url>[,…]       download base URL(s); repeatable, joined in order (also written to nodejs-template/asset-pack.json)
+  --pointer <url>[,…]    small stable URLs the app reads first; their content overrides --base at run time (repeatable)
+  --pointer-out <file>   also write that pointer payload to <file> (e.g. pack.json at the repository root)
   --manifest-name <n>    manifest file name (default assets-pack-<app>.json)
   --dry-run              plan and print the numbers only, write nothing
   --help                 this text
@@ -55,6 +58,28 @@ Options:
 const partName = (app, i) => `assets-pack-${app}-${String(i).padStart(3, '0')}.part`;
 const indexName = (app) => `assets-index-${app}.json`;
 const defaultManifestName = (app) => `assets-pack-${app}.json`;
+
+/**
+ * The identity of the *art*, not of the app: `art-id.mjs` over `data/assets.json` and `data/local-assets.json`. An app
+ * accepts a pack whose `artId` equals the id of the two manifests it ships, so a release that only changed code keeps
+ * using the pack already on the phone — no 502 MB re-upload, no re-download. Empty when neither manifest is readable:
+ * the pack then carries no `artId` and the app falls back to comparing its version with `app` (the 0.2.5 behaviour).
+ * @param {string} [root] the game repository root
+ */
+export function readArtId(root = REPO) {
+  const read = (rel) => {
+    try { return JSON.parse(fs.readFileSync(path.join(root, rel), 'utf8')); } catch { return null; }
+  };
+  return artIdFrom({ assets: read(path.join('data', 'assets.json')), local: read(path.join('data', 'local-assets.json')) });
+}
+
+/**
+ * The small "where do the parts live now" file the app reads before anything else (`asset-pack.json` `pointers`). It
+ * is what makes moving the parts to another host a 200-byte commit instead of a new APK.
+ */
+export function pointerPayload({ app, manifestName, bases }) {
+  return { format: PACK_FORMAT, app, manifest: manifestName, bases };
+}
 
 /**
  * Fill parts up to `partBytes` of raw payload, in the given order. A file larger than the limit is the only member of
@@ -135,15 +160,19 @@ export async function buildArtPack(opts) {
     log(`  ${name}: ${stats.files} files, ${mb(stats.rawBytes)} raw → ${mb(stats.bytes)}`);
   }
 
-  const indexText = `${JSON.stringify({ format: PACK_FORMAT, app: opts.app, count: files.length, rawBytes, files: indexFiles }, null, 0)}\n`;
+  const indexText = `${JSON.stringify({ format: PACK_FORMAT, app: opts.app, artId: opts.artId || readArtId(), count: files.length, rawBytes, files: indexFiles }, null, 0)}\n`;
   const indexPath = path.join(opts.outDir, index);
   await fsp.writeFile(indexPath, indexText, 'utf8');
   const indexBytes = Buffer.byteLength(indexText, 'utf8');
   const indexSha = createHash('sha256').update(indexText).digest('hex');
 
+  const artId = opts.artId ?? readArtId();
   const manifest = {
     format: PACK_FORMAT,
     app: opts.app,
+    // The art this pack holds. `app` below is informational (which release built it); `artId` is what decides
+    // whether an app may use it (nodejs-template/assets.mjs, art-id.mjs).
+    artId,
     container: CONTAINER,
     codec: DEFAULT_CODEC,
     generatedAt: new Date().toISOString(),
@@ -163,9 +192,9 @@ export async function buildArtPack(opts) {
 }
 
 /**
- * `{format:1, app, manifest, bases}` — staged next to the entry point and baked into the APK.
+ * `{format, app, manifest, bases, pointers}` — staged next to the entry point and baked into the APK.
  *
- * @param {{ app: string, bases: string[], manifestName?: string, file?: string }} opts
+ * @param {{ app: string, bases: string[], manifestName?: string, pointers?: string[], file?: string }} opts
  */
 export async function writeAssetPackJson(opts) {
   const payload = {
@@ -173,6 +202,9 @@ export async function writeAssetPackJson(opts) {
     app: opts.app,
     manifest: opts.manifestName || defaultManifestName(opts.app),
     bases: opts.bases,
+    // Small, stable URLs whose content overrides `manifest` + `bases` at run time, so the parts can move to another
+    // host (or another release) without rebuilding the APK. Tried in order; all of them failing is not an error.
+    pointers: opts.pointers || [],
   };
   const file = opts.file ?? path.join(TEMPLATE, 'asset-pack.json');
   await fsp.writeFile(file, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
@@ -185,7 +217,7 @@ export async function writeAssetPackJson(opts) {
 /** @returns {{ [key: string]: true | string }} */
 export function parseArgs(argv) {
   const flags = {};
-  const takesValue = new Set(['out', 'part-bytes', 'app', 'base', 'manifest-name']);
+  const takesValue = new Set(['out', 'part-bytes', 'app', 'base', 'manifest-name', 'pointer', 'pointer-out']);
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (!arg.startsWith('--')) throw new Error(`unexpected argument: ${arg}`);
@@ -198,7 +230,7 @@ export function parseArgs(argv) {
     }
     const value = eq >= 0 ? arg.slice(eq + 1) : argv[++i];
     if (value === undefined) throw new Error(`--${name} needs a value`);
-    if (name === 'base') flags.base = flags.base ? `${flags.base},${value}` : value;
+    if (name === 'base' || name === 'pointer') flags[name] = flags[name] ? `${flags[name]},${value}` : value;
     else flags[name] = value;
   }
   return flags;
@@ -228,7 +260,7 @@ async function main(argv) {
     return;
   }
   for (const key of Object.keys(flags)) {
-    if (!['out', 'part-bytes', 'app', 'base', 'manifest-name', 'dry-run', 'help'].includes(key)) {
+    if (!['out', 'part-bytes', 'app', 'base', 'manifest-name', 'pointer', 'pointer-out', 'dry-run', 'help'].includes(key)) {
       console.error(`ERROR: unknown option --${key}\n\n${HELP}`);
       process.exitCode = 1;
       return;
@@ -246,6 +278,8 @@ async function main(argv) {
   const assetsRoot = path.join(REPO, ASSETS_REL);
   const manifestName = flags['manifest-name'] || defaultManifestName(app);
   const bases = flags.base ? String(flags.base).split(',').map((s) => s.trim()).filter(Boolean) : [];
+  const pointers = flags.pointer ? String(flags.pointer).split(',').map((s) => s.trim()).filter(Boolean) : [];
+  const artId = readArtId();
 
   const started = Date.now();
   if (!fs.existsSync(assetsRoot)) {
@@ -262,6 +296,7 @@ async function main(argv) {
     console.log(`assets        ${assetsRoot}`);
     console.log(`out           ${outDir}`);
     console.log(`app           ${app}`);
+    console.log(`art id        ${artId || '(no data/assets.json + data/local-assets.json: the app falls back to the app version)'}`);
     console.log(`part limit    ${mb(partBytes)} raw per part`);
     console.log(`files         ${files.length}`);
     console.log(`raw bytes     ${rawBytes} (${mb(rawBytes)})`);
@@ -279,20 +314,28 @@ async function main(argv) {
     } else {
       console.log('asset-pack    (no --base given: nodejs-template/asset-pack.json is not written)');
     }
+    if (pointers.length) console.log(`pointers      ${pointers.join(', ')}`);
+    if (flags['pointer-out']) console.log(`pointer file  ${path.resolve(REPO, flags['pointer-out'])}`);
     console.log(`elapsed       ${secs(Date.now() - started)}`);
     return;
   }
 
-  const { manifest, totals } = await buildArtPack({ assetsRoot, outDir, app, partBytes, manifestName, log: (m) => console.log(m) });
+  const { manifest, totals } = await buildArtPack({ assetsRoot, outDir, app, partBytes, manifestName, artId, log: (m) => console.log(m) });
 
   let assetPack = null;
   if (bases.length) {
-    const written = await writeAssetPackJson({ app, bases, manifestName });
+    const written = await writeAssetPackJson({ app, bases, manifestName, pointers });
     assetPack = written.file;
+  }
+  let pointerFile = null;
+  if (flags['pointer-out']) {
+    pointerFile = path.resolve(REPO, flags['pointer-out']);
+    await fsp.writeFile(pointerFile, `${JSON.stringify(pointerPayload({ app, manifestName, bases }), null, 2)}\n`, 'utf8');
   }
 
   console.log('\n=== summary ===');
   console.log(`app            ${app}`);
+  console.log(`art id         ${artId || '(none)'}`);
   console.log(`files          ${totals.files}`);
   console.log(`raw bytes      ${totals.rawBytes} (${mb(totals.rawBytes)})`);
   console.log(`parts          ${totals.partCount}`);
@@ -304,6 +347,7 @@ async function main(argv) {
   console.log(`index          ${path.join(outDir, manifest.index.name)} (${manifest.index.bytes} bytes)`);
   console.log(`manifest       ${path.join(outDir, manifestName)}`);
   if (assetPack) console.log(`asset-pack     ${assetPack}`);
+  if (pointerFile) console.log(`pointer        ${pointerFile}`);
   console.log(`elapsed        ${secs(Date.now() - started)}`);
 }
 

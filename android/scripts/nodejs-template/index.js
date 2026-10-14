@@ -30,7 +30,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import { startHost } from './lan/host.mjs';
-import { ensureArt, artDirFrom, packBases, readPackConfig } from './assets.mjs';
+import { ensureArt, artDirFrom, packBases, readArtId, readPackConfig, resolvePackSource } from './assets.mjs';
 import { fillFromCommunity } from './community.mjs';
 
 /**
@@ -93,6 +93,11 @@ const artDir = artDirFrom(slimBuild && bridge ? path.resolve(process.cwd(), '..'
 if (artDir) process.env.SP_ASSETS_DIR = artDir;
 const pack = readPackConfig({ dir: HERE });
 const bases = packBases(pack.bases);
+/**
+ * The art this build ships (`data/assets.json` + `data/local-assets.json`): the pack must hold exactly this art, and a
+ * pack that does keeps working across app releases that only changed code (art-id.mjs).
+ */
+const ART_ID = readArtId(HERE);
 /** Where the art may come from: `pack` (our own release parts), `community` (the dumps of the official client) or `auto`. */
 const SOURCE = (process.env.SP_ASSET_SOURCE || 'auto').toLowerCase();
 
@@ -126,17 +131,26 @@ function prepareArt(why) {
         packError = Object.assign(new Error(`没有配置素材包来源（缺少 ${pack.file}）`), { code: 'E_CONFIG' });
       } else {
         try {
+          // Where the parts are right now, in order of precedence: an explicit `SP_PACK_BASE` (a developer or a
+          // maintainer testing another host) wins; then a small pointer file, if the build was given one, which may
+          // name another host, another release or another manifest; then the addresses baked into this APK. All
+          // pointers failing is normal — it silently means "the baked list".
+          const forced = (process.env.SP_PACK_BASE || '').trim();
+          const source = forced
+            ? { bases, manifestName: pack.manifest, source: 'SP_PACK_BASE' }
+            : await resolvePackSource({ pointers: pack.pointers, bases, manifestName: pack.manifest, log: artLog, signal: cancelArt.signal });
           const res = await ensureArt({
             artDir,
-            bases,
-            manifestName: pack.manifest,
+            bases: source.bases,
+            manifestName: source.manifestName,
             app: APP_VERSION,
+            artId: ART_ID,
             log: artLog,
             signal: cancelArt.signal,
-            onProgress: (p) => send('art-progress', JSON.stringify({ ...p, why, artDir })),
+            onProgress: (p) => send('art-progress', JSON.stringify({ ...p, why, artDir, source: source.source })),
           });
-          console.log(`[sp] art ${res.status}: ${res.files} files, ${Math.round(res.rawBytes / (1 << 20))} MB, ${res.seconds.toFixed(1)} s`);
-          send('art-done', JSON.stringify({ status: res.status, files: res.files, rawBytes: res.rawBytes, bytes: res.bytes, seconds: res.seconds, why, artDir }));
+          console.log(`[sp] art ${res.status}: ${res.files} files, ${Math.round(res.rawBytes / (1 << 20))} MB, ${res.seconds.toFixed(1)} s (pack from ${source.source})`);
+          send('art-done', JSON.stringify({ status: res.status, files: res.files, rawBytes: res.rawBytes, bytes: res.bytes, seconds: res.seconds, why, artDir, source: source.source }));
           return;
         } catch (err) {
           if (err?.code === 'E_CANCELLED') { artLog('cancelled — the server keeps serving what is on disk'); send('art-skipped', JSON.stringify({ reason: 'cancelled', artDir })); return; }

@@ -28,6 +28,7 @@ import https from 'node:https';
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { readPart, CONTAINER, DEFAULT_CODEC } from './art-container.mjs';
+import { artIdFrom } from './art-id.mjs';
 
 /** The state file inside the art directory (its presence + `complete` is the "art is ready" marker). */
 export const STATE_FILE = '.sp-pack.json';
@@ -47,6 +48,8 @@ const PROGRESS_MS = 200;
  * before the next one is tried. A part gets the longer MAX_REDIRECTS-timeout below: it is 50 MB, not 3 KB.
  */
 const SMALL_FILE_TIMEOUT_MS = 30_000;
+/** Timeout for one pointer (a 200-byte file on a host that may not answer at all). */
+const POINTER_TIMEOUT_MS = 10_000;
 
 /** An error the caller can act on: `code` is one of E_CONFIG / E_NETWORK / E_CORRUPT / E_DISK / E_CANCELLED. */
 export class ArtError extends Error {
@@ -109,6 +112,7 @@ export function packBases(baked = []) {
 /**
  * Read the baked-in pack description: `asset-pack.json` next to the entry point (staged by assemble-nodejs.mjs), or
  * `{ manifest, bases }` from the caller. Missing file → the caller's value (or an error).
+ * `pointers` are the small, stable URLs whose content replaces `manifest` + `bases` at run time (resolvePackSource).
  * @param {{ dir: string, manifest?: string, bases?: string[] }} opts
  */
 export function readPackConfig({ dir, manifest = '', bases = [] }) {
@@ -119,7 +123,51 @@ export function readPackConfig({ dir, manifest = '', bases = [] }) {
     app: String(json?.app || ''),
     manifest: String(manifest || json?.manifest || ''),
     bases: bases.length ? bases : (Array.isArray(json?.bases) ? json.bases.map(String) : []),
+    pointers: Array.isArray(json?.pointers) ? json.pointers.map(String) : [],
   };
+}
+
+/**
+ * The art id of the manifests this build ships (`data/assets.json`, `data/local-assets.json` next to the entry point).
+ * @param {string} dir the directory holding the entry point (the unpacked `<files>/nodejs/public`)
+ * @returns {string} 12 hex characters, or '' when the files are missing
+ */
+export function readArtId(dir) {
+  const read = (rel) => {
+    try { return JSON.parse(fs.readFileSync(path.join(dir, rel), 'utf8')); } catch { return null; }
+  };
+  return artIdFrom({ assets: read(path.join('data', 'assets.json')), local: read(path.join('data', 'local-assets.json')) });
+}
+
+/**
+ * Where the parts are right now: a pointer is a tiny, stable JSON whose content overrides the baked-in addresses, so
+ * moving 502 MB to another host (or another release) is a small commit instead of a new APK. Pointers are tried in
+ * order with the small-file timeout; every one of them failing is normal and silently falls back to the baked list.
+ *
+ * @param {{ pointers?: string[], bases: string[], manifestName: string, log?: Function, signal?: AbortSignal|null }} opts
+ * @returns {Promise<{ bases: string[], manifestName: string, source: string }>} source: the pointer URL or 'built in'
+ */
+export async function resolvePackSource({ pointers = [], bases = [], manifestName = '', log = () => {}, signal = null }) {
+  for (const url of pointers) {
+    try {
+      log(`[art] pointer ${url}`);
+      // eslint-disable-next-line no-await-in-loop
+      const buf = await httpGetBuffer(url, { signal, timeoutMs: POINTER_TIMEOUT_MS });
+      const json = JSON.parse(buf.toString('utf8'));
+      const list = Array.isArray(json?.bases) ? json.bases.map(String).filter(Boolean) : [];
+      if (json?.format !== PACK_FORMAT || !list.length) {
+        log(`[art] pointer ${url} is not usable (format ${json?.format}, ${list.length} base(s))`);
+        continue;
+      }
+      const normalised = list.map((u) => (u.endsWith('/') ? u : `${u}/`));
+      const name = String(json.manifest || manifestName);
+      log(`[art] using ${name} from ${normalised.length} base(s) named by that pointer`);
+      return { bases: normalised, manifestName: name, source: url };
+    } catch (err) {
+      log(`[art] pointer ${url}: ${err.message}`);
+    }
+  }
+  return { bases, manifestName, source: 'built in' };
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -210,10 +258,16 @@ async function freeBytes(dir) {
  * Whether the art tree looks complete according to the state file (and, with `verify`, according to the index).
  * @param {{ artDir: string, app?: string, verify?: boolean, index?: any, log?: Function }} opts
  */
-export async function artComplete({ artDir, app = '', verify = false, index = null, log = () => {} }) {
+export async function artComplete({ artDir, app = '', artId = '', verify = false, index = null, log = () => {} }) {
   const state = await readJson(path.join(artDir, STATE_FILE));
   if (!state || state.complete !== true || state.format !== PACK_FORMAT) return false;
-  if (app && state.app !== app) { log(`[art] the art in ${artDir} is for ${state.app}, this app is ${app}`); return false; }
+  // Same rule as the pack itself: the art decides when both sides know it, the app version otherwise.
+  if (state.artId || artId) {
+    if (state.artId !== artId) { log(`[art] the art in ${artDir} is ${state.artId || '(unknown)'}, this build ships ${artId || '(unknown)'}`); return false; }
+  } else if (app && state.app !== app) {
+    log(`[art] the art in ${artDir} is for app ${state.app}, this app is ${app}`);
+    return false;
+  }
   if (!verify || !index) return true;
   let checked = 0;
   let bytes = 0;
@@ -236,17 +290,33 @@ export async function artComplete({ artDir, app = '', verify = false, index = nu
  * Make the art tree complete: verify it, or download + unpack what is missing.
  *
  * @param {{
- *   artDir: string, bases: string[], manifestName: string, app?: string, log?: Function,
+ *   artDir: string, bases: string[], manifestName: string, app?: string, artId?: string, log?: Function,
  *   onProgress?: (p: object) => void, signal?: AbortSignal, retries?: number, verify?: boolean,
  * }} opts
+ *   app: this app's version — informational, used only when the pack carries no `artId` (a pack built before 0.2.6)
+ *   artId: the art this build ships (readArtId) — the pack must hold exactly that art, whatever app version built it
  * @returns {Promise<{ status: 'complete' | 'downloaded', files: number, rawBytes: number, bytes: number, seconds: number }>}
  */
-export async function ensureArt({ artDir, bases, manifestName, app = '', log = () => {}, onProgress = () => {}, signal = null, retries = DEFAULT_RETRIES, verify = process.env.SP_ART_VERIFY === '1' }) {
+export async function ensureArt({ artDir, bases, manifestName, app = '', artId = '', log = () => {}, onProgress = () => {}, signal = null, retries = DEFAULT_RETRIES, verify = process.env.SP_ART_VERIFY === '1' }) {
   if (!artDir) throw new ArtError('E_CONFIG', 'no art directory');
   if (!bases.length) throw new ArtError('E_CONFIG', 'no pack source (asset-pack.json / SP_PACK_BASE)');
   if (!manifestName) throw new ArtError('E_CONFIG', 'no pack manifest name (asset-pack.json)');
   await fsp.mkdir(artDir, { recursive: true });
   const started = Date.now();
+
+  // 0. the fast path: the state file says a verified tree is already here, and it is the tree this build ships. Then
+  // there is nothing to fetch at all — no manifest, no 1.5 MB index, no network — which is what a second launch and
+  // every launch after an app update that did not change the art should look like. SP_ART_VERIFY=1 skips this and
+  // re-hashes everything against the index below.
+  if (!verify && (artId || app)) {
+    const state = await readJson(path.join(artDir, STATE_FILE));
+    if (state?.complete === true && state.format === PACK_FORMAT
+      && (state.artId || artId ? state.artId === artId : state.app === app)) {
+      log(`[art] already complete: ${state.files ?? '?'} files, ${human(Number(state.rawBytes) || 0)} (art ${state.artId || state.app})`);
+      onProgress({ phase: 'done', bytes: 0, totalBytes: 0, speedBps: 0, etaMs: 0 });
+      return { status: 'complete', files: Number(state.files) || 0, rawBytes: Number(state.rawBytes) || 0, bytes: 0, seconds: (Date.now() - started) / 1000, index: null };
+    }
+  }
 
   // 1. the manifest — the only thing that decides whether there is anything to do at all
   onProgress({ phase: 'manifest', bytes: 0, totalBytes: 0 });
@@ -255,8 +325,16 @@ export async function ensureArt({ artDir, bases, manifestName, app = '', log = (
   if (manifest.container !== CONTAINER) throw new ArtError('E_CORRUPT', `${manifestUrl}: container ${manifest.container} is not ${CONTAINER}`);
   if (manifest.codec !== DEFAULT_CODEC) throw new ArtError('E_CORRUPT', `${manifestUrl}: codec ${manifest.codec} is not ${DEFAULT_CODEC}`);
   if (!Array.isArray(manifest.parts) || !manifest.parts.length) throw new ArtError('E_CORRUPT', `${manifestUrl}: no parts`);
-  if (app && manifest.app && manifest.app !== app) throw new ArtError('E_CORRUPT', `${manifestUrl}: the pack is for app ${manifest.app}, this app is ${app}`);
-  log(`[art] pack ${manifest.app}: ${manifest.fileCount} files, ${human(manifest.rawBytes)} raw in ${manifest.parts.length} part(s) (${human(manifest.partBytes)})`);
+  // The art, not the version, decides: an app keeps using the pack it already has when a release only changed code.
+  // A pack without `artId` (built before 0.2.6) falls back to the app version, which is what those packs were for.
+  if (manifest.artId) {
+    if (artId && manifest.artId !== artId) {
+      throw new ArtError('E_CORRUPT', `${manifestUrl}: the pack holds art ${manifest.artId}, this build ships ${artId}`);
+    }
+  } else if (app && manifest.app && manifest.app !== app) {
+    throw new ArtError('E_CORRUPT', `${manifestUrl}: the pack is for app ${manifest.app} (it names no art), this app is ${app}`);
+  }
+  log(`[art] pack ${manifest.artId || `for app ${manifest.app}`}: ${manifest.fileCount} files, ${human(manifest.rawBytes)} raw in ${manifest.parts.length} part(s) (${human(manifest.partBytes)})`);
   log(`[art] manifest from ${manifestUrl}`);
 
   // 2. the index (needed even for the "already complete" check: it says what the tree must hold)
@@ -281,7 +359,7 @@ export async function ensureArt({ artDir, bases, manifestName, app = '', log = (
   log(`[art] index: ${fileCount} files`);
 
   // 3. already there?
-  if (await artComplete({ artDir, app, verify, index, log })) {
+  if (await artComplete({ artDir, app, artId, verify, index, log })) {
     return { status: 'complete', files: fileCount, rawBytes: manifest.rawBytes || index.rawBytes || 0, bytes: 0, seconds: (Date.now() - started) / 1000, index };
   }
 
@@ -296,7 +374,8 @@ export async function ensureArt({ artDir, bases, manifestName, app = '', log = (
   await fsp.mkdir(tmpDir, { recursive: true });
   const statePath = path.join(artDir, STATE_FILE);
   const state = (await readJson(statePath)) || {};
-  const parts = { ...(state.app === (manifest.app || app) ? state.parts : {}) };
+  const sameArtSet = state.artId ? state.artId === (manifest.artId || artId) : state.app === (manifest.app || app);
+  const parts = { ...(sameArtSet ? state.parts : {}) };
   const totalBytes = manifest.parts.reduce((sum, p) => sum + Number(p.bytes || 0), 0);
   let doneBytes = manifest.parts.reduce((sum, p) => (parts[p.name]?.sha256 === p.sha256 ? sum + Number(p.bytes || 0) : sum), 0);
   let speed = 0;
@@ -348,7 +427,7 @@ export async function ensureArt({ artDir, bases, manifestName, app = '', log = (
         const unpacked = await unpackPart({ part, tmp, artDir, index, log, signal, onProgress: (n) => report({ phase: 'unpack', part: part.name, partIndex: i + 1, parts: manifest.parts.length, partBytes: 0, filesDone: n }) });
         parts[part.name] = { sha256: part.sha256, files: unpacked.files, bytes: part.bytes };
         // eslint-disable-next-line no-await-in-loop
-        await writeJson(statePath, { format: PACK_FORMAT, app: manifest.app || app, manifest: manifestName, complete: false, parts });
+        await writeJson(statePath, { format: PACK_FORMAT, app: manifest.app || app, artId: manifest.artId || artId, manifest: manifestName, complete: false, parts });
         // eslint-disable-next-line no-await-in-loop
         await fsp.rm(tmp, { force: true });
         doneBytes += Number(part.bytes || 0);
@@ -373,7 +452,7 @@ export async function ensureArt({ artDir, bases, manifestName, app = '', log = (
   }
 
   await writeJson(statePath, {
-    format: PACK_FORMAT, app: manifest.app || app, manifest: manifestName, complete: true,
+    format: PACK_FORMAT, app: manifest.app || app, artId: manifest.artId || artId, manifest: manifestName, complete: true,
     files: fileCount, rawBytes: manifest.rawBytes || index.rawBytes || 0, bytes: totalBytes,
     parts, finishedAt: new Date().toISOString(),
   });
