@@ -191,6 +191,22 @@ describe('art download (assets.mjs)', () => {
     }
   });
 
+  test('a caller without an art id does not invalidate a complete tree', async () => {
+    // A desktop run, the CLI or an older tool passes no art id. The tree on disk was verified under an id, so it must
+    // not look foreign — and the state file written before ids existed must not either (the app version still decides).
+    const server = await serve(packDir);
+    const artDir = path.join(root, 'art-dl');
+    try {
+      const noId = await ensureArt({ artDir, bases: [server.url], manifestName: 'assets-pack-0.2.5.json', app: '0.2.5', log: () => {} });
+      assert.equal(noId.status, 'complete', 'a complete tree stays complete');
+      assert.equal(noId.bytes, 0);
+      assert.ok(await artComplete({ artDir, app: '0.2.5' }));
+      assert.equal(await artComplete({ artDir, app: '9.9.9' }), false, 'but a different app version does not');
+    } finally {
+      await server.close();
+    }
+  });
+
   test('the art id decides, not the app version', async () => {
     const server = await serve(packDir);
     const artDir = path.join(root, 'art-dl');

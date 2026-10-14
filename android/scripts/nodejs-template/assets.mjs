@@ -255,17 +255,26 @@ async function freeBytes(dir) {
 }
 
 /**
+ * Whether a state file describes the art this caller wants. Ids are compared when *both* sides have one (that is the
+ * 0.2.6 rule: the art decides), otherwise the app version decides — a caller that passes no art id (a desktop run, a
+ * test, the CLI) must not make a complete tree look foreign, and neither must a state file written before ids existed.
+ * @param {any} state @param {{ app?: string, artId?: string, manifestArtId?: string }} want
+ */
+function sameArtSet(state, { app = '', artId = '', manifestArtId = '' } = {}) {
+  const mine = manifestArtId || artId;
+  if (state?.artId && mine) return state.artId === mine;
+  return !app || state?.app === app;
+}
+
+/**
  * Whether the art tree looks complete according to the state file (and, with `verify`, according to the index).
  * @param {{ artDir: string, app?: string, verify?: boolean, index?: any, log?: Function }} opts
  */
 export async function artComplete({ artDir, app = '', artId = '', verify = false, index = null, log = () => {} }) {
   const state = await readJson(path.join(artDir, STATE_FILE));
   if (!state || state.complete !== true || state.format !== PACK_FORMAT) return false;
-  // Same rule as the pack itself: the art decides when both sides know it, the app version otherwise.
-  if (state.artId || artId) {
-    if (state.artId !== artId) { log(`[art] the art in ${artDir} is ${state.artId || '(unknown)'}, this build ships ${artId || '(unknown)'}`); return false; }
-  } else if (app && state.app !== app) {
-    log(`[art] the art in ${artDir} is for app ${state.app}, this app is ${app}`);
+  if (!sameArtSet(state, { app, artId })) {
+    log(`[art] the art in ${artDir} is ${state.artId || `for app ${state.app}`}, this build wants ${artId || `app ${app}`}`);
     return false;
   }
   if (!verify || !index) return true;
@@ -310,8 +319,7 @@ export async function ensureArt({ artDir, bases, manifestName, app = '', artId =
   // re-hashes everything against the index below.
   if (!verify && (artId || app)) {
     const state = await readJson(path.join(artDir, STATE_FILE));
-    if (state?.complete === true && state.format === PACK_FORMAT
-      && (state.artId || artId ? state.artId === artId : state.app === app)) {
+    if (state?.complete === true && state.format === PACK_FORMAT && sameArtSet(state, { app, artId })) {
       log(`[art] already complete: ${state.files ?? '?'} files, ${human(Number(state.rawBytes) || 0)} (art ${state.artId || state.app})`);
       onProgress({ phase: 'done', bytes: 0, totalBytes: 0, speedBps: 0, etaMs: 0 });
       return { status: 'complete', files: Number(state.files) || 0, rawBytes: Number(state.rawBytes) || 0, bytes: 0, seconds: (Date.now() - started) / 1000, index: null };
@@ -374,8 +382,7 @@ export async function ensureArt({ artDir, bases, manifestName, app = '', artId =
   await fsp.mkdir(tmpDir, { recursive: true });
   const statePath = path.join(artDir, STATE_FILE);
   const state = (await readJson(statePath)) || {};
-  const sameArtSet = state.artId ? state.artId === (manifest.artId || artId) : state.app === (manifest.app || app);
-  const parts = { ...(sameArtSet ? state.parts : {}) };
+  const parts = { ...(sameArtSet(state, { app: manifest.app || app, artId, manifestArtId: manifest.artId }) ? state.parts : {}) };
   const totalBytes = manifest.parts.reduce((sum, p) => sum + Number(p.bytes || 0), 0);
   let doneBytes = manifest.parts.reduce((sum, p) => (parts[p.name]?.sha256 === p.sha256 ? sum + Number(p.bytes || 0) : sum), 0);
   let speed = 0;

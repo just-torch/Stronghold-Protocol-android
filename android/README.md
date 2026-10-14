@@ -179,6 +179,11 @@ pwsh -NoProfile -File android/scripts/build-apk.ps1 -NoArt -SkipAssemble
   `.scratch/test-slim-apk.mjs` 把 **slim APK 本身**解开，按插件的 cwd（`…/nodejs/public`）跑包里的入口点：
   服务器先起来（`[sp] listening on …`），素材在后台下完 12 634 个文件，随后 `/assets/` 提供的字节与仓库一致；
   第二次启动打印「art complete … 0.0 s」且不再取任何分卷。
+- **指针与素材身份（2026-10-14）**：`android` 分支根目录的 `pack.json` 两个镜像都实测能取到（`gh-proxy.com` 转发 raw 与 jsDelivr）；
+  指针全挂时回落到包内地址；搬走后的 `assets-0.2.5` 发布里，manifest、索引（按 manifest 里的 sha256 校验）与第一个 61 MB 分卷
+  都逐字节核对过；App 侧算出 `artId = 58cd79e523a4` 与包内 manifest 一致。仓库内新增 `android/test/art-download.test.js`（9 项，
+  随 `android/npm test` 跑，不需要网络）：指针命中/失效/兜底、`artId` 命中与不符、素材完整时**零请求**、断点续传（含忽略 `Range`
+  的服务器）、截断分卷、索引被改、文件与索引不符、源全挂、缺配置。
 - **仍未验证**：真机上的实际下载（这里没有 arm64 设备；`libnode.so` 只有 arm64），以及 Android 在前台/后台切换、
   网络切换（Wi-Fi ↔ 移动数据）、存储不足时的实际表现。
 
