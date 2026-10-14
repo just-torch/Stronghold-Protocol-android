@@ -545,6 +545,20 @@ pwsh -File android\scripts\build-apk.ps1 -Variant devtest  # 出可共存的测�
 pwsh -File android\scripts\build-apk.ps1 -NoArt           # 出 slim 变体（不含素材，首启在应用内下载，见上）
 ```
 
+### 发布页怎么写（2026-10-14 整理）
+
+发布页只回答玩家的问题，实现细节留给仓库文档（否则每发一版都要维护两份）：
+
+- **App 发布**：标题 `卫戍协议：盟约 · 安卓 <版本>（完整 <大小> / slim <大小>）`；正文五段——这个包是什么、
+  **两个包怎么选**（表格）、安装与要求（含 arm64 / Android 版本 / 一台开服 / 前台限制）、这一版包含什么（一段话）、
+  指向 `CHANGELOG.md` · `docs/FORK-DEVIATIONS.md` · 本文件的链接。
+- **素材包**：单独一个 tag（当前 `assets-0.2.5`），标题 `素材包 <版本>（数据，不是安装包）`，并**勾选 Pre-release**。
+  不勾的话它会成为 GitHub 的 “Latest”，把真正要下载的安装包挤到后面（`/releases/latest` 会指向它）。
+- **历史版本**：保留一个短正文（一句话 + 「已被最新版取代」+ 该版包含什么 + 安装要求），别整页删掉——老包的下载者
+  仍要能看懂自己下的是什么。
+- 正文改写用本地脚本 `.scratch/gh-release-edit.cjs edit <tag> --name … --body-file … [--prerelease true]`
+  （`show`/`bodies` 可以核对结果；不入仓库）。发布页正文与仓库文档不一致时，以仓库文档为准。
+
 ### slim 变体（不含素材的 40.6 MB 包）
 
 `-NoArt` 装配时跳过 `public/assets`，产物是 `android/dist/Stronghold-Protocol-<版本>-arm64-slim.apk`；它需要配一份素材包
