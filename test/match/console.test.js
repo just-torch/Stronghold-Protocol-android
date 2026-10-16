@@ -138,15 +138,22 @@ describe('debug console: chess and items (§21.33)', () => {
     h.invariants();
   });
 
-  test('a full hand AND temp is HAND_FULL (nothing is lost, the pool is not touched)', () => {
+  test('a full hand and a full visible temp still gains (0.3.0: the temp queue is a window, not a capacity limit)', () => {
     const h = consoleMatch();
     const ps = h.ps('p_0');
     const base = [...h.m.pool.entries.keys()][0];
     for (let i = 0; i < ps.hand.length; i++) ps.hand[i] = ps.newPiece('item', h.m.gd.shopItemsByTier[1][0]);
     for (let i = 0; i < ps.temp.length; i++) ps.temp[i] = ps.newPiece('item', h.m.gd.shopItemsByTier[1][0]);
     const left = h.m.pool.left(base);
-    assert.deepEqual(dbg(h.m, { t: 'g.dbgChess', chessId: base }), { error: 'HAND_FULL' });
-    assert.equal(h.m.pool.left(base), left, 'the copy is returned');
+    assert.deepEqual(dbg(h.m, { t: 'g.dbgChess', chessId: base }), { ok: true });
+    assert.equal(h.m.pool.left(base), Math.max(0, left - 1), 'the copy came out of the pool');
+    // upstream 0.2.6 (#630): gains past the five visible temp slots queue up behind them instead of being lost
+    const queued = ps.temp.slice(ps.temp.length - 1).filter(Boolean);
+    assert.equal(queued.length, 1, 'the gain waits in the hidden tail of temp');
+    assert.equal(h.m.gd.baseIdOf(queued[0].id), base);
+    // undo the test's own edit: the copies go back to the pool and temp keeps its five visible slots
+    ps.returnCopies(queued[0]);
+    ps.temp.splice(ps.temp.indexOf(queued[0]), 1);
     ps.hand.fill(null);
     ps.temp.fill(null);
     h.invariants();

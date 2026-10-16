@@ -12,6 +12,8 @@ import http from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { createStaticHandler } from '../server/index.js';
 import { serveDirs } from '../server/http/config.js';
+import { createAssetIndex, hash16 } from '../server/http/assetIndex.js';
+import { createManifestViews } from '../server/http/assetViews.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -73,12 +75,13 @@ function pruneEmptyDirs() {
 }
 
 /** An http server around the static handler, on an ephemeral port. */
-function serve({ assetsDir }) {
+function serve({ assetsDir, assetIndex = null }) {
   const handler = createStaticHandler({
     publicDir: PUBLIC,
     dataDir: path.join(ROOT, 'data'),
     sharedDir: path.join(ROOT, 'shared'),
     assetsDir,
+    assetIndex,
     log: { info() {}, warn() {}, error() {}, debug() {} },
   });
   const srv = http.createServer((req, res) => {
@@ -108,6 +111,20 @@ async function withServer(assetsDir, fn) {
     await fn(srv);
   } finally {
     await new Promise((resolve) => srv.close(resolve));
+  }
+}
+
+/** The same with a content-hash index over `assetsDir` (0.3.0: the index reads the external directory). */
+async function withIndexedServer(assetsDir, fn) {
+  const index = createAssetIndex({ publicDir: PUBLIC, rootDirs: { assets: assetsDir }, delayMs: 0 });
+  index.start();
+  await index.whenReady();
+  const srv = await serve({ assetsDir, assetIndex: index });
+  try {
+    await fn(srv, index);
+  } finally {
+    await new Promise((resolve) => srv.close(resolve));
+    index.close();
   }
 }
 
@@ -306,6 +323,58 @@ describe('serveDirs: the art directory is an option or SP_ASSETS_DIR', () => {
         assert.equal((await get(srv, '/index.html')).status, 200, 'the public mount keeps serving the client');
       });
     } finally {
+      removeCreated();
+      pruneEmptyDirs();
+    }
+  });
+});
+
+describe('the content-hash index reads the external art directory (0.3.0, `rootDirs`)', () => {
+  test('the `assets` root hashes the external directory, not the bundled public/assets', async () => {
+    const art = mkTmp('sp-art-');
+    const pub = mkTmp('sp-pub-');
+    put(art, 'char/avatar/x.png', 'external png');
+    put(pub, 'assets/char/avatar/x.png', 'bundled png');
+    const index = createAssetIndex({ publicDir: pub, rootDirs: { assets: art }, delayMs: 0 });
+    index.start();
+    await index.whenReady();
+    try {
+      assert.equal(index.hashOf('assets/char/avatar/x.png'), hash16(Buffer.from('external png')), 'the served bytes are the external ones');
+      assert.equal(index.hashOf('assets/char/avatar/nope.png'), null, 'a file the directory does not hold has no hash');
+    } finally {
+      index.close();
+    }
+  });
+
+  test('the served manifests carry those hashes and the hashed URL is immutable', async () => {
+    const art = mkTmp('sp-art-');
+    const dataDir = mkTmp('sp-data-');
+    put(art, 'char/avatar/avatar-assets-dir-test.png', 'indexed art');
+    const rel = 'assets/char/avatar/avatar-assets-dir-test.png';
+    fs.writeFileSync(path.join(dataDir, 'assets.json'), JSON.stringify({ chars: { t: { avatar: '/' + rel } } }));
+    const index = createAssetIndex({ publicDir: PUBLIC, rootDirs: { assets: art }, delayMs: 0 });
+    index.start();
+    await index.whenReady();
+    const views = createManifestViews({ dataDir, index });
+    try {
+      const view = await views.get('assets.json');
+      assert.ok(view, 'the index is ready, so there is a view');
+      const hash = index.hashOf(rel);
+      assert.match(view.body.toString('utf8'), new RegExp(`/assets/~${hash}/char/avatar/avatar-assets-dir-test\.png`));
+      const srv = await serve({ assetsDir: art, assetIndex: index });
+      try {
+        const hashed = await get(srv, `/assets/~${hash}/char/avatar/avatar-assets-dir-test.png`);
+        assert.equal(hashed.status, 200);
+        assert.equal(hashed.body, 'indexed art');
+        assert.match(hashed.cache, /immutable/, 'a URL naming the current bytes is cached for good');
+        const stale = await get(srv, '/assets/~0123456789abcdef/char/avatar/avatar-assets-dir-test.png');
+        assert.equal(stale.status, 200, 'another hash still serves the file');
+        assert.doesNotMatch(stale.cache, /immutable/, 'but not as immutable');
+      } finally {
+        await new Promise((resolve) => srv.close(resolve));
+      }
+    } finally {
+      index.close();
       removeCreated();
       pruneEmptyDirs();
     }

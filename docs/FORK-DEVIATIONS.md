@@ -177,6 +177,79 @@ fork files upstream never touches, 104 fork-only files, and 61 changed on both s
 
 ---
 
+## Merge notes (v0.3.0, this tree)
+
+v0.2.6 and v0.3.0 are two releases on top of the tree the v0.2.5 merge left ([history/0.2.6.md](history/0.2.6.md),
+[history/0.3.0.md](history/0.3.0.md)): 0.2.6 is the official battle effects (DESIGN §33), the bot's placement and
+purchasing, the expandable temp queue (PR #630), the multi-language voice dubs, the rewritten 统计 screen and the asset
+pack, and 0.3.0 is the whole plugin system (data / DSL / cosmetic / UI plugins, the `/studio/` workbench, Forge import,
+the script sandbox and the site CSP). Nothing in the table below changes: upstream re-implemented no fork rule and
+dropped none. The merge was resolved against the **v0.2.5 tag's source** (base) with the **v0.3.0 tag's source** as
+theirs — 924 files identical, 372 upstream-only changes, 400 new upstream files, 37 fork files upstream never touches,
+117 fork-only files, and 62 changed on both sides (25 of them needed a decision).
+
+* **What the fork's own features had to be re-attached to**: upstream rewrote the three files the fork's Android work
+  lives in, so each is a hand merge rather than a line merge:
+  * `server/http/static.js` — upstream added the plugin routes (`/plugins/`, `/cs/`, `/vs/`, `/p/`), the studio guard,
+    the sim-worker CSP and the content-hash cache options; the fork's multi-directory mounts (the `assetsDir` mount of
+    §21.52 plus `resolveMountFile` / `canFallBack` / `answerStatFailure` / `answerEmptyLocalArt`) are the new mount
+    loop, with upstream's studio / simWorker / `hashedFileOpts` guards applied to the resolved file. The `indexed`
+    check now also covers the `assets` mount (the external art directory is served with the same content-hash URLs).
+  * `server/index.js` — the fork's `console` option is set on the `Lobby` right after `createSessionStack` (still not
+    part of upstream's `LOBBY_OPTION_KEYS`), the fork's "wait for the queued `room.closed` frames" block sits between
+    `network.close()` and upstream's `assetIndex.close()`, and the asset index is built with
+    `rootDirs: { assets: assetsDir }` when an external art directory is configured.
+  * `server/http/assetIndex.js` — one new option, `rootDirs`, maps a root to a directory of its own, so the external
+    art directory is indexed under the same `assets/…` rels the static handler serves
+    (`test/assets-dir.test.js` pins both the hashing and an `immutable` hashed URL through the `assets` mount).
+  * `server/http/media.js` / `http/config.js` — the fork's `mediaRoots()` list of audio roots plus upstream's
+    `{ urlHash, assetIndex }` argument; `serveDirs` returns `assetsDir` beside upstream's `pluginsDir`.
+  * `server/lobby.js` — the fork's `isLoopbackIp` import and its `console` seat field beside upstream's
+    `seatSettings(room, s, data)` filtering and the `DIFFICULTIES` / `charPotentialChanges` imports.
+  * `public/js/screens/game.js`, `public/js/ui/gameLogic/shortcuts.js`, `shared/constants.js`,
+    `server/sim/content/support/index.js`, `tools/fetch-assets.mjs` — the fork's own additions combined with
+    upstream's (the 作战统计 block and the new `W` hotkey, `bodyInRange`, `--no-optional-voice`, the plugin error
+    codes) instead of one side winning.
+  * `public/i18n/*.json` — merged at key level again: upstream's 1789 keys in their order, then the fork's 77 msgids
+    (`稀有度` is upstream's now, and took upstream's Japanese `レアリティ` over the fork's `レア度`; all four packs are
+    100 % clean under `node tools/i18n.mjs check --all --strict`).
+  * `public/js/render/units.js` / `app.js` — §21.50's `syncView(…, downIds)` guard survived upstream's rewrite of the
+    view sync untouched, and `app.js` still passes the newest snapshot's `down` list.
+  * docs — upstream's new text with the fork's parts re-appended: the §31–§33 rows and the §21.30–§21.51 row in
+    `docs/DESIGN.md`, the 休整期 sentence in `docs/PLAYING.md` (upstream's drag-to-prepare text plus the fork's
+    two-press ready), the measured asset figures in `docs/DEPLOY.md`, and the console section in `docs/PLAYING.md`
+    (still §14).
+* **The golden corpus**: `npm run golden:update` recomputed all **288** scenarios (upstream's 21 matches, one more than
+  v0.2.5; the fork's corpus grew with it). Exactly **two** moved, both §21.31 / §21.43:
+  `bond-kjeragShip-high` (`.hooks.statusApplied` 1538 → 1842, `.events.status` 26 → 27) and
+  `bond-victoriaShip-high` (193 → 386 — the fork's membership reading exactly doubles upstream's own number again).
+  `roster` / `fields` / `matches` / `standins` / `diy` are byte-identical to upstream's.
+* **Upstream tests the fork had to adapt** (they pin upstream's own values or assume a checkout — never a rule):
+  * `test/match/console.test.js` — the fork's own test asserted `HAND_FULL` for a full hand and temp; upstream 0.2.6
+    (PR #630) made temp an expandable queue, so it now asserts the queued copy and the pool charge. The rule is
+    upstream's; the test follows it (`ISSUES-FIXLOG.md` §10.3).
+  * `test/asset-index.test.js` — its linked-folder case needs a directory symlink, which Windows without Developer Mode
+    refuses with `EPERM`; that one case is skipped where the system refuses (the rest of the suite runs).
+  * `tools/package.mjs` — `trackedFiles` / `dirtyFiles` fall back to walking the tree when `git` cannot answer (this
+    fork's working copy is not a checkout: it publishes through the GitHub API). A real checkout is unchanged.
+  * `test/scene-assets.test.js` (`fileURLToPath`) and `test/ui/text-scale.test.js` (`.15rem`, the console stylesheet)
+    keep the v0.2.5 adaptations, which still apply.
+  * `test/ui/playtest2.real.e2e.test.js` — upstream's new `assertPen` in prep with the fork's `client.ready()`.
+* **Assets**: the three manifests (`data/assets.json` 16 712 URLs, `data/local-assets.json` 1 690,
+  `data/local-fx.json` 12 534) hold **30 936** paths and every one is on disk. They come from the **full**
+  `Stronghold-Protocol-v0.3.0.zip` (840 MB): 6 818 of its 6 837 `MANIFEST.json` entries are byte-identical to the
+  v0.3.0 tree (the rest are `npm install` outputs, the release staging's rewritten doc links and npm's own
+  bookkeeping — no code file differs), and `public/assets/**` was then overwritten / completed by size difference
+  (18 403 files, 388.9 MB). The new local overlay is 14 309 files / 365 MB — the 12 534 official **battle effects**
+  (DESIGN §33) plus the refreshed scene bundles, the new `mesh/trap_110` group and `scene/tex` files upstream added.
+  `public/assets` is 31 021 files / 1 124 MB. None of it is in the repository (see `ISSUES.md` §4).
+* **`eslint.config.js`**: upstream's own file merged cleanly and the fork's ignores (`.scratch/**`, the `android/` build
+  outputs) are still there — `npm run lint` is 0 errors on this machine.
+* **Known upstream nit kept as-is**: `node tools/check-imports.mjs` still lists three `sim-node` violations in
+  `server/sim/nodeData.js` in the pristine v0.3.0 tag too; the checker is non-strict by default.
+
+---
+
 ## The fork's sections, verbatim (from the pre-merge `docs/DESIGN.md`)
 
 Section numbers unchanged. v0.2.0 status lines are annotations added by the merge; the section bodies are as the fork
@@ -253,7 +326,7 @@ User: 「给每个卫戍干员都加语音」, then, after the first build, 「�
 - **Where it lives**: the panel is `ui/console.js` (one overlay of its own — 干员 / 装备 / 资源 / 盟约 tabs, a search + tier filter, a command line — built from the modal frame's classes but with a light, blur-free backdrop, so the game it is setting up stays readable behind it; the outer div keeps the `modal` class, so the game's R / F / D / Space stay blocked while it is open), opened by the corner's terminal button or the `` ` `` key and mounted by `screens/game.js` **only while `m.private.console` is true**. Its model half — the row builders, the filters, the steppers, the command parser — is hookless (`test/ui/console.test.js`).
 - **Who may**: the server, never the client. The lobby decides it per connection in `startMatch` (`consoleAllowed(console, session.addr)`: loopback only under the default `'auto'`), so the packaged Android app and a desktop dev browser have the console while a client over the LAN or the internet does not; `SP_CONSOLE=1` / `0` (`Lobby` option `console`) forces it on / off, and `Match` seats built directly (tests, tools) have it off unless the seat asks. A seat without it gets `ERR.NO_CONSOLE` for every `g.dbg*` — the console does not exist for it (`isLoopbackIp` is strictly narrower than the platform's `isLocalIp`: a tunnel's public client resolves to its own address, so it never qualifies).
 - **The five intents** (`server/match/console.js`; each a thin wrapper over the API the game itself uses, so the invariants hold for console-made state too):
-  - `g.dbgChess {chessId}` → `PlayerState.acquireChess` with `source: 'console'`: ANY chess record, elite ids included. The shared pool is consulted but never required — a copy is taken when one is left, and a banned / hidden / exhausted operator is created holding 0 copies, exactly like an effect grant with the pool empty (pool.js); merges and the hand → temp overflow behave as for any gain (a third copy still merges to the elite). `HAND_FULL` when hand **and** temp are full.
+  - `g.dbgChess {chessId}` → `PlayerState.acquireChess` with `source: 'console'`: ANY chess record, elite ids included. The shared pool is consulted but never required — a copy is taken when one is left, and a banned / hidden / exhausted operator is created holding 0 copies, exactly like an effect grant with the pool empty (pool.js); merges and the hand → temp overflow behave as for any gain (a third copy still merges to the elite). It answered `HAND_FULL` while hand **and** temp were full until upstream 0.2.6 (PR #630) made the temp queue an expandable one — a gain now queues behind the five visible slots instead (`server/match/player/pieces.js` `stow`), so the fork's branch is the defensive contract with `acquireChess`, not the normal answer (`test/match/console.test.js` pins the queued copy).
   - `g.dbgItem {itemId}` → `acquireItem` (an identical normal pair merges into the golden item).
   - `g.dbgFunds {funds}` → set 资金 outright (0 … 9999; **no** stats — `fundsGained` / `gold` stay the player's own record).
   - `g.dbgLayers {bondId, layers}` → set one bond's 盟约层数 outright (0 … the official `BOND_LAYER_CAP` 999; 0 forgets the entry). A direct write with no `onLayers`: a tester sets a state, he does not play a gain, so layer 特质 do not react (the settling writers go through `addLayers` for the same reason). Layers still do not activate a bond — members do.
@@ -435,6 +508,7 @@ User: 「给每个卫戍干员都加语音」, then, after the first build, 「�
 - **Where the art lives, and why not in `public/assets`**: `@jadejr/capacitor-nodejs` copies the whole unpacked project out of the APK and **deletes it whenever the APK version changes** (`copyNodeProjectFromAPK`: `isAppUpdated()` → `DeleteDir`), so art downloaded into `public/assets` would be re-downloaded after every app update. It therefore lives in `<files>/nodejs/art` — the example of the new server option: `SP_ASSETS_DIR` (or the `assetsDir` option of `startServer`) makes `serveDirs` and the static handler serve `/assets/…` and `/media/…` from there first and fall back to the bundled `public/assets`; unset, the feature is off and the server behaves exactly as before. `tools/fetch-assets.mjs` reads the same variable, and its `main(argv)` is exported so a program without a second Node binary can run a fetch in-process (the app has no `node` executable to spawn).
 - **Fallback** (`community.mjs`, `SP_ASSET_SOURCE=pack|community|auto`, default `auto`): when the parts cannot be reached at all, the app runs the repository's own `tools/fetch-assets.mjs` — staged into the slim APK together with the research tables its plan reads and the dependency closure of the Spine parser (43 packages / 9.5 MiB of JavaScript, ~3 MB in the APK) — as `--add-only --asset-source=mirror` against the community dumps a PC install uses. Known limit: those dumps carry no `assets/local/**` (the 3D battlefield scenes, mesh materials and the local-client enemy/token models come from an installed Arknights client, 84.7 MB packed), so a community-only phone keeps the placeholder board and the next launch retries the pack for the rest. The launcher says so instead of pretending the art is complete.
 - **Trade-offs** (documented for the player in `android/README.md`): the slim install needs a network for its first launch and ~700 MB of free space, a 502.5 MB download (the same bytes as before, later), and the download runs only while the app is in the foreground (an interrupted part is resumed, not restarted). In exchange the APK is 14× smaller, updates are ~40 MB instead of 561 MB, and the APK's own bytes are not stored twice.
+- **0.3.0 additions** (the v0.3.0 merge notes above have the merge side): the same "outside the wiped tree" rule now covers **plugins** — `nodejs-template/index.js` passes `pluginsDir` = `<files>/nodejs/plugins` to `startServer` (the `pluginsDir` option of `serveDirs`) while the templates, guides and schemas ship *inside* the tree (`assemble-nodejs.mjs` mirrors `plugins/` and `schemas/`, exactly as the Docker image splits them with `SP_PLUGIN_RESOURCES`); and the **content-hash index** now reads the external art directory (`rootDirs: { assets: assetsDir }`, server/index.js), so a phone that keeps its art outside the install gets the same `/assets/~<hash>/…` URLs, year-long cache and `immutable` answers as a bundled `public/assets` — measured on the tree extracted from the 0.3.0 APK: `[assets] content hashes: 30 965 files … 5.7 s`, `/data/assets.json` served with all 17 379 URLs hashed, `/media/~<hash>/bgm/…` and the hashed `.mp3` both 200 with `immutable`. The measured sizes of this release (816.8 MB full / 42.0 MB slim / a 725 MB art pack in 17 parts) are in `android/README.md`.
 - **Verified** on this machine end to end (`.scratch/test-slim-e2e.mjs`, `.scratch/test-art-negatives.mjs`, `.scratch/test-slim-apk.mjs`, `.scratch/test-real-urls.mjs` — never shipped): the real 502.5 MB pack downloaded from a local server with the first base deliberately dead (base rotation), 12 634 files / 659.6 MB unpacked in 34–38 s, every file byte-identical to the repository's `public/assets`, the packed set exactly the repository's art minus the 35 pruned `local/scene/**/*.png` sources (26.4 MB), a second run a no-op, a 3 MB partial part resumed and completed, and a game server with `SP_ASSETS_DIR` serving the downloaded bytes, the bundled client, `/media/…` audio and 404s unchanged. The **slim APK itself** was unpacked and its entry point run the way the plugin does (cwd `…/nodejs/public`): the server listens first, the art arrives afterwards, and a second launch logs `art complete … 0.0 s` without fetching a part. Then the **published addresses** were used for real (mirror first): 12 634 files / 502.5 MB in 281.7 s (1.78 MB/s), every file verified against the index. Failure modes: a Range-ignoring server still ends with a correct part, a truncated part and a file that contradicts the index are `E_CORRUPT` after the retry budget, a pack for another app version is refused, dead sources are `E_NETWORK`, damage is noticed by the verification pass, and the community fallback loads and honours its argv in-process. The pointer path was checked against the live files: both `pack.json` mirrors resolve, a dead pointer falls back to the baked list, and the moved release's manifest, index (hash checked against the manifest) and first 61 MB part are intact. `android/test/art-download.test.js` (10 cases, in the repository, `npm test` in `android/`) pins all of this down without a network: pointer hit / miss / fallback, art-id hit and mismatch, the no-request fast path, resume against a Range-ignoring server, truncated part, tampered index, a file that contradicts the index, dead source and missing configuration. Not verified: the actual download on a phone (no arm64 device here), and Android killing the app in the background.
 
 ---

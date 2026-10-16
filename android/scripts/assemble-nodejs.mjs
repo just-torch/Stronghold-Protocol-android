@@ -64,8 +64,13 @@ const CONSOLE_TOKEN = '__SP_CONSOLE__';
 const SLIM_TOKEN = '__SP_SLIM__';
 const log = (...a) => console.log(...a);
 
-/** Directories copied verbatim from the repository into web/nodejs/. */
-const MIRRORED = ['server', 'shared', 'data', 'public'];
+/**
+ * Directories copied verbatim from the repository into web/nodejs/. `plugins` and `schemas` joined in 0.3.0: the
+ * plugin studio reads its templates from `plugins/_template` (server/studio/gameData.js) and the manifests name
+ * `schemas/*.schema.json`, so the author side of the plugin system works on the phone too (the player's own plugins
+ * live outside this tree — nodejs-template/index.js `pluginsDir`).
+ */
+const MIRRORED = ['server', 'shared', 'data', 'public', 'plugins', 'schemas'];
 
 // ---------------------------------------------------------------------------------------------------
 // helpers

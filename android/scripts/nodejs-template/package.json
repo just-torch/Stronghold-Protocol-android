@@ -1,6 +1,6 @@
 {
   "name": "stronghold-protocol-nodejs",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "private": true,
   "description": "The game server, executed by the embedded Node.js runtime inside the Android app.",
   "license": "GPL-3.0-or-later",

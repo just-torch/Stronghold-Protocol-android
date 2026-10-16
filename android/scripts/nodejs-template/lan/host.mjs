@@ -26,7 +26,9 @@ export function defaultHostName() {
  * An announcement failure is never fatal: the phone must still be playable (and joinable by anyone who types the
  * address) on a device with no Wi-Fi, or when another instance already holds the discovery port.
  *
- * @param {{ port?: number, host?: string, name?: string, announce?: boolean, log?: (message: string) => void }} [opts]
+ * @param {{ port?: number, host?: string, name?: string, announce?: boolean, log?: (message: string) => void,
+ *           pluginsDir?: string }} [opts] pluginsDir: where the phone's own plugins live (outside the project tree the
+ *           Capacitor plugin deletes on an app update; the templates stay in the project — nodejs-template/index.js)
  * @returns {Promise<{ srv: any, announcer: any, lan: string[], name: string,
  *                     close: () => Promise<void> }>}
  */
@@ -36,7 +38,7 @@ export async function startHost(opts = {}) {
   const log = typeof opts.log === 'function' ? opts.log : () => {};
   const name = (opts.name && String(opts.name)) || defaultHostName();
 
-  const srv = await startServer({ port, host: bindHost });
+  const srv = await startServer({ port, host: bindHost, ...(opts.pluginsDir ? { pluginsDir: opts.pluginsDir } : {}) });
 
   let announcer = null;
   if (opts.announce !== false) {

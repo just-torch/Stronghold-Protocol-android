@@ -26,30 +26,32 @@
 
 | 项目 | 值 |
 |---|---|
-| 文件 | `android/dist/Stronghold-Protocol-0.2.5-arm64.apk` |
-| 体积 | **561.6 MB**（APK 内 13 721 个条目；0.2.0 的自选干员素材与语音把它从 0.1.4 的 479.9 MB 推上来，0.2.1 补入 39 个召唤物模型 +3.6 MB，0.2.5 又随素材清单补入新干员、255 个音效与整套日文语音 +91 MB、本地叠加层 11 张官方战场场景 +61 MB；随后一轮压缩去掉 226 MB（−28.7 %），见下） |
+| 文件 | `android/dist/Stronghold-Protocol-0.3.0-arm64.apk` |
+| 体积 | **816.8 MB**（APK 内 33 987 个条目；0.2.0 的自选干员素材与语音把它从 0.1.4 的 479.9 MB 推上来，0.2.1 补入 39 个召唤物模型 +3.6 MB，0.2.5 又随素材清单补入新干员、255 个音效与整套日文语音 +91 MB、本地叠加层 11 张官方战场场景 +61 MB，随后一轮压缩去掉 226 MB（−28.7 %）；0.3.0 再随素材清单补入三套配音 **+168.7 MB** 与官方战斗特效 **+69.0 MB**，见下） |
 | 架构 | `arm64-v8a`（只有这一个；2016 年以后几乎所有的 Android 手机） |
 | 系统要求 | `minSdkVersion 23`（Android 6.0）／`targetSdkVersion 35`；**建议 Android 8.0 以上**，并保持「Android System WebView」/ Chrome 为较新版本 |
 | 内嵌运行时 | Node.js 24.5.0（`lib/arm64-v8a/libnode.so`，约 92 MB；0.2.5 起压缩存放，装机时由系统解压到私有 `lib/arm64/`） |
-| 内嵌服务器 | `assets/public/nodejs/`：`server/ shared/ data/ public/ node_modules/ws lan/` + `index.js` |
-| 内含素材 | 打包进 APK 的 `public/` 是 12 851 个文件 / 约 673 MB（其中 `public/assets/**` 12 634 个文件 / 约 660 MB：192 名干员的中文与日文两套战斗语音、战斗 BGM、官方 3D 棋盘贴图、11 张官方战场场景（`/assets/local/scene/**` 的 `.webp` + `.bin`，57 个文件）、2 688 个日文语音与 120 个召唤物模型文件）与 40 个召唤物模型；仓库里还多 35 个场景 `.png` 源图 26 MB，打包时剔除——客户端只读 `.webp`。前提是打包时 `public/assets/local/` 已存在 |
+| 内嵌服务器 | `assets/public/nodejs/`：`server/ shared/ data/ public/ plugins/ schemas/ node_modules/ws lan/` + `index.js`（`plugins/` 与 `schemas/` 是 0.3.0 的作者资源：插件工作台从 `plugins/_template` 读模板，玩家自己的插件存在项目之外，见下） |
+| 内含素材 | 打包进 APK 的 `public/` 是 31 331 个文件 / 约 1 140 MB（其中 `public/assets/**` 31 021 个文件 / 约 1 124 MB：192 名干员的**中 / 日 / 英 / 韩 / 本土**五套战斗语音共 11 088 个文件、战斗 BGM、官方 3D 棋盘贴图、11 张官方战场场景（`/assets/local/scene/**` 的 `.webp` + `.bin`）、**12 534 个官方战斗特效文件**（`/assets/local/fx/**`，DESIGN §33）、40 个召唤物模型）；仓库里还多 35 个场景 `.png` 源图 26 MB，打包时剔除——客户端只读 `.webp`。前提是打包时 `public/assets/local/` 已存在 |
 | 服务器依赖 | 只有 `ws` |
 | 新增权限 | **无**。自动搜索走 UDP 广播，`INTERNET` 权限就够（组播才需要 `CHANGE_WIFI_MULTICAST_STATE`） |
 | 发现协议端口 | UDP `45777`（主机广播到这里，加入方监听）与 `45778`（加入方询问，主机监听），见[局域网自动发现](#局域网自动发现) |
 | 签名 | 自签名，v1 + v2 方案（`android/android/stronghold-release.jks`，由构建脚本自动生成） |
 | 应用名 / 包名 | 卫戍协议：盟约 / `io.github.sganggs.strongholdprotocol` |
-| slim 变体 | `android/dist/Stronghold-Protocol-0.2.5-arm64-slim.apk`，**40.6 MB**（不含 `public/assets`，首启在应用内下载 502.5 MB 素材包，素材包在**单独的** [assets-0.2.5](https://github.com/just-torch/Stronghold-Protocol-android/releases/tag/assets-0.2.5) 发布里），见[素材包与首启下载](#素材包与首启下载-slim-变体2026-10-13) |
+| slim 变体 | `android/dist/Stronghold-Protocol-0.3.0-arm64-slim.apk`，**42.0 MB**（不含 `public/assets`，首启在应用内下载 **725 MB / 17 个分卷**的素材包，素材包在**单独的** [assets-0.3.0](https://github.com/just-torch/Stronghold-Protocol-android/releases/tag/assets-0.3.0) 发布里），见[素材包与首启下载](#素材包与首启下载-slim-变体2026-10-13) |
 
 另外还可以构建一份**测试版 APK**（`-Variant devtest`，见[测试版 APK](#测试版-apkadjacent)）：同一个游戏、另一个包名
-（`…strongholdprotocol.dev`）、应用名「卫戍协议：盟约·测试」、版本号 `0.2.5-dev`，**可以和正式版同时装在手机上**，
+（`…strongholdprotocol.dev`）、应用名「卫戍协议：盟约·测试」、版本号 `0.3.0-dev`，**可以和正式版同时装在手机上**，
 并且内嵌服务器的**调试控制台**强制开着。
 
 APK 体积较大的原因是**素材必须随包分发**：主机手机要能在完全离线、不联外网的情况下把素材发给同一 Wi-Fi 里的
 其他玩家。这和 Releases 里的「整合包」是同一个思路。
 
-### 体积是怎么压下来的（2026-10-13）
+### 体积是怎么压下来的（2026-10-13；0.3.0 沿用同一套设置并复核）
 
 第一版 0.2.5 包 787.6 MB，压缩后 **561.6 MB**（−226 MB / −28.7 %）。按每个条目「压缩后 / 原始」实测了一遍，只有三类值得动，且**没有改任何素材内容**：
+
+0.3.0 沿用同一套设置：装配树 1.05 GiB → **816.8 MB**（−235 MB / −22.4 %）。逐目录实测这 +255.2 MB 几乎全是内容：**干员语音 +168.7 MB**（新增英语 / 韩语 / 本土语言三套，语音文件从 5 376 增至 11 088 个）、**官方战斗特效 +69.0 MB**（12 534 个文件，`.webp` 与 `.json`）、本地引导图与场景 +6.4 MB，代码与依赖不到 3 MB：
 
 | 手段 | 省下 | 代价 |
 |---|---|---|
@@ -62,26 +64,26 @@ APK 体积较大的原因是**素材必须随包分发**：主机手机要能在
 
 ### 素材包与首启下载（`-slim` 变体，2026-10-13）
 
-561.6 MB 里 **520.8 MB 是 `public/assets`**（12 634 个文件 / 659.6 MB 原始），其余全部——内嵌 Node 运行时、客户端、服务器、
-数据、字体——只有 **37.9 MB**。所以另出一个 **slim 变体**：APK 里不含素材，**40.6 MB**，首次「建立主机」时在应用内下载素材包
-（**502.5 MB / 11 个分卷**），存进应用私有目录。正式包继续照原样发布，两者包名相同（同一台手机装的是其中一个）。
+816.8 MB 里 **约 780 MB 是 `public/assets`**（31 021 个文件 / 1 124 MB 原始），其余全部——内嵌 Node 运行时、客户端、服务器、
+数据、字体——只有 **约 37 MB**。所以另出一个 **slim 变体**：APK 里不含素材，**42.0 MB**，首次「建立主机」时在应用内下载素材包
+（**725 MB / 17 个分卷**，30 958 个文件 / 1 020.1 MB 原始），存进应用私有目录。正式包继续照原样发布，两者包名相同（同一台手机装的是其中一个）。
 
 | | 正式包 | slim 变体 |
 |---|---|---|
-| 安装包 | 561.6 MB | **40.6 MB** |
-| 首次启动 | 解包约 695 MB（几十秒） | 服务器几秒就绪，素材在后台下载（502.5 MB；4G 下约 10–30 分钟） |
-| 每次更新 | 重新下载约 561 MB | 约 40 MB（素材不用重下） |
-| 占用空间 | APK 561 MB + 解压 695 MB ≈ 1.26 GB | APK 41 MB + 代码与素材约 700 MB ≈ 0.75 GB |
+| 安装包 | 816.8 MB | **42.0 MB** |
+| 首次启动 | 解包约 1.05 GB（几十秒） | 服务器几秒就绪，素材在后台下载（725 MB；4G 下约 15–40 分钟） |
+| 每次更新 | 重新下载约 816 MB | 约 42 MB（素材不用重下） |
+| 占用空间 | APK 816 MB + 解压 1.05 GB ≈ 1.87 GB | APK 42 MB + 代码与素材约 1.05 GB ≈ 1.1 GB |
 | 离线 | 装完即玩 | 首次必须联网；下载完成后同样离线可用（联机时由主机提供素材，客人不需要自己的） |
 
 流程与保证：
 
 1. 点「建立主机」后服务器**立刻**起来（同一 Wi-Fi 的朋友马上能加入，`server-ready` 不被下载拖延），素材在后台按分卷下载。
-2. 每个分卷先按 `assets-pack-0.2.5.json` 里的 sha256 校验整体，解开时**逐个文件**再对一遍 `assets-index-0.2.5.json` 里的
+2. 每个分卷先按 `assets-pack-0.3.0.json` 里的 sha256 校验整体，解开时**逐个文件**再对一遍 `assets-index-0.3.0.json` 里的
    sha256（写 `*.part-tmp` 再改名），对不上就重下该分卷；网络中断、切后台被系统杀掉都只损失当前分卷，重进应用会**断点续传**
    （HTTP `Range`）。清单里多出来的路径、`..`、缺文件、包对不上当前版本，都会在写盘前拒绝。
 3. 下载状态写在 `<素材目录>/.sp-pack.json`：下次启动发现完整就整段跳过（写这个文件之前已经逐文件校验过，所以不必每次重算
-   660 MB 的 sha256；`SP_ART_VERIFY=1` 可以强制全量校验）。
+   1 020 MB 的 sha256；`SP_ART_VERIFY=1` 可以强制全量校验）。
 4. 素材目录在 `public/` **之外**：插件在每次**应用更新**时会删掉整个解包目录重拷（`copyNodeProjectFromAPK` 的 `isAppUpdated()`），
    放在 `public/assets` 里的素材会跟着丢。服务器用 `SP_ASSETS_DIR` 把 `/assets/**` 与 `/media/**` 指到 `<files>/nodejs/art`，
    找不到再回落到包内 `public/assets`（这一条是仓库侧的改动，见 `docs/FORK-DEVIATIONS.md` §21.52 与 `docs/DEPLOY.md` §4.1）。
@@ -96,10 +98,10 @@ APK 体积较大的原因是**素材必须随包分发**：主机手机要能在
 维护者：构建与发布。
 
 ```bash
-# 1. 打素材包：public/assets → android/dist/art/（11 个 .part + 索引 + manifest），同时写出包内地址文件与指针文件。
+# 1. 打素材包：public/assets → android/dist/art/（17 个 .part + 索引 + manifest），同时写出包内地址文件与指针文件。
 #    --base 是素材托管地址（按顺序试，镜像放前面）；--pointer 是「换托管只改它」的小文件地址；
 #    --pointer-out 把指针内容写到仓库根目录的 pack.json（提交到 android 分支即生效）。
-node android/scripts/pack-art.mjs   --base https://gh-proxy.com/https://github.com/just-torch/Stronghold-Protocol-android/releases/download/assets-0.2.5/   --base https://github.com/just-torch/Stronghold-Protocol-android/releases/download/assets-0.2.5/   --pointer https://gh-proxy.com/https://raw.githubusercontent.com/just-torch/Stronghold-Protocol-android/android/pack.json   --pointer https://cdn.jsdelivr.net/gh/just-torch/Stronghold-Protocol-android@android/pack.json   --pointer-out pack.json
+node android/scripts/pack-art.mjs   --base https://gh-proxy.com/https://github.com/just-torch/Stronghold-Protocol-android/releases/download/assets-0.3.0/   --base https://github.com/just-torch/Stronghold-Protocol-android/releases/download/assets-0.3.0/   --pointer https://gh-proxy.com/https://raw.githubusercontent.com/just-torch/Stronghold-Protocol-android/android/pack.json   --pointer https://cdn.jsdelivr.net/gh/just-torch/Stronghold-Protocol-android@android/pack.json   --pointer-out pack.json
 #    先看一眼计划：node android/scripts/pack-art.mjs --dry-run（会打印素材身份 artId）
 
 # 2. 装配 slim 树（不含 public/assets，另加社区回退所需的 tools/ 与研究表、Spine 解析器）
@@ -111,10 +113,10 @@ pwsh -NoProfile -File android/scripts/build-apk.ps1 -NoArt -SkipAssemble
 
 发布分两处，**素材不再放 App 的发布里**：
 
-- **素材包**：把 `android/dist/art/` 里的 11 个 `.part` + `assets-index-0.2.5.json` + `assets-pack-0.2.5.json` 传到一个**单独的**
-  release/tag（当前是 `assets-0.2.5`），然后发布它（草稿状态下匿名下载不了，App 会拿不到）。换托管只需改分支根目录的
+- **素材包**：把 `android/dist/art/` 里的 17 个 `.part` + `assets-index-0.3.0.json` + `assets-pack-0.3.0.json` 传到一个**单独的**
+  release/tag（当前是 `assets-0.3.0`），然后发布它（草稿状态下匿名下载不了，App 会拿不到）。换托管只需改分支根目录的
   `pack.json` 并提交，**不用重发 APK**；包内的地址（`android/scripts/nodejs-template/asset-pack.json`）是它读不到指针时的兜底。
-- **App**：slim APK 与正式 APK 一起放在 `v0.2.5-fork.1` 这类发布里。
+- **App**：slim APK 与正式 APK 一起放在 `v0.3.0-fork.1` 这类发布里。
 
 **素材没变就不用重传素材包**：App 按**素材身份** `artId` 判断，而不是版本号。`artId` 是 `data/assets.json` 的 `hash` 与
 `data/local-assets.json` 的 `count`/`groups` 规范化后的 sha1 前 12 位（`android/scripts/nodejs-template/art-id.mjs`，两边同一份代码）。
@@ -143,7 +145,8 @@ pwsh -NoProfile -File android/scripts/build-apk.ps1 -NoArt -SkipAssemble
 - APK 内容清点：`lib/arm64-v8a/{libnode.so, libnative-lib.so, libc++_shared.so}`、
   `assets/builtin_modules/bridge/**`（Node 侧 `require('bridge')` 用）、`assets/public/{index.html,launcher.js,launcher.css,vendor/*}`、
   `assets/public/nodejs/**`（含自动搜索用的 `lan/{protocol,net,announce,host}.mjs`）、
-  `assets/public/nodejs/public/assets/**` 12 634 个素材（含日文语音、官方战场场景与召唤物模型）、`assets/capacitor.config.json`
+  `assets/public/nodejs/public/assets/**` 31 021 个素材（含五套语音、官方战场场景、官方战斗特效与召唤物模型）、
+  `assets/public/nodejs/{plugins/_template,schemas}`、`assets/capacitor.config.json`
   里 `server.allowNavigation: ["*"]` 与 `startMode: "manual"` 都在。
 - `classes.dex` 里也能查到 `io/github/sganggs/strongholdprotocol/lan/{LanDiscoveryPlugin,LanDiscoveryCore}`
   与 `getHosts`（`@PluginMethod`），且 `assets/public/index.html` 里搜到的房间列表 DOM（`card-lan` /
@@ -154,7 +157,7 @@ pwsh -NoProfile -File android/scripts/build-apk.ps1 -NoArt -SkipAssemble
   `{"t":"hello",...}` 收到了 `{"t":"welcome","playerId":…,"token":…}`。
 - **最强的那个检查：把服务器从 APK 里解出来再跑一遍**。按插件的做法（`assets/public/nodejs` →
   `<filesDir>/nodejs/public`，`assets/builtin_modules` → `<filesDir>/nodejs/builtin_modules` 并挂到
-  `NODE_PATH`）把 APK 里的那棵树提取出来（13 268 个文件 / 695 MB，与装配结果一致），然后：
+  `NODE_PATH`）把 APK 里的那棵树提取出来（33 534 个文件 / 1 147 MB，与装配结果一致），然后：
   - `require('bridge')` 经 `NODE_PATH` **确实解析到了**（在 Windows 上它走 `process.send` 分支并抛出
     「No IPC channel has been established…」，被入口的 try/catch 接住后照常继续——真机 `process.platform`
     是 `android`，会走 `_linkedBinding('nativeBridge')` 分支）；
@@ -181,7 +184,8 @@ pwsh -NoProfile -File android/scripts/build-apk.ps1 -NoArt -SkipAssemble
   第二次启动打印「art complete … 0.0 s」且不再取任何分卷。
 - **指针与素材身份（2026-10-14）**：`android` 分支根目录的 `pack.json` 两个镜像都实测能取到（`gh-proxy.com` 转发 raw 与 jsDelivr）；
   指针全挂时回落到包内地址；搬走后的 `assets-0.2.5` 发布里，manifest、索引（按 manifest 里的 sha256 校验）与第一个 61 MB 分卷
-  都逐字节核对过；App 侧算出 `artId = 58cd79e523a4` 与包内 manifest 一致。仓库内新增 `android/test/art-download.test.js`（9 项，
+  都逐字节核对过；App 侧算出 `artId = 58cd79e523a4` 与包内 manifest 一致。**0.3.0 的素材包**（17 个分卷 / 725 MB，`artId = d0f33ce08ee8`）
+  同样逐项核对：index 的 sha256 与 manifest 一致、每个分卷的 sha256 与 manifest 一致、包内路径数 30 958 与索引条目数相同。仓库内新增 `android/test/art-download.test.js`（9 项，
   随 `android/npm test` 跑，不需要网络）：指针命中/失效/兜底、`artId` 命中与不符、素材完整时**零请求**、断点续传（含忽略 `Range`
   的服务器）、截断分卷、索引被改、文件与索引不符、源全挂、缺配置。
 - **仍未验证**：真机上的实际下载（这里没有 arm64 设备；`libnode.so` 只有 arm64），以及 Android 在前台/后台切换、
@@ -207,7 +211,7 @@ Java 那份挪到桌面 JVM 上、对着真正的 JS 广播端跑，等于在没
 另外用 `node android/scripts/lan-tool.mjs announce` + `scan` 做过一次跨进程实测：一个进程当主机、另一个进程搜索，
 在 `192.168.43.253` 与 `26.42.62.124` 两个网卡上都搜到了，房间码与人数字段正确。
 
-- **仍未验证**的部分（只能在真机上确认）：Android 的 `AssetManager` 把约 673 MB 素材解压到私有目录的实际过程、
+- **仍未验证**的部分（只能在真机上确认）：Android 的 `AssetManager` 把约 1.14 GB 素材解压到私有目录的实际过程、
   WebView 从启动器导航到局域网地址、**Capacitor 把 `LanDiscovery` 插件暴露给启动器页面的那一段**、手机 Wi-Fi 上
   的 UDP 广播收发、以及真机上的完整对局。见[排错](#排错)。
 
@@ -215,8 +219,8 @@ Java 那份挪到桌面 JVM 上、对着真正的 JS 广播端跑，等于在没
 
 1. 把 APK 传到手机（数据线、微信文件传输、网盘、`adb install` 都行）。
 2. 在手机上点开安装。系统会提示「来自未知来源的应用」，按提示允许（这是自签名 APK 的正常提示）。
-   - 用 `adb`：`adb install -r android\dist\Stronghold-Protocol-0.2.5-arm64.apk`
-3. 首次启动会稍慢：点「建立主机」后，应用要把约 695 MB 的游戏文件从 APK 里解压到自己的私有目录
+   - 用 `adb`：`adb install -r android\dist\Stronghold-Protocol-0.3.0-arm64.apk`
+3. 首次启动会稍慢：点「建立主机」后，应用要把约 1.14 GB 的游戏文件从 APK 里解压到自己的私有目录
    （界面上会显示「正在准备游戏文件（已用 N 秒）」）。**这一步每个版本只做一次**，之后再启动就很快。
 
 ## 怎么联机
@@ -348,7 +352,7 @@ netsh advfirewall firewall add rule name="Stronghold Protocol 3000" dir=in actio
   房号 / 模式 / 难度 / 人数 / 是否对局中放进广播里，于是加入方可以一键 `?room=ABCD` 直接进房
   （`public/js/main.js` 本来就会记住并自动加入 `?room=`）。所有读取都包在 `try/catch` 里，以后大厅内部结构变了
   只会退化成「不显示房号」，不会把主机拖崩。
-- **搜索端为什么会话在 Java 里**（而不是复用内嵌的 Node）：`NodeJS.start()` 每次都会把约 673 MB 素材从 APK
+- **搜索端为什么会话在 Java 里**（而不是复用内嵌的 Node）：`NodeJS.start()` 每次都会把约 1.14 GB 素材从 APK
   复制到私有目录——插件的 `FileOperations.CopyAssetDir` 对每个文件无条件重写，没有任何「已存在就跳过」的判断。
   而加入方本来是**最轻**的路径（不需要服务器），如果为了听一个 UDP 包就先解压整个游戏，体验会明显变差。所以
   搜索端是 `LanDiscoveryCore.java`（只用 `java.net`，不依赖 Android，也就能在桌面 JVM 上验证）
@@ -363,7 +367,7 @@ netsh advfirewall firewall add rule name="Stronghold Protocol 3000" dir=in actio
 | **UDP 广播**（采用） | 同一个子网内几乎总是通的；**不需要任何新权限**（`INTERNET` 就够，只有组播才需要 `CHANGE_WIFI_MULTICAST_STATE`）；报文里能带房号等结构化信息 |
 | mDNS / Android `NsdManager` | 能跨子网、更「标准」，但 Android 上多播被 AP 过滤 / 省电模式掐掉的情况很多，`NsdManager` 历史上 bug 不少，而且解析服务还得自己写。收益（跨子网）对本项目意义不大——跨子网本来就该手输地址或走 VPN |
 | 网段扫描 + HTTP 探测 | 在 WebView 里做不了：跨源 `fetch` 的响应体读不到（`/healthz` 没有 CORS 头），`mode:'no-cors'` 只能知道「有东西应答」，分不清是不是游戏服务器；254 个并发请求在手机上也又慢又费电 |
-| 让内嵌 Node 同时当搜索端 | 可行但代价大：见上面的 695 MB 复制问题。加入方不该为了搜索先解压游戏 |
+| 让内嵌 Node 同时当搜索端 | 可行但代价大：见上面的 1.14 GB 复制问题。加入方不该为了搜索先解压游戏 |
 
 **可靠的部分**（已验证，见[自动搜索的验证](#自动搜索的验证)）：报文格式、解析、广播地址计算、超时与去重、
 「真服务器 + 真广播端 + 真房间码」这条链，以及 Java 那份代码在桌面 JVM 上对着真 JS 广播端的行为。
@@ -507,8 +511,8 @@ README 公布校验和；同一批构建在 [JonaNorman/WebViewPackage](https://
 - Node.js 22 或 24
 - JDK 17 以上（构建脚本会自动从 `PATH` 上找 `java`）
 - 仓库根目录已经执行过 `npm install` 和 `npm run setup`（需要 `public/assets`，约 686 MB）
-- **磁盘**：`android/.build/`（Android SDK + NDK + Gradle，约 4 GB）+ `android/web/nodejs`（约 695 MB）
-  + `android/android/app/src/main/assets/public`（又一份约 695 MB）+ 构建中间产物。建议预留 12 GB。
+- **磁盘**：`android/.build/`（Android SDK + NDK + Gradle，约 4 GB）+ `android/web/nodejs`（约 1.05 GiB）
+  + `android/android/app/src/main/assets/public`（又一份约 1.05 GiB）+ 构建中间产物 + `android/dist/art`（素材包 725 MB）。建议预留 20 GB。
 
 > 不需要预装 Android Studio。下面的脚本会把 Android SDK、NDK、CMake、Gradle 全部装到仓库内的
 > `android/.build/`，不写用户目录，也不需要管理员权限；不需要时删掉 `android/.build/` 即可。
@@ -552,17 +556,17 @@ pwsh -File android\scripts\build-apk.ps1 -NoArt           # 出 slim 变体（�
 - **App 发布**：标题 `卫戍协议：盟约 · 安卓 <版本>（完整 <大小> / slim <大小>）`；正文五段——这个包是什么、
   **两个包怎么选**（表格）、安装与要求（含 arm64 / Android 版本 / 一台开服 / 前台限制）、这一版包含什么（一段话）、
   指向 `CHANGELOG.md` · `docs/FORK-DEVIATIONS.md` · 本文件的链接。
-- **素材包**：单独一个 tag（当前 `assets-0.2.5`），标题 `素材包 <版本>（数据，不是安装包）`，并**勾选 Pre-release**。
+- **素材包**：单独一个 tag（当前 `assets-0.3.0`），标题 `素材包 <版本>（数据，不是安装包）`，并**勾选 Pre-release**。
   不勾的话它会成为 GitHub 的 “Latest”，把真正要下载的安装包挤到后面（`/releases/latest` 会指向它）。
 - **历史版本**：保留一个短正文（一句话 + 「已被最新版取代」+ 该版包含什么 + 安装要求），别整页删掉——老包的下载者
   仍要能看懂自己下的是什么。
 - 正文改写用本地脚本 `.scratch/gh-release-edit.cjs edit <tag> --name … --body-file … [--prerelease true]`
   （`show`/`bodies` 可以核对结果；不入仓库）。发布页正文与仓库文档不一致时，以仓库文档为准。
 
-### slim 变体（不含素材的 40.6 MB 包）
+### slim 变体（不含素材的 42.0 MB 包）
 
 `-NoArt` 装配时跳过 `public/assets`，产物是 `android/dist/Stronghold-Protocol-<版本>-arm64-slim.apk`；它需要配一份素材包
-（`android/dist/art/`，11 个分卷 + 索引 + manifest）放在**同一个 Release** 上，见
+（`android/dist/art/`，17 个分卷 + 索引 + manifest）放在**单独的素材包 Release** 上，见
 [素材包与首启下载](#素材包与首启下载-slim-变体2026-10-13) 一节的构建与发布命令。`-NoArt` 与 `-Variant devtest` 可以叠加
 （产物名 `…-dev-arm64-slim.apk`）。`public/assets` 缺失时也能装配 slim 树（正式包则必须先 `npm run setup`）。
 
@@ -572,10 +576,10 @@ pwsh -File android\scripts\build-apk.ps1 -NoArt           # 出 slim 变体（�
 
 | | 正式版（默认） | 测试版（`-Variant devtest`） |
 |---|---|---|
-| 产物 | `android/dist/Stronghold-Protocol-0.2.5-arm64.apk` | `android/dist/Stronghold-Protocol-0.2.5-dev-arm64.apk` |
+| 产物 | `android/dist/Stronghold-Protocol-0.3.0-arm64.apk` | `android/dist/Stronghold-Protocol-0.3.0-dev-arm64.apk` |
 | 包名 | `io.github.sganggs.strongholdprotocol` | `io.github.sganggs.strongholdprotocol.dev` |
 | 应用名 | 卫戍协议：盟约 | 卫戍协议：盟约·测试 |
-| 版本名 | `0.2.5` | `0.2.5-dev`（versionCode 相同） |
+| 版本名 | `0.3.0` | `0.3.0-dev`（versionCode 相同） |
 | 内嵌服务器的调试控制台 | 服务器默认 `auto`：**本机**（App 自己的 WebView）有控制台 | `SP_CONSOLE=1`：**所有**连到这台测试版 App 的客户端都有（包括局域网里加入的朋友） |
 | 签名 | 同一个自签名密钥 | 同一个自签名密钥 |
 
@@ -653,7 +657,7 @@ AIA 自动补齐，OpenSSL（Node）和 JDK 都不会。所以 `build-apk.ps1` �
   `data/`、`public/` 保持同级，它就当自己是原版项目，默认端口 3000、监听 `0.0.0.0`。自动搜索也没有动它：
   广播端是 `web/nodejs/lan/` 里新增的独立模块，只**读**大厅的公开字段（见[局域网自动发现](#局域网自动发现)）。
 - **两件事在 Android 侧，两件事在 Node 侧**：游戏服务器和广播端在 Node 里；启动器界面和 UDP 搜索在 WebView / Java 里。
-  这样加入方（不跑服务器的那台）不需要先解压 673 MB 素材就能搜到主机。
+  这样加入方（不跑服务器的那台）不需要先解压 1.14 GB 素材就能搜到主机。
 - **启动顺序**：启动器页面（Capacitor 本地页面）先 `NodeJS.start()`，插件把 APK 里的
   `assets/public/nodejs/**` 解压到 `/data/data/<包名>/files/nodejs/public/`，然后启动 Node；Node 侧用内置的
   `bridge` 模块把 `server-ready`（含端口、局域网地址、主机名、广播状态）回传给启动器；启动器再把 WebView 导航到

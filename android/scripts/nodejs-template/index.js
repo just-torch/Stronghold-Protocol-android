@@ -91,6 +91,14 @@ const APP_VERSION = (() => {
  */
 const artDir = artDirFrom(slimBuild && bridge ? path.resolve(process.cwd(), '..', 'art') : '');
 if (artDir) process.env.SP_ASSETS_DIR = artDir;
+/**
+ * Plugins (0.3.0) live outside the unpacked project for the same reason the art does: the Capacitor plugin deletes the
+ * whole project directory on every app update, so a plugin installed on the phone would vanish with it. The templates
+ * and the schemas stay inside the project (`plugins/_template`, mirrored by android/scripts/assemble-nodejs.mjs) —
+ * the Docker image splits the two the same way (`SP_PLUGIN_RESOURCES`).
+ */
+const pluginsDir = bridge ? path.resolve(process.cwd(), '..', 'plugins') : '';
+if (pluginsDir) { try { fs.mkdirSync(pluginsDir, { recursive: true }); } catch { /* the server reports it */ } }
 const pack = readPackConfig({ dir: HERE });
 const bases = packBases(pack.bases);
 /**
@@ -219,7 +227,7 @@ if (channel?.on) {
 // ---------------------------------------------------------------------------------------------------
 try {
   // 0.0.0.0 so the other phones on the same Wi-Fi can reach this one.
-  const host = await startHost({ port, name: hostName, log: (message) => console.log(message) });
+  const host = await startHost({ port, name: hostName, log: (message) => console.log(message), pluginsDir });
   const { srv, announcer } = host;
 
   console.log(`[sp] listening on ${srv.url}${host.lan.length ? ` — LAN: ${host.lan.join(', ')}` : ' — no LAN address found'}`);
@@ -234,6 +242,7 @@ try {
     lan: host.lan,
     name: host.name,
     assets: { dir: artDir || null, pack: pack.manifest || null, sources: bases.length },
+    plugins: pluginsDir || null,
     announce: announcer
       ? {
         id: announcer.id,
