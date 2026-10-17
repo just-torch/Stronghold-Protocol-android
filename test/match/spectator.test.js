@@ -96,8 +96,9 @@ test('during a battle a spectator may watch any field at once; one added mid-bat
   h.sched.advance(500);
   const first = h.lastTo(S, 'b.start');
   assert.deepEqual([first.fieldId, first.watch, first.authoritative], ['n:p_0', true, false], 'auto-observes the first field');
-  // a fighting player may not look elsewhere — a spectator (like an eliminated player) may
-  assert.equal(m.handle('p_0', { t: 'g.watch', fieldId: 'n:p_1' }).error, ERR.WRONG_PHASE);
+  // a fighting player may look elsewhere too (the fork's 战斗中观战, §21.53) — and a spectator (like an eliminated
+  // player) may watch anything
+  assert.deepEqual(m.handle('p_0', { t: 'g.watch', fieldId: 'n:p_1' }), { ok: true });
   assert.deepEqual(m.handle(S, { t: 'g.watch', fieldId: 'n:p_1' }), { ok: true });
   const st = h.lastTo(S, 'b.start');
   assert.deepEqual([st.fieldId, st.watch, st.authoritative], ['n:p_1', true, false]);

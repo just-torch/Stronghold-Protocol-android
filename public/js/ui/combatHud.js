@@ -2,7 +2,9 @@
 // pills.
 //   Client-side combat (`client` prop, DESIGN §14 — the official behaviour):
 //     * own normal battle over: "⌛ 作战结束，等待队友完成作战" with each teammate's live progress (kills / total, ✓);
-//     * observing a teammate (team row → 前往查看): "👁 name" + 返回战场;
+//     * observing a teammate (team row → 前往查看): "👁 name" + 返回战场 — and, while the own battle still runs (the owner's
+//       request of 2026-10-17, 「战斗中也可以观战其他人」), the line "你的作战仍在进行" under it: the own battle keeps running
+//       in the page's runner (its leaks / LP and its result still land) and 返回战场 goes back to it;
 //     * 联防 / 最终攻势: the ‹ › pill switches the camera LEFT half / 全景 / RIGHT half ("你自己" / name / "全景"); it
 //       replaces the observing pill on such a field watched with 前往查看 (a 联防 leaker, an eliminated spectator — the
 //       official non-helper pill "‹ 👁 helper# ›"), with 返回战场 beside the arrows (DESIGN §20.15);
@@ -79,6 +81,7 @@ function ClientHud({ hud, myDone, spectating, spectator = false, client }) {
         : html`<div class="chud__msg chud__msg--dead" role="status"><${Icon} name="close" /><span>${t('你已被淘汰，可点击队友头像前往查看')}</span></div>`) : null}
       ${observing && !halves ? html`<div class="vswitch chud__observe is-single" role="status">
         <span class="vswitch__label"><${GIcon} name="eye" /><span>${observing.name}</span></span>
+        ${client.ownRunning ? html`<span class="chud__ownrun">${t('你的作战仍在进行')}</span>` : null}
         ${client.onBack ? html`<button type="button" class="btn btn--secondary btn--sm chud__back" onClick=${() => client.onBack()}>
           <span class="btn__label">${t('返回战场')}</span></button>` : null}
       </div>` : null}
@@ -87,6 +90,7 @@ function ClientHud({ hud, myDone, spectating, spectator = false, client }) {
         <span class="vswitch__label">
           ${cur && cur.watch ? html`<${GIcon} name="eye" />` : null}<span>${cur ? cur.label : t('全景')}</span></span>
         <button type="button" class="vswitch__arrow" disabled=${idx >= layers.length - 1} aria-label=${t('右侧战场')} onClick=${() => step(1)}><${Icon} name="chevronRight" /></button>
+        ${observing && client.ownRunning ? html`<span class="chud__ownrun">${t('你的作战仍在进行')}</span>` : null}
         ${observing && client.onBack ? html`<button type="button" class="btn btn--secondary btn--sm chud__back" onClick=${() => client.onBack()}>
           <span class="btn__label">${t('返回战场')}</span></button>` : null}
       </div>` : null}

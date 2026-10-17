@@ -33,6 +33,7 @@ import { html, BondDisc, Icon, MicroLabel, Tooltip } from './components.js';
 import { RichText, UnitThumb, BondGlyph, GIcon } from './gameComponents.js';
 import { sortBonds, bondMembers, nextThreshold, bondTier, harmonyMembers, HARMONY_BOND, memberHeadCount, briefingBondTip, diyGetter, diyRecordFor, memberStandIn, standInForText } from './gameLogic.js';
 import { formatBondEffect } from './richText.js';
+import { BondMilestones } from './bondMilestones.js';
 import { bondIconUrl } from './assetUrls.js';
 import { data } from '../data.js';
 import { t, tc, tParts, tName } from '../../../shared/i18n.js';
@@ -162,6 +163,7 @@ export function BondPopup({ bondId, entry, priv, banned = [], onClose, onMember,
       <h4>${t('当前效果')} ${b.noStack ? null : html`<small class="num">${t('（{layers} 层）', { layers })}</small>`}</h4>
       <${RichText} as="p" text=${formatBondEffect(b, layers)} class="bpop__desc" />
     </section>` : null}
+    <${BondMilestones} bond=${b} layers=${layers} active=${active} />
     <section class="bpop__sec">
       <h4>${t('盟约效果')}</h4>
       <${RichText} as="p" text=${b.descRaw || b.desc} class="bpop__desc" />

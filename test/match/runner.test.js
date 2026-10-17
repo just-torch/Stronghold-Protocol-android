@@ -230,6 +230,32 @@ test('own battle statistics stay available when viewing a teammate; owner filter
   r.runner.dispose();
 });
 
+test('watching a teammate while the own battle runs: the own battle keeps ticking and reports (战斗中观战, 2026-10-17)', async () => {
+  const start = realStart(7312);
+  const r = rig();
+  await r.runner.onStart(start);
+  r.advance(1000, 50);
+  const teammate = structuredClone(start);
+  teammate.battleId = 'watch-live-teammate';
+  teammate.fieldId = 'n:watch-live-teammate';
+  teammate.authoritative = false;
+  teammate.watch = true;
+  for (const player of teammate.spec.players) player.playerId = 'live-teammate';
+  await r.runner.onStart(teammate);
+  assert.equal(r.store.get().match.field.fieldId, 'n:watch-live-teammate', 'the teammate is on screen');
+  const ownProgress = () => r.net.sent.filter((x) => x.t === 'b.progress' && x.battleId === start.battleId).length;
+  const before = ownProgress();
+  r.advance(3000, 50);
+  assert.ok(ownProgress() > before, 'the own battle is still stepped and reports progress while off screen');
+  assert.ok(r.runner._entries.get(start.battleId).battle.tickCount > 0, 'the own battle keeps running');
+  // back to the own field: the display returns to the same battle
+  r.net.emit('b.start', { ...start, elapsed: 0 });
+  await r.settle();
+  assert.equal(r.store.get().match.field.fieldId, start.fieldId);
+  assert.ok(r.runner._entries.has(start.battleId));
+  r.runner.dispose();
+});
+
 test('evicted observed battles keep match totals; replaying one replaces its snapshot without double counting', async () => {
   const start = realStart(7310);
   const r = rig();

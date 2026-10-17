@@ -447,6 +447,19 @@
 .combat-metrics__type--true, .combat-metrics__segment--true { --damage-color: #ff7272; }
 .combat-metrics__type--elemental, .combat-metrics__segment--elemental { --damage-color: #cf9fff; }
 .combat-metrics__sort { margin-left: auto; color: var(--text-lo); }
+/* 实时排名 (the owner's request, 2026-10-17): the metric switch that reorders the list, the owner of a teammate's row */
+.combat-metrics__live { margin-left: 8px; padding: 1px 6px; font-size: max(calc(.1 * var(--t)), 10px); font-weight: 500; color: var(--mint-400); background: var(--mint-900); border: 1px solid var(--mint-800); }
+.combat-metrics__sorts { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 max(.14rem, 10px) 8px; font-size: max(calc(.12 * var(--t)), 11px); }
+.combat-metrics__sortby { color: var(--text-lo); }
+.combat-metrics__sortbtn { padding: 2px 8px; min-height: 26px; color: var(--text-md); background: var(--bg-1); border: 1px solid var(--line-2); font-size: inherit; }
+.combat-metrics__sortbtn.is-on { color: var(--mint-400); background: var(--mint-900); border-color: var(--mint-700); }
+.combat-metrics__owner { flex: none; padding: 0 5px; font-size: max(calc(.1 * var(--t)), 10px); color: var(--ice); border: 1px solid var(--line-2); background: var(--ice-900); }
+.combat-metrics__seen { grid-column: 1 / -1; color: var(--mint-500); }
+.combat-metrics__values span.is-on small { color: var(--mint-400); }
+.combat-metrics__values span.is-on b { color: var(--mint-400); font-weight: 700; }
+.combat-metrics__values .combat-metrics__heal.is-on b { color: var(--mint-400); }
+.combat-metrics__row.is-dps .combat-metrics__values span:nth-child(2) b,
+.combat-metrics__row.is-hps .combat-metrics__values span:nth-child(4) b { text-shadow: 0 0 .12rem rgba(78, 216, 175, .5); }
 .combat-metrics__list { flex: 1 1 auto; min-height: 0; margin: 0; padding: 0 max(.14rem, 10px); list-style: none; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
 .combat-metrics__row { display: grid; grid-template-columns: max(.2rem, 18px) max(.42rem, 30px) minmax(0, 1fr); gap: max(.08rem, 6px); align-items: center; padding: max(.09rem, 7px) 0; border-top: 1px solid var(--line); }
 .combat-metrics__rank { align-self: start; color: var(--text-lo); font-family: var(--font-num); padding-top: 2px; }
@@ -605,6 +618,8 @@
 .chud__observe .vswitch__label .icon { width: .24rem; height: .24rem; color: var(--amber); }
 .chud__layers .vswitch__label .icon { width: .22rem; height: .22rem; color: var(--amber); }
 .chud__back { flex: none; }
+/* 战斗中观战 (the owner's request, 2026-10-17): the own battle keeps running behind the observed one */
+.chud__ownrun { color: var(--amber); font-size: calc(.15 * var(--t)); white-space: nowrap; }
 .chud__layers { border-color: var(--mint-700); }
 /* a 联防 / 最终攻势 field watched with 前往查看: the ‹ › pill carries 返回战场 (DESIGN §20.15) */
 .chud__layers.is-observing { gap: .1rem; padding-right: .08rem; border-color: rgba(246, 163, 41, .55); }
@@ -645,6 +660,11 @@
 .set-voice .set-seg { grid-column: auto; flex: 1 1 auto; }
 .set-native { min-height: .38rem; padding: 0 .12rem; background: #0a0d0c; border: 1px solid var(--line-2); color: var(--text-lo); font-size: calc(.16 * var(--t)); cursor: pointer; }
 .set-native.is-on { background: var(--mint-500); color: var(--text-on-mint); font-weight: 700; }
+/* 试听 the chosen dub (the owner's request, 2026-10-17) */
+.set-preview { display: inline-flex; align-items: center; gap: .05rem; min-height: .38rem; padding: 0 .12rem; background: #0a0d0c; border: 1px solid var(--line-2); color: var(--text-md); font-size: calc(.16 * var(--t)); cursor: pointer; }
+.set-preview:hover { color: var(--mint-400); border-color: var(--mint-700); }
+.set-preview .icon { width: .14rem; height: .14rem; color: var(--mint-500); }
+.set-preview__miss { flex-basis: 100%; font-size: calc(.13 * var(--t)); color: var(--amber); }
 .set-seg button { flex: 1 1 auto; min-width: .8rem; min-height: .38rem; height: auto; white-space: normal; background: #0a0d0c; border: 0; border-right: 1px solid var(--line-2); color: var(--text-lo); font-size: calc(.16 * var(--t)); }
 /* 文字大小 (ui/settings.js): four steps, so its buttons are narrower than the two- and three-step groups' — at .8rem each
    the group would be wider than the row's 1fr column on a phone (1rem = 40 px) */

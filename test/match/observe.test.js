@@ -1,6 +1,7 @@
 // Observing rules of the client (public/js/battle/observe.js, research 09 §3.1 / §6.3) — the mirror of the server's
-// Match._watchClient: prep boards, no observing while the own normal battle runs, a teammate's field once it is over,
-// the other pair's boss field hidden, eliminated players free; the 联防 / 最终攻势 camera halves and their captions;
+// Match._watchClient: prep boards, a teammate's field while the own normal battle runs (the own battle keeps running
+// behind it — the owner's request of 2026-10-17) and once it is over, the other pair's boss field hidden, eliminated
+// players free; the 联防 / 最终攻势 camera halves and their captions;
 // a reloaded screen that watched a teammate's battle takes the watch back (resumedWatch).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -18,9 +19,10 @@ test('observeTarget: prep, own battle running / over, boss pairs, eliminated pla
     { fieldId: 'n:a', kind: 'normal', players: ['a'], live: liveA },
     { fieldId: 'n:b', kind: 'normal', players: ['b'], live: true, progress: { killed: 3, total: 8, done: false } },
   ], players);
-  assert.match(observeTarget(players[1], combat(true), 'a').reason, /作战中无法查看/);
-  assert.deepEqual(observeTarget(players[1], combat(true), 'a', { ownDone: true }), { fieldId: 'n:b' }, 'the local battle already ended');
-  assert.deepEqual(observeTarget(players[1], combat(false), 'a'), { fieldId: 'n:b' });
+  assert.deepEqual(observeTarget(players[1], combat(true), 'a'), { fieldId: 'n:b', live: true },
+    'the own battle still runs: watching is allowed (it keeps running) and the caller marks it live');
+  assert.deepEqual(observeTarget(players[1], combat(true), 'a', { ownDone: true }), { fieldId: 'n:b', live: false }, 'the local battle already ended');
+  assert.deepEqual(observeTarget(players[1], combat(false), 'a'), { fieldId: 'n:b', live: false });
   assert.deepEqual(observeTarget(players[0], combat(false), 'a', { observing: true }), { back: true });
   // the teammate's capsule reads `resolved` (the field's own enemies knocked out or leaked); a report without one falls
   // back to `killed` (public/js/battle/observe.js teammateProgress)

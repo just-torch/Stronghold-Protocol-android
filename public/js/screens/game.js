@@ -984,12 +984,15 @@ function MatchScreen() {
 
   const watchPlayer = useCallback((p) => {
     const L = live.current;
+    // (`obs`, not `t`: `t` is the translation function this callback also calls)
     if (isClientCombat(L.pub)) {
       const observing = !!L.watching && L.watching !== L.home && L.watching !== ownFieldId(L.myId);
-      const t = observeTarget(p, L.pub, L.myId, { observing, ownDone: L.localDone });
-      if (t.back) { backHome(); return; }
-      if (t.reason) { toast(t.reason, 'warn'); audio.sfx('error', { volume: 0.5 }); return; }
-      if (t.fieldId) requestWatch(t.fieldId, p.playerId);
+      const obs = observeTarget(p, L.pub, L.myId, { observing, ownDone: L.localDone });
+      if (obs.back) { backHome(); return; }
+      if (obs.reason) { toast(obs.reason, 'warn'); audio.sfx('error', { volume: 0.5 }); return; }
+      // own battle still running: the own battle keeps running in the page's runner, say so once (the pill repeats it)
+      if (obs.fieldId && obs.live) toast(t('已切到 {name} 的战场；你自己的作战仍在进行，随时可以返回战场', { name: p.name || t('队友') }));
+      if (obs.fieldId) requestWatch(obs.fieldId, p.playerId);
       return;
     }
     const self = p.playerId === L.myId;
@@ -1001,9 +1004,9 @@ function MatchScreen() {
       setWatchWho(null);
       return;
     }
-    const t = watchTarget(p, L.pub, L.myId);
-    if (t.reason) { toast(t.reason, 'warn'); audio.sfx('error', { volume: 0.5 }); return; }
-    requestWatch(t.fieldId, p.playerId);
+    const obs = watchTarget(p, L.pub, L.myId);
+    if (obs.reason) { toast(obs.reason, 'warn'); audio.sfx('error', { volume: 0.5 }); return; }
+    requestWatch(obs.fieldId, p.playerId);
   }, []);
 
   const watchField = useCallback((fid) => { requestWatch(fid); }, []);
@@ -1685,7 +1688,8 @@ function MatchScreen() {
 
       ${combat || mode === 'settle' ? html`<${CombatHud} pub=${pub} myId=${myId} watching=${watchingNow} hud=${hud} myDone=${!!myDone && alive}
         spectating=${!alive} spectator=${spectator} onWatch=${watchField}
-        client=${cc ? { progress, observing: observingName ? { name: observingName } : null, onBack: alive ? backHome : null, layers, layer, onLayer: setLayer } : null} />` : null}
+        client=${cc ? { progress, observing: observingName ? { name: observingName } : null, onBack: alive ? backHome : null, layers, layer, onLayer: setLayer,
+          ownRunning: !!watchingOther && alive && phase === PHASE.COMBAT && meP?.status !== 'done' } : null} />` : null}
 
       ${showDeadPill(alive, phase) ? (spectator
         ? html`<div class="gm__dead gm__dead--spectator" role="status"><${GIcon} name="eye" />${t('观战中 · 点击左侧成员头像切换查看')}</div>`
@@ -1696,7 +1700,9 @@ function MatchScreen() {
       <div class="ui-slot gm__ui-slot" data-ui-slot="hud.right" aria-label=${t('界面插件')} dangerouslySetInnerHTML=${{ __html: '' }}></div>
 
       <div class="gm__corner">
-        ${showMetrics && metricsOpen ? html`<${CombatMetricsPanel} myId=${myId} onClose=${() => setMetricsOpen(false)} />` : null}
+        ${showMetrics && metricsOpen ? html`<${CombatMetricsPanel} myId=${myId} onClose=${() => setMetricsOpen(false)}
+          watching=${watchingOther && watchedName ? { playerId: watchedP?.playerId || null, name: watchedName } : null}
+          names=${new Map(players.map((p) => [p.playerId, p.name || t('博士')]))} />` : null}
         ${spectator ? null : html`<${EmoteWheel} open=${emoteOpen} onToggle=${setEmoteOpen} onSend=${(id) => actions.emote(id)} disabled=${conn.status !== 'online'} />`}
         ${showMetrics ? html`<button type="button" class="gm__gear gm__metrics" aria-label=${t('作战统计')} title=${t('作战统计')} aria-expanded=${metricsOpen}
           aria-controls="combat-metrics-panel" onKeyDown=${(e) => { if (e.key === ' ') e.stopPropagation(); }} onClick=${() => {

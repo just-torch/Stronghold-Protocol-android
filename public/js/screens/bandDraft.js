@@ -326,6 +326,7 @@ export function BandDraftScreen() {
     </main>
     <${ExitModal} open=${exit} onClose=${() => setExit(false)} solo=${solo} />
     <${MatchInfoDialog} open=${infoOpen} onClose=${() => setInfoOpen(false)} model=${info}
+      stage=${pub?.stageId ? gd.stage(pub.stageId) : null}
       status=${infoStatus ? html`<span class=${cx('minfo-dlg__turn', `is-${infoStatus.tone}`)}>
         <${Icon} name=${infoStatus.tone === 'mint' ? 'check' : 'hourglass'} />${infoStatus.text}${infoStatus.secs != null ? html`<b class="num">${infoStatus.secs}s</b>` : null}
       </span>` : null} />

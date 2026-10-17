@@ -8,10 +8,10 @@ numbers.
 
 Upstream's section numbers are global and never change; code, tests and the other documents cite them as "DESIGN §N".
 The fork's sections keep chapter 21, sit immediately after upstream's own §21.30 (干员战斗语音, which is upstream's and
-not ours) and run **§21.31–§21.51**, so every "DESIGN §21.34" in a comment, a test name or another document still
+not ours) and run **§21.31–§21.57**, so every "DESIGN §21.34" in a comment, a test name or another document still
 resolves. §21.30 is reproduced below only as the anchor the fork's numbering hangs off.
 
-**What these sections are.** Each §21.31–§21.51 entry is something this fork did on top of the upstream release named
+**What these sections are.** Each §21.31–§21.57 entry is something this fork did on top of the upstream release named
 in its title: a player report fixed here, an owner decision, or a deliberate deviation from the official game. Several
 of them are **Android / packaging / phone-layout work** (`android/`, `docs/DEPLOY.md`, the phone HUD) and one is the
 maintainer's own test tool (the debug console); those have no upstream counterpart at all and must never be dropped
@@ -47,6 +47,12 @@ carries a **v0.2.0 status** line under its heading. The table is the summary:
 | §21.49 | 麻痹, 诱导 and 暴露 have status icons | **keep (fork-only)**: upstream's `STATUS_ICON` / `STATUS_KEYS` have no `palsy` / `attract` / `reveal` |
 | §21.50 | The newer snapshot owns "is this unit on the field" | **keep (fork-only)**: upstream hoisted the revive into `units.js syncView(v, s, t)`, which still stands a view up from the interpolated (older) sample |
 | §21.51 | 导出 says so when the browser refuses the download | **keep (fork-only)**: upstream's `downloadText` is deliberately a silent no-op ("复制 stays available") |
+| §21.52 | 首启下载素材 — a slim APK, an art pack and the external art directory | **keep (fork-only)**: Android packaging, the `SP_ASSETS_DIR` mount and the art pack have no upstream counterpart |
+| §21.53 | 战斗中观战队友 — a living player may watch a teammate's battle while its own runs | **keep (fork-only, deliberate deviation)**: the official and upstream refuse it (`WRONG_PHASE 'own battle running'`); the own battle keeps running in the runner |
+| §21.54 | 作战统计 as a live ranking (伤害 / DPS / 治疗 / HPS, spectated players included) | **keep (fork-only)**: upstream's PR #618 panel is damage-sorted, owner-filtered and not re-sortable |
+| §21.55 | 本局地图 — the battlefield drawn in the briefing / 本局信息 | **keep (fork-only)**: upstream names the stage only (`战场#03`) |
+| §21.56 | 语音语言 can be previewed in 设置 | **keep (fork-only)**: upstream has the switch and the per-operator picker, no preview of the global dub |
+| §21.57 | 层数奖励 — a bond's `<every N layers>` progress in its popup | **keep (fork-only)**: the payout is upstream's (`bonds/core.js` payHammers); the progress line is this fork's answer to the 2026-10-17 report |
 
 Appendix A lists the fork's edits that sit *inside* upstream's own sections (§6.3, §8.2, §8.3, §19.8, §21.1, §21.11,
 §21.20 and §22's intro) — wording that upstream's `docs/design/*` and `docs/history/*` do not carry. Each one is either
@@ -510,6 +516,90 @@ User: 「给每个卫戍干员都加语音」, then, after the first build, 「�
 - **Trade-offs** (documented for the player in `android/README.md`): the slim install needs a network for its first launch and ~700 MB of free space, a 502.5 MB download (the same bytes as before, later), and the download runs only while the app is in the foreground (an interrupted part is resumed, not restarted). In exchange the APK is 14× smaller, updates are ~40 MB instead of 561 MB, and the APK's own bytes are not stored twice.
 - **0.3.0 additions** (the v0.3.0 merge notes above have the merge side): the same "outside the wiped tree" rule now covers **plugins** — `nodejs-template/index.js` passes `pluginsDir` = `<files>/nodejs/plugins` to `startServer` (the `pluginsDir` option of `serveDirs`) while the templates, guides and schemas ship *inside* the tree (`assemble-nodejs.mjs` mirrors `plugins/` and `schemas/`, exactly as the Docker image splits them with `SP_PLUGIN_RESOURCES`); and the **content-hash index** now reads the external art directory (`rootDirs: { assets: assetsDir }`, server/index.js), so a phone that keeps its art outside the install gets the same `/assets/~<hash>/…` URLs, year-long cache and `immutable` answers as a bundled `public/assets` — measured on the tree extracted from the 0.3.0 APK: `[assets] content hashes: 30 965 files … 5.7 s`, `/data/assets.json` served with all 17 379 URLs hashed, `/media/~<hash>/bgm/…` and the hashed `.mp3` both 200 with `immutable`. The measured sizes of this release (816.8 MB full / 42.0 MB slim / a 725 MB art pack in 17 parts) are in `android/README.md`.
 - **Verified** on this machine end to end (`.scratch/test-slim-e2e.mjs`, `.scratch/test-art-negatives.mjs`, `.scratch/test-slim-apk.mjs`, `.scratch/test-real-urls.mjs` — never shipped): the real 502.5 MB pack downloaded from a local server with the first base deliberately dead (base rotation), 12 634 files / 659.6 MB unpacked in 34–38 s, every file byte-identical to the repository's `public/assets`, the packed set exactly the repository's art minus the 35 pruned `local/scene/**/*.png` sources (26.4 MB), a second run a no-op, a 3 MB partial part resumed and completed, and a game server with `SP_ASSETS_DIR` serving the downloaded bytes, the bundled client, `/media/…` audio and 404s unchanged. The **slim APK itself** was unpacked and its entry point run the way the plugin does (cwd `…/nodejs/public`): the server listens first, the art arrives afterwards, and a second launch logs `art complete … 0.0 s` without fetching a part. Then the **published addresses** were used for real (mirror first): 12 634 files / 502.5 MB in 281.7 s (1.78 MB/s), every file verified against the index. Failure modes: a Range-ignoring server still ends with a correct part, a truncated part and a file that contradicts the index are `E_CORRUPT` after the retry budget, a pack for another app version is refused, dead sources are `E_NETWORK`, damage is noticed by the verification pass, and the community fallback loads and honours its argv in-process. The pointer path was checked against the live files: both `pack.json` mirrors resolve, a dead pointer falls back to the baked list, and the moved release's manifest, index (hash checked against the manifest) and first 61 MB part are intact. `android/test/art-download.test.js` (10 cases, in the repository, `npm test` in `android/`) pins all of this down without a network: pointer hit / miss / fallback, art-id hit and mismatch, the no-request fast path, resume against a Range-ignoring server, truncated part, tampered index, a file that contradicts the index, dead source and missing configuration. Not verified: the actual download on a phone (no arm64 device here), and Android killing the app in the background.
+
+### 21.53 战斗中观战队友 (the owner's request, 2026-10-17) — `server/match/match/watch.js` (`_watchClient`), `public/js/battle/observe.js` (`observeTarget`), `public/js/ui/combatHud.js` (the observing pill, `ownRunning`), `public/js/screens/game.js` (`watchPlayer` toast, the `client.ownRunning` prop), `public/css/screens/game.css` (`.chud__ownrun`)
+
+- **Requested**: 「添加战斗中也可以观战其他人的功能」. Until now `g.watch` refused a living player's watch of another
+  normal field while its own normal battle ran (`WRONG_PHASE 'own battle running'`) and the client mirrored the refusal
+  (`observeTarget` → 「作战中无法查看队友，作战结束后可前往查看」). The official game behaves the same way (research 09
+  §3.1: 「Normal combat, own battle running: team avatars are not watchable」), so this is a **deliberate fork deviation**.
+- **Why it is safe**: the page's runner already steps an authoritative battle it is not displaying (`running()` in
+  `public/js/battle/runner.js` keeps `e.authoritative && !e.resultSent` going while `cur` is another field), and its
+  progress / leak / result reporting ran on the same path — measured by the new case in `test/match/runner.test.js`
+  (「watching a teammate while the own battle runs: the own battle keeps ticking and reports」): with the teammate's
+  replica on screen the own field still sends `b.progress` and its `b.result` still lands. The watched field is a
+  display replica (`b.start watch: true`), exactly like a watch after one's own battle.
+- **Now**: `Match._watchClient` only refuses the other pair's boss field (`BAD_TARGET 'other group hidden'`); the client's
+  `observeTarget` answers `{ fieldId, live }` (`live`: the viewer's own battle is still running) and the game screen
+  toasts 「已切到 {name} 的战场；你自己的作战仍在进行，随时可以返回战场」 once. The observing pill carries
+  「你的作战仍在进行」 next to 返回战场 while that holds. The own battle's leaks / LP keep moving on the top bar (the
+  runner publishes `state().leaks` for every local normal field, not only the one on screen).
+- **Kept**: 联防 / 最终攻势 rules (the ‹ › halves, the hidden other pair, the eliminated / spectator freedom) and the
+  server-run combat mode (which never refused it).
+- Tests: `test/match/observe.test.js` (the new `{ fieldId, live }` answers), `test/match/clientCombat.test.js` (a
+  fighting player's `g.watch` now answers ok and the replica is `watch: true`), `test/match/watch-bonds.test.js` (a
+  fighter may watch a teammate's field while its own runs, and the own `b.start` still exists), `test/match/
+  runner.test.js` (the test above).
+
+### 21.54 作战统计升为实时排名 (the owner's request, 2026-10-17) — `public/js/ui/combatMetrics.js`, `public/css/screens/game.css` (`.combat-metrics__sorts` / `__sortbtn` / `__owner` / `__live`), `public/js/screens/game.js` (the panel's `watching` / `names` props), `public/js/ui/settings.js` (the hint)
+
+- **Requested**: 「增加一个能实时查看干员伤害，dps 或者治疗量，hps 排名的功能」. Upstream's panel (PR #618) already listed
+  the viewer's own operators sorted by damage with DPS / HPS next to them; it could not re-sort, and it always filtered
+  on the viewer (`combatMetrics({ ownerId: myId })`), so a watched teammate's numbers never showed.
+- **Now**: the four metrics are the sort switch — 伤害 / DPS / 治疗 / HPS, descending, rank numbers recomputed
+  (`rankRows`, pure and tested) — and the rows are read **without** an owner filter, so 当前战斗 is the battle on screen
+  (the own one, or the teammate's field while 观战) with each row's owner chip (the teammate's name; `ownerLabelOf`), and
+  本局累计 adds every battle this page simulated in the match — including the fields it watched. A 「实时排名」 tag sits in
+  the title, the totals line says 「含观战：{name}」 while watching one, and the note states what is counted (this device
+  only; effective HP loss / effective healing; same-name operators merged, summons counted for their owner; reset on
+  reload). Nothing is sent to the server.
+- Tests: `test/ui/combat-metrics-rank.test.js` (`rankRows`, `ownerLabelOf`), `test/match/runner.test.js` (the existing
+  metric suites; the match view is no longer owner-filtered, so the row sets now come from the local battles only) and
+  `test/ui/gameLogic.test.js` (the 作战统计 settings row / hint text).
+
+### 21.55 本局地图 (the owner's request, 2026-10-17) — `public/js/ui/stageMap.js`, `public/js/screens/briefing.js` (`StageMapCard`), `public/js/ui/matchInfo.js` (the strategy draft's 本局信息 dialog), `public/js/ui/enemyDrawer.js` (the in-match 本局信息 tab), `public/css/screens/briefing.css` (`.stagemap*`, `.brief-stage--map`)
+
+- **Requested**: 「添加在准备阶段查看地图的功能」 — the phase the owner named is the briefing (「查看禁用盟约和最终 boss 的阶段」,
+  INFO_CHECK 「1/2 确认本局信息」, and the strategy draft's 本局信息 dialog that repeats it). Until now that screen listed the
+  stage only by name (「战场#03」) and the pool note; the map itself appeared at the first 休整期, and a boss field never
+  before its round.
+- **Now**: `stageMapModel(stage, { field })` turns a `data/stages.json` record into a grid of display kinds
+  (`tileKind`: ground / high / wall / fence / water / hazard / spawn / goal / entry / exit / void, from the tile's own
+  `tileKey` / `height` / `buildable` / `special` — display only, placement still comes from `placementContext` and the
+  server) for one of two fields: `normal` = board rows 9–12, both halves, with the own deployable region (`GEO.FIELD`)
+  outlined, and `boss` = rows 0–5 (最终攻势 / 隐秘核心). `StageMap` draws it as an SVG (no art needed), `StageMapCard` is
+  the briefing's BATTLEFIELD line with a 查看地图 button that opens `StageMapDialog` (battlefield + boss field + legend +
+  「只显示地形…」 note), the 本局信息 dialog shows the same large map inline, and the in-match 本局信息 tab shows the
+  compact card. Nothing of the enemy line-up or the players' boards is revealed: only the terrain both sides see.
+- Tests: `test/ui/stage-map.test.js` (`tileKind` per tile kind, the two fields' bounds, the deploy rect, the boss-field
+  detection for every stage in `data/stages.json`).
+- [ASSUMED] the colour per kind (a UI choice, not official art); the boss field's rows are the same stage record's top
+  rows (server/match/board.js `BOSS_RECT`).
+
+### 21.56 语音语言可试听 (the owner's request, 2026-10-17) — `public/js/ui/settings.js` (`VoicePreview`), `public/css/screens/game.css` (`.set-preview`)
+
+- **Requested**: 「添加一个设置，能够调整音量，配置语言语音等」 — the settings modal has had 背景音乐 / 干员语音 / 音效 / 静音,
+  语言 and (since 0.2.6) 语音语言 + 本土语言; what it lacked was any way to hear the chosen dub without leaving it.
+- **Now**: 试听 beside 语音语言 plays one line of an operator this server has the chosen tree for (`audio.previewVoice`,
+  the first operator of `data/assets.json audio` whose Chinese tree and the chosen tree both exist; 本土语言 previews
+  that tree). Silent while the voice volume is 0 or muted; nothing is stored; a server without any dub says
+  「没有可试听的语音（先下载素材）」.
+- Tests: none (it needs an `AudioContext`); the hint and the button are covered by the e2e settings pass, and the pure
+  part is the manifest lookup.
+
+### 21.57 层数奖励（维多利亚每 25 层的进度）(the owner's report, 2026-10-17) — `public/js/ui/bondMilestones.js`, `public/js/ui/bondStrip.js` (BondPopup), `public/css/screens/game-panels.css` (`.bpop__ms*`)
+
+- **Reported**: 「有人反映盟约『维多利亚』『每 25 层给予一个随机效果的装备』生效有问题」. The rule's implementation was audited end
+  to end and is correct (docs/ISSUES-FIXLOG.md §11 has the evidence: payout while active / inactive then activated /
+  in-battle layers at settle / 50 and 100 layers at once / withdraw-and-replace / the pool / elite 维娜's +6 per distinct
+  tier — and the four hammers' battle effects, the 加速 one pinned by `test/content/hammer-aspd.test.js`). What a player
+  could not see was **where they stand**: the popup showed layers and thresholds but not the 25-layer milestones, and an
+  inactive bond pays nothing until it lights up — the shape of the reports from the older builds.
+- **Now**: the bond popup gained 层数奖励 — one line per `bonds.json layerMilestones` entry (每 N 层 / 首次达到 N 层 / 达到 N 层),
+  the payouts already reached, the next one's layer and how many layers are missing, and, while the bond is inactive,
+  「盟约未激活：这些层数已经累计，激活时立即补发（每档只发一次）」. Pure `milestoneModel` (tested by
+  `test/ui/bond-milestones.test.js` against 维多利亚 / 远见 / 奇迹 / 迅捷, and against every other bond showing nothing) — the
+  payout stays the server's one implementation (`server/sim/content/bonds/core.js` payHammers).
 
 ---
 

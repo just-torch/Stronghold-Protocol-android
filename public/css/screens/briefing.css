@@ -135,3 +135,57 @@
   .brief-reroll__actions { flex-shrink: 1; }
   .brief-reroll__actions .btn { min-height: .44rem; padding-inline: .12rem; }
 }
+
+/* ==========================================================================================
+   js/ui/stageMap.js — 本局地图 (the owner's request, 2026-10-17): the battlefield drawn read-only from
+   data/stages.json. The briefing's BATTLEFIELD card, the enlarged dialog (briefing + strategy draft's
+   本局信息) and the in-game 本局信息 drawer all share these classes.
+   ========================================================================================== */
+.brief-stage--map { flex-direction: column; align-items: stretch; gap: .1rem; padding: .1rem .12rem .12rem; }
+.brief-stage--map .brief-stage__k { justify-content: space-between; }
+.brief-stage__map { position: relative; display: block; padding: 0; border: 1px solid var(--line-2); background: #080b0a; cursor: pointer; }
+.brief-stage__map:hover, .brief-stage__map:focus-visible { border-color: var(--mint-700); }
+.brief-stage__zoom {
+  position: absolute; right: .06rem; bottom: .06rem; display: flex; align-items: center; gap: .04rem;
+  padding: .02rem .07rem; font-size: max(calc(.13 * var(--t)), 9px); color: var(--text-md);
+  background: rgba(8, 10, 9, .84); border: 1px solid var(--line-2);
+}
+.brief-stage__zoom .icon { width: .14rem; height: .14rem; }
+.brief-stage__map:hover .brief-stage__zoom { color: var(--mint-400); border-color: var(--mint-700); }
+
+.stagemap { display: block; width: 100%; height: auto; background: #080b0a; }
+.stagemap__c.is-void { fill: transparent; }
+.stagemap__c.is-wall { fill: #333d39; }
+.stagemap__c.is-ground { fill: #46564f; }
+.stagemap__c.is-high { fill: #6f8277; }
+.stagemap__c.is-fence { fill: #4a3d2a; }
+.stagemap__c.is-water { fill: #1d4a5c; }
+.stagemap__c.is-hazard { fill: #5b4a1d; }
+.stagemap__c.is-spawn { fill: #a82a17; }
+.stagemap__c.is-goal { fill: #2f6f9a; }
+.stagemap__c.is-entry, .stagemap__c.is-exit { fill: #4b3f66; }
+.stagemap__deploy { fill: none; stroke: var(--mint-500); stroke-width: 1.3; stroke-dasharray: 3 2; }
+.stagemap__dot { fill: rgba(0, 0, 0, .42); }
+.stagemap__dot.is-high { fill: rgba(255, 255, 255, .38); }
+
+.stagemap-legend { display: flex; flex-wrap: wrap; gap: .08rem .18rem; margin: 0; padding: 0; list-style: none; font-size: max(calc(.14 * var(--t)), 9px); color: var(--text-md); }
+.stagemap-legend__i { display: flex; align-items: center; gap: .06rem; }
+.stagemap-legend__sw { width: .16rem; height: .16rem; flex: none; border: 1px solid rgba(255, 255, 255, .14); }
+.stagemap-legend__sw.is-ground { background: #3d4b45; }
+.stagemap-legend__sw.is-high { background: #6f8277; }
+.stagemap-legend__sw.is-wall { background: #2b3431; }
+.stagemap-legend__sw.is-water { background: #1d4a5c; }
+.stagemap-legend__sw.is-hazard { background: #5b4a1d; }
+.stagemap-legend__sw.is-spawn { background: #a82a17; }
+.stagemap-legend__sw.is-goal { background: #2f6f9a; }
+.stagemap-legend__sw.is-deploy { background: transparent; border: 1px dashed var(--mint-500); }
+
+.stagemap-dlg__block { display: flex; flex-direction: column; gap: .1rem; margin-bottom: .2rem; }
+.stagemap-dlg__tabs { display: flex; gap: .06rem; margin-bottom: .12rem; }
+.stagemap-dlg__tab { flex: 1; min-height: .38rem; padding: 0 .12rem; background: #0a0d0c; border: 1px solid var(--line-2); color: var(--text-lo); font-size: calc(.16 * var(--t)); cursor: pointer; }
+.stagemap-dlg__tab.is-on { background: var(--mint-900); border-color: var(--mint-700); color: var(--mint-400); font-weight: 700; }
+.stagemap-dlg__h { display: flex; align-items: baseline; justify-content: space-between; gap: .12rem; font-size: calc(.2 * var(--t)); font-weight: 700; }
+.stagemap-dlg__canvas { padding: .1rem; background: #080b0a; border: 1px solid var(--line); }
+.stagemap-dlg__hint { margin: .1rem 0 0; font-size: calc(.14 * var(--t)); line-height: 1.6; color: var(--text-lo); }
+.minfo-dlg__map { display: flex; flex-direction: column; gap: .1rem; }
+.minfo-dlg__map .brief-h { margin-bottom: 0; }

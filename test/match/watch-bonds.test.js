@@ -323,7 +323,11 @@ for (const elite of [false, true]) test(`runner: watched ${elite ? 'elite' : 'no
   assert.equal(diyRows('yanShip', h.ps('p_0').privateView()).some((x) => x.diy), false);
   for (const pid of ['p_0', 'p_1']) assert.deepEqual(h.m.handle(pid, { t: 'g.ready', ready: true }), { ok: true });
   h.runToPhase(PHASE.COMBAT, 1);
-  assert.deepEqual(h.m.handle('p_0', { t: 'g.watch', fieldId: 'n:p_1' }), { error: 'WRONG_PHASE', detail: 'own battle running' });
+  const p0Own = JSON.parse(JSON.stringify(h.lastTo('p_0', 'b.start'))); // p_0's own field, before any watch
+  assert.equal(p0Own.fieldId, 'n:p_0');
+  // watching a teammate while the own battle runs is allowed since the owner's request of 2026-10-17
+  assert.deepEqual(h.m.handle('p_0', { t: 'g.watch', fieldId: 'n:p_1' }), { ok: true });
+  assert.equal(h.lastTo('p_0', 'b.start').fieldId, 'n:p_1');
   assert.deepEqual(h.m.handle('s_spec', { t: 'g.watch', fieldId: 'n:p_1' }), { ok: true });
   const start = JSON.parse(JSON.stringify(h.lastTo('s_spec', 'b.start')));
   assert.deepEqual([start.watch, start.authoritative, start.elapsed], [true, false, 0]);
@@ -359,7 +363,7 @@ for (const elite of [false, true]) test(`runner: watched ${elite ? 'elite' : 'no
   resumed.net.emit('b.start', JSON.parse(JSON.stringify(h.lastTo('s_spec', 'b.start'))));
   await resumed.settle();
   assertHuang(ownerBoard(resumed.store.get().match.field, 'p_1', resumed.runner.ownerOps('p_1')));
-  r.net.emit('b.start', h.lastTo('p_0', 'b.start'));
+  r.net.emit('b.start', p0Own);
   await r.settle();
   assert.deepEqual(r.runner.ownerOps('p_1'), [], 'switching fields drops the other field\'s members');
   r.net.emit('b.start', start);

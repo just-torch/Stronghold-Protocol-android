@@ -130,8 +130,10 @@ export class MatchWatch {
 
   /**
    * g.watch under client-side combat: the watcher gets the field's spec (b.start, display only) and runs a local
-   * replica fast-forwarded to the field's clock. No watching while the own normal battle runs; the other pair's boss
-   * field is never shown to a fighting player; eliminated players may watch anything.
+   * replica fast-forwarded to the field's clock. A living player may watch a teammate's normal battle even while its own
+   * battle still runs (the owner's request of 2026-10-17: 「战斗中也可以观战其他人」 — the own battle keeps running in
+   * the page's runner and still reports its progress / result; 返回战场 goes back to it), and an eliminated player or a
+   * spectator seat may watch anything. The other pair's boss field is never shown to a fighting player.
    */
   _watchClient(ps, fieldId, playerId = null) {
     const f = this.fields.find((x) => x.fieldId === fieldId) || null;
@@ -139,7 +141,6 @@ export class MatchWatch {
     const own = this.fields.find((x) => x.players.includes(ps.playerId)) || null;
     if (ps.alive) {
       if ((f.kind === 'boss' || f.kind === 'hidden') && own && own !== f) return fail(ERR.BAD_TARGET, 'other group hidden');
-      if (f.kind === 'normal' && own && own !== f && own.live) return fail(ERR.WRONG_PHASE, 'own battle running');
     }
     this.watchers.set(ps.playerId, f.fieldId);
     this._watchPrefSet(ps, f, playerId);

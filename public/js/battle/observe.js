@@ -1,7 +1,9 @@
 // Observing rules and labels of client-side combat (research 09 §3.1 / §6.3, DESIGN §14 "Spectating") — pure helpers
 // for the game screen, the team panel and the combat HUD (mirror of server/match/match/watch.js _watchClient):
 //   * prep (休整期): tap a teammate → 前往查看 → their board (read-only);
-//   * own normal battle running: no observing ("当前无法查看");
+//   * own normal battle running: observing is allowed (the owner's request of 2026-10-17, 「战斗中也可以观战其他人」) —
+//     the own battle keeps running in the page's runner and still reports its progress / result, the HUD's observing
+//     pill says so and 返回战场 goes back to it;
 //   * own battle over: "⌛ 作战结束，等待队友完成作战" + the teammates' progress; tap a teammate → 前往查看 → a local
 //     replica of their battle; 返回战场 goes back;
 //   * 联防 / 最终攻势: the ‹ › pill switches the camera LEFT half / 全景 / RIGHT half of the own field; the other pair's
@@ -33,7 +35,8 @@ export function nameOf(pub, playerId) {
 }
 
 /**
- * What tapping a team row does: `{ back: true }` (own row while observing), `{ fieldId }` to observe, or `{ reason }`.
+ * What tapping a team row does: `{ back: true }` (own row while observing), `{ fieldId, live? }` to observe (`live`: the
+ * viewer's own battle is still running, so the observing pill says it keeps going), or `{ reason }`.
  * @param {any} p m.public player row
  * @param {any} pub
  * @param {string} myId
@@ -54,8 +57,9 @@ export function observeTarget(p, pub, myId, { observing = false, ownDone = false
   if (!meAlive || !own) return { fieldId: target.fieldId };
   if (own.fieldId === target.fieldId) return { reason: t('队友与你在同一战场，使用 ‹ › 切换视角') };
   if (target.kind === 'boss' || target.kind === 'hidden') return { reason: t('无法查看另一组队友的战场') };
-  if (own.kind === 'normal' && own.live !== false && !ownDone) return { reason: t('作战中无法查看队友，作战结束后可前往查看') };
-  return { fieldId: target.fieldId };
+  // the own battle still running: watching a teammate is allowed and the own battle keeps running (the runner steps an
+  // authoritative battle it does not display); `live` lets the screen say so while that is the case
+  return { fieldId: target.fieldId, live: own.kind === 'normal' && own.live !== false && !ownDone };
 }
 
 /**

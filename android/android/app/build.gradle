@@ -32,7 +32,7 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         // The game's own version: keep in step with package.json (build-apk.ps1 checks and refuses a mismatch; the dist
         // artifact name is derived from package.json). versionCode = major*10000 + minor*100 + patch. ASCII only.
-        versionCode 300
+        versionCode 301
         versionName "0.3.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

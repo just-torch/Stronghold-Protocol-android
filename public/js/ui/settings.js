@@ -39,6 +39,8 @@ import { UI_LIMITS } from '../../../shared/plugins/ui.js';
 import { toast, describeError } from './toasts.js';
 import { pluginMicro } from './pluginTag.js';
 import { fxAvailable } from '../render/vfx/available.js';
+import { data } from '../data.js';
+import { VOICE_TREES } from '../voicePrefs.js';
 import { resolveOfficialFx } from '../render/vfx/tier.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
@@ -94,6 +96,31 @@ function Slider({ label, micro, value, onInput, icon }) {
       onInput=${(e) => onInput(Number(e.currentTarget.value) / 100)} />
     <span class="set-row__val num">${pct}</span>
   </label>`;
+}
+
+/**
+ * A line of the chosen dub, for the 语音语言 row (the owner's request, 2026-10-17: 「配置语言语音」 — the switch existed
+ * since 0.2.6, but a player had to find an operator's card to hear it): the first operator of this server's manifest whose
+ * Chinese tree and the chosen tree both exist (data/assets.json audio — every dub is a separate tree), so the preview
+ * speaks the language that was just picked; 本土语言 previews the own-language dub. Silent while the voice volume is 0
+ * or the page is muted (audio.previewVoice returns false). Nothing is stored.
+ * @param {{ lang: string, native: boolean }} props
+ */
+function VoicePreview({ lang, native }) {
+  const [missed, setMissed] = useState(false);
+  const play = () => {
+    const manifest = data.get('assets')?.audio || null;
+    const want = native ? 'native' : (['cn', 'jp', 'en', 'kr'].includes(lang) ? lang : 'cn');
+    const tree = want === 'cn' ? 'voice' : VOICE_TREES[want];
+    const slots = manifest?.[tree];
+    const id = (slots && typeof slots === 'object' ? Object.keys(slots) : []).find((c) => manifest?.voice?.[c]);
+    const ok = !!(id && audio.previewVoice(id, want));
+    setMissed(!ok);
+  };
+  return html`<button type="button" class="set-preview" data-testid="voice-preview" onClick=${play}
+      title=${native ? t('试听本土语言配音') : t('试听{lang}配音', { lang: VOICE_LANG_NAMES[lang] || VOICE_LANG_NAMES.cn })}>
+    <${Icon} name="play" /><span>${t('试听')}</span></button>
+    ${missed ? html`<span class="set-preview__miss">${t('没有可试听的语音（先下载素材）')}</span>` : null}`;
 }
 
 function Toggle({ label, micro, value, onChange }) {
@@ -368,8 +395,10 @@ export function SettingsModal({ open, onClose }) {
           </div>
           <button type="button" class=${s.voiceNative ? 'set-native is-on' : 'set-native'} data-testid="voice-native" aria-pressed=${s.voiceNative ? 'true' : 'false'}
             title=${t('有本土语言配音时使用')} onClick=${() => updateSettings({ voiceNative: !s.voiceNative })}>${tc('voice-lang', '本土语言')}</button>
+          <${VoicePreview} lang=${s.voiceLang} native=${s.voiceNative} />
         </div>
       </div>
+      <p class="set-hint">${t('试听会用一名有这个配音的干员说一句台词；单名干员可以在干员调配或详情里单独选配音。')}</p>
       <${Slider} label=${t('音效')} micro="SFX" icon="signal" value=${s.sfx}
                  onInput=${(v) => { updateSettings({ sfx: v }); if (!tested) { setTested(true); setTimeout(() => setTested(false), 400); audio.sfx('click'); } }} />
       <${Toggle} label=${t('静音')} micro="MUTE" value=${s.muted} onChange=${(v) => updateSettings({ muted: v })} />
@@ -381,7 +410,7 @@ export function SettingsModal({ open, onClose }) {
       <${Toggle} label=${t('秘术师能量')} micro="STORED ENERGY" value=${s.mysticEnergy} onChange=${(v) => updateSettings({ mysticEnergy: v })} />
       <p class="set-hint">${t('在秘术师的血条下方显示储存的攻击能量 / 上限（如 2/3）。官方用干员身上的特效表示，没有这个数字。')}</p>
       <${Toggle} label=${t('作战统计')} micro="COMBAT STATS" value=${s.combatMetrics} onChange=${(v) => updateSettings({ combatMetrics: v })} />
-      <p class="set-hint">${t('打开后，对局左下角可以查看自己干员的伤害、治疗和 DPS / HPS。官方界面没有这个窗口。改变玩法的插件对局在 Worker 里演算，统计不到，按钮不显示。')}</p>
+      <p class="set-hint">${t('打开后，对局左下角可以查看干员伤害 / DPS / 治疗 / HPS 的实时排名，点上方指标切换排序；观战队友时也统计他们的干员（只在本机累计）。官方界面没有这个窗口。改变玩法的插件对局在 Worker 里演算，统计不到，按钮不显示。')}</p>
       <div class="set-row">
         <span class="set-row__label">${t('画面质量')}<${MicroLabel}>QUALITY<//></span>
         <div class="set-seg" role="radiogroup">

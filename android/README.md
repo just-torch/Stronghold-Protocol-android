@@ -22,6 +22,19 @@
 
 ---
 
+## 0.3.0-fork.2 带来什么（2026-10-17）
+
+与 fork.1 相比**没有规则改动**（黄金结果仍 288/288、素材包 `artId` 不变，已下载的素材可继续用），只有界面与玩法上的四项，
+详见仓库 `docs/FORK-DEVIATIONS.md` §21.53–§21.57：
+
+- **战斗中也能观战队友**：自己的作战还在进行时也能切过去看（官方与本 fork 之前都会拒绝），自己的作战在后台继续演算、结算照常；
+  观战标签写着「你的作战仍在进行」，随时「返回战场」。
+- **作战统计变成实时排名**：伤害 / DPS / 治疗 / HPS 四个指标点选排序，观战队友时也统计他们的干员（只在本机累计）。
+- **准备阶段就能看地图**：「确认本局信息」「本局信息（选策略 / 对局中）」新增整张战场：敌人出生点（红）、防守目标点（蓝）、
+  高台、阻隔、特殊地形，绿色虚线是你的部署区；可切到「最终攻势战场」看关底地图。
+- **语音语言可试听**：设置里「语音语言」旁的「试听」直接用一名有此配音的干员说一句台词。
+- 另外修好 `tools/plugin.mjs test` 在 Windows 上一律失败的问题（`--import` 收到 `C:\…` 被当成 `c:` 协议）。
+
 ## 成品
 
 | 项目 | 值 |
@@ -116,7 +129,7 @@ pwsh -NoProfile -File android/scripts/build-apk.ps1 -NoArt -SkipAssemble
 - **素材包**：把 `android/dist/art/` 里的 17 个 `.part` + `assets-index-0.3.0.json` + `assets-pack-0.3.0.json` 传到一个**单独的**
   release/tag（当前是 `assets-0.3.0`），然后发布它（草稿状态下匿名下载不了，App 会拿不到）。换托管只需改分支根目录的
   `pack.json` 并提交，**不用重发 APK**；包内的地址（`android/scripts/nodejs-template/asset-pack.json`）是它读不到指针时的兜底。
-- **App**：slim APK 与正式 APK 一起放在 `v0.3.0-fork.1` 这类发布里。
+- **App**：slim APK 与正式 APK 一起放在 `v0.3.0-fork.2` 这类发布里。
 
 **素材没变就不用重传素材包**：App 按**素材身份** `artId` 判断，而不是版本号。`artId` 是 `data/assets.json` 的 `hash` 与
 `data/local-assets.json` 的 `count`/`groups` 规范化后的 sha1 前 12 位（`android/scripts/nodejs-template/art-id.mjs`，两边同一份代码）。

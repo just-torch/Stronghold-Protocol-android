@@ -19,6 +19,7 @@
 
 import { html, Button, Icon, MicroLabel, BondDisc, Tooltip, Modal } from './components.js';
 import { UnitThumb } from './gameComponents.js';
+import { StageLegend, StageMap, stageMapModel } from './stageMap.js';
 import { bannedPerBond, disabledBondSets, briefingBondTip, diyBannedPieces } from './gameLogic.js';
 import { bondIconUrl } from './assetUrls.js';
 import { data } from '../data.js';
@@ -157,13 +158,21 @@ export function MatchInfo({ model }) {
 
 /**
  * The read-only match-info dialog (the strategy draft's 本局信息): MatchInfo in a Modal that 关闭, a tap outside or Esc
- * closes. `status` (the caller's line, e.g. the draft's turn and countdown) sits left of 关闭.
- * @param {{ open: boolean, onClose: Function, model: MatchInfoModel|null, status?: any }} props
+ * closes. `status` (the caller's line, e.g. the draft's turn and countdown) sits left of 关闭. `stage` (the match's
+ * stages.json record, m.public.stageId) adds 本局地图 — the same read-only battlefield the briefing shows
+ * (ui/stageMap.js, the owner's request of 2026-10-17), so the strategy can be planned against the map.
+ * @param {{ open: boolean, onClose: Function, model: MatchInfoModel|null, status?: any, stage?: any }} props
  */
-export function MatchInfoDialog({ open, onClose, model, status = null }) {
-  return html`<${Modal} open=${open && !!model} onClose=${onClose} title=${t('本局信息')} micro="MATCH INFO // BONDS & BANNED OPERATORS" class="minfo-dlg"
+export function MatchInfoDialog({ open, onClose, model, status = null, stage = null }) {
+  const map = open && stage ? stageMapModel(stage, { field: 'normal' }) : null;
+  return html`<${Modal} open=${open && !!model} onClose=${onClose} title=${t('本局信息')} micro="MATCH INFO // MAP, BONDS & BANNED OPERATORS" class="minfo-dlg"
     actions=${html`${status ? html`<div class="minfo-dlg__status" data-testid="match-info-status">${status}</div>` : null}
       <${Button} variant="secondary" icon="close" data-autofocus data-testid="match-info-close" onClick=${onClose}>${t('关闭')}<//>`}>
+    ${map ? html`<div class="minfo-dlg__map" data-testid="match-info-map">
+      <h3 class="brief-h"><span>${t('本局地图')}</span><${MicroLabel}>BATTLEFIELD</${MicroLabel}></h3>
+      <div class="stagemap-dlg__canvas"><${StageMap} stage=${stage} field="normal" /></div>
+      <${StageLegend} model=${map} />
+    </div>` : null}
     ${open && model ? html`<${MatchInfo} model=${model} />` : null}
   <//>`;
 }

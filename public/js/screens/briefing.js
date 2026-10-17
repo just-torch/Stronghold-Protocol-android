@@ -10,6 +10,7 @@ import { html, Button, Icon, MicroLabel } from '../ui/components.js';
 import { useGameData, Img, RichText } from '../ui/gameComponents.js';
 import { StepHeader, ExitModal } from '../ui/matchChrome.js';
 import { MatchInfo, matchInfoModel } from '../ui/matchInfo.js';
+import { StageMapCard } from '../ui/stageMap.js';
 import { LoadoutButton } from './loadout.js';
 import { UnofficialMark } from '../ui/pluginTag.js';
 import { SetupReroll } from '../ui/setupReroll.js';
@@ -80,9 +81,8 @@ export function BriefingScreen() {
             </ul>` : null}
           </div>
         </div>
-        <div class="brief-stage">
-          <span class="brief-stage__k"><${MicroLabel}>BATTLEFIELD</${MicroLabel}>${pool ? html`<span class="brief-stage__pool">${pool}</span>` : null}</span>
-          <span class="brief-stage__name"><${Icon} name="rook" />${stage?.name || pub.stageId || '—'}</span>
+        <div class="brief-stage-wrap">
+          <${StageMapCard} stage=${stage} pool=${pool} />
         </div>
         <div class="brief-factions">
           <h3 class="brief-h"><span>${t('特训敌人')}</span><${MicroLabel}>SPECIAL ENEMIES</${MicroLabel}></h3>
