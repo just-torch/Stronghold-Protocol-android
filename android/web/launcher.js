@@ -22,7 +22,9 @@
 /* global capacitorCapacitorNodeJS, capacitorExports */
 
 const DEFAULT_PORT = 3000;
-const HOST_WAIT_MS = 120_000;   // first launch has to unpack ~320 MB out of the APK
+const HOST_WAIT_MS = 300_000;   // first launch unpacks the whole tree out of the APK (1.05 GB in the full build —
+//                                ~3 min on an old phone, measured on a Galaxy C7 2016; the 120 s this used to
+//                                be was set when the tree was ~320 MB and timed out before the server bound)
 const READY_WAIT_MS = 60_000;   // after the unpack: waiting for the server to bind its port
 const READY_GRACE_MS = 25_000;  // bridge is up but `server-ready` has not arrived yet → use loopback anyway
 const DISCOVERY_POLL_MS = 1500; // how often the discovered-host list is refreshed while this page is visible

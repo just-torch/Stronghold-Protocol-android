@@ -595,6 +595,10 @@ User: 「给每个卫戍干员都加语音」, then, after the first build, 「�
   tier — and the four hammers' battle effects, the 加速 one pinned by `test/content/hammer-aspd.test.js`). What a player
   could not see was **where they stand**: the popup showed layers and thresholds but not the 25-layer milestones, and an
   inactive bond pays nothing until it lights up — the shape of the reports from the older builds.
+- **Follow-up (same day, the test phone)**: the full APK's first launch unpacks 1.05 GB out of the APK and took
+  150–180 s on a Galaxy C7 2016, so `android/web/launcher.js`'s 180 s wait (120 s host + 60 s ready) expired just before
+  the server bound its port; it is 300 s now (the slim pack's 54 MB tree is unaffected). `android/README.md` step 3 and
+  the release notes carry the measured numbers.
 - **Now**: the bond popup gained 层数奖励 — one line per `bonds.json layerMilestones` entry (每 N 层 / 首次达到 N 层 / 达到 N 层),
   the payouts already reached, the next one's layer and how many layers are missing, and, while the bond is inactive,
   「盟约未激活：这些层数已经累计，激活时立即补发（每档只发一次）」. Pure `milestoneModel` (tested by
