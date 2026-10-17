@@ -21,9 +21,10 @@
 // The UI never mutates match state locally; it re-renders from m.public / m.private / m.field pushes.
 // Client-side combat (DESIGN §14, m.public.combatMode 'client'): battles are simulated in this browser by
 // battle/runner.js, which publishes the battle's field meta into store.match.field and feeds the view the same b.snap /
-// b.ev frames the server used to stream. Observing follows research 09 §3.1 (battle/observe.js): no looking elsewhere
-// while the own normal battle runs; afterwards a teammate row → 前往查看 → a local replica, 返回战场 goes back; in
-// 联防 / 最终攻势 the ‹ › pill switches the camera between the field's halves and 全景.
+// b.ev frames the server used to stream. Observing follows research 09 §3.1 (battle/observe.js) with the fork's
+// 战斗中观战 (§21.53): a teammate row → 前往查看 → a local replica — also while the own normal battle runs (it keeps
+// being simulated and reported in the background, and the pill says so) — 返回战场 goes back; in 联防 / 最终攻势 the
+// ‹ › pill switches the camera between the field's halves and 全景.
 // Enemy preview pen (research 09 §2 / §6.2 item 3): in 休整期 the next round's enemies stand in the pen at the top right
 // of the prep view (render/app.js: the prep camera shows it, the battle cameras do not — the maintainer's decision of
 // 2026-10-15); the right HUD 🔍▶▶ pans the camera to the pen (view.setCamera('pen')); the left button turns into 🔍◀◀
