@@ -386,6 +386,11 @@ describe('asset pack loader (fake store)', () => {
     const manifest = { groups: {} };
     for (const [slot, [g, n]] of Object.entries(PACK_IMAGES)) (manifest.groups[g] ||= {})[n] = { path: `/assets/local/${g}/${n}.png` };
     manifest.groups['mesh/s_common_box_01'] = { pCube2: { path: '/assets/local/mesh/s_common_box_01/pCube2.obj' } };
+    // 0.3.1 added the 射击台 and 阻隔工事 models to the pack (mesh/trap_110: platform, crate)
+    manifest.groups['mesh/trap_110'] = {
+      trap_1106_achplat: { path: '/assets/local/mesh/trap_110/trap_1106_achplat.obj' },
+      trap_1105_accrate: { path: '/assets/local/mesh/trap_110/trap_1105_accrate.obj' },
+    };
     manifest.groups['map/fx'] = { ...manifest.groups['map/fx'], Start_up: { path: '/assets/local/map/fx/Start_up.obj' }, prefab: { path: '/assets/local/map/fx/prefab.json' } };
     const requested = [];
     const store = {

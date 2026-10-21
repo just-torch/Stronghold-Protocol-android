@@ -5,10 +5,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateC2S, C2S } from '../../shared/protocol.js';
 import { ERR, EMOTES } from '../../shared/constants.js';
+import { PLUGIN_OFFER_SLOTS } from '../../shared/plugins/limits.js';
 import { createRng } from '../../server/sim/rng.js';
 import { DATA, makeMatch, checkInvariants } from './harness.js';
 
-const GAME = Object.keys(C2S).filter((t) => t.startsWith('g.') && t !== 'g.leave');
+// `g.test` is a host-only 测试房间 command (its own validation and the test room tests cover it): not fuzzed here
+const GAME = Object.keys(C2S).filter((t) => t.startsWith('g.') && t !== 'g.leave' && t !== 'g.test');
 const BANDS = Object.keys(DATA.bands);
 const CHESS_IDS = Object.keys(DATA.chess);
 const ITEM_IDS = Object.keys(DATA.items);
@@ -34,6 +36,9 @@ function randomIntent(rng, m, ps) {
     case 'g.sell': case 'g.destroy': return { t, uid: uid() };
     case 'g.move': return { t, uid: uid(), to: to() };
     case 'g.equip': return { t, itemUid: uid(), targetUid: uid() };
+    case 'g.unequip': return { t, itemUid: uid() };
+    // a plugin interaction window (PLUGIN API v2): shapes only — no plugin offer is open, so every one is refused
+    case 'g.offer': case 'g.offerRefresh': return { t, offerId: rng.pick(['off_x', 'o1']), pluginId: rng.pick(['p_x', 'a']), seq: rng.int(1000), idx: rng.int(PLUGIN_OFFER_SLOTS) };
     case 'g.art': return { t, itemUid: uid(), row: rng.int(19), col: rng.int(21) };
     case 'g.reward': case 'g.choice': return { t, idx: rng.int(6) };
     case 'g.ready': return { t, ready: rng() < 0.4 };

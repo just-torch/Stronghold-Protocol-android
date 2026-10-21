@@ -208,8 +208,10 @@ describe('wiring', () => {
     assert.match(game, /const shopFolded = showShop && \(pen \? penRef\.current\.collapsed : \(collapsed \|\| deployFold\)\);/);
     // entering prep and the boss-prep re-frame take the fold state; a fold / unfold re-frames through foldCamera
     assert.equal((game.match(/const pc = prepCameraFor\(pub, myId, shopFolded\);/g) || []).length, 2);
-    // a hand-made fold still goes through foldCamera, still deferred while busy (the deploy fold's own branch is
-    // asserted in issue602-deploy-fold.test.js)
-    assert.match(game, /const next = foldCamera\(\{\n\s+pub, myId, folded: shopFolded, ownPrep: !!view && viewModeRef\.current === 'prep' && showPrep,\n\s+pen, busy: !!drag \|\| !!facing, current: camRef\.current,\n\s+\}\);\n\s+if \(next\) setCam\(next\.kind, \{ \.\.\.next\.opts, ms: FOLD_CAMERA_MS \}\);/);
+    // a hand-made fold still reaches foldCamera (through prepDeployCamera), still deferred while busy; the deploy
+    // fold's zoom / release frame is layered on top there and asserted in issue602-deploy-fold.test.js
+    assert.match(game, /const next = prepDeployCamera\(\{\n\s+pub, myId, deployFold, releaseDeploy: step\.release, folded: shopFolded,\n\s+ownPrep: !!view && viewModeRef\.current === 'prep' && showPrep,\n\s+pen, busy: !!drag \|\| !!facing, current: camRef\.current,\n\s+\}\);/);
+    assert.match(game, /deployZoomedRef\.current = deployZoomRemember\(step, \{ next, pen \}\);/);
+    assert.match(game, /if \(next\) setCam\(next\.kind, \{ \.\.\.next\.opts, ms: FOLD_CAMERA_MS \}\);/);
   });
 });

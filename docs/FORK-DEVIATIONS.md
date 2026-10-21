@@ -53,6 +53,7 @@ carries a **v0.2.0 status** line under its heading. The table is the summary:
 | §21.55 | 本局地图 — the battlefield drawn in the briefing / 本局信息 | **keep (fork-only)**: upstream names the stage only (`战场#03`) |
 | §21.56 | 语音语言 can be previewed in 设置 | **keep (fork-only)**: upstream has the switch and the per-operator picker, no preview of the global dub |
 | §21.57 | 层数奖励 — a bond's `<every N layers>` progress in its popup | **keep (fork-only)**: the payout is upstream's (`bonds/core.js` payHammers); the progress line is this fork's answer to the 2026-10-17 report |
+| §21.58 | 对局记录与回放 — finished matches stored on the server, replayed from their battle specs | **keep (fork-only)**: upstream keeps only the last match's frames in memory for a reconnecting client (`Lobby.buildReplay`); nothing survives a restart |
 
 Appendix A lists the fork's edits that sit *inside* upstream's own sections (§6.3, §8.2, §8.3, §19.8, §21.1, §21.11,
 §21.20 and §22's intro) — wording that upstream's `docs/design/*` and `docs/history/*` do not carry. Each one is either
@@ -604,6 +605,26 @@ User: 「给每个卫戍干员都加语音」, then, after the first build, 「�
   「盟约未激活：这些层数已经累计，激活时立即补发（每档只发一次）」. Pure `milestoneModel` (tested by
   `test/ui/bond-milestones.test.js` against 维多利亚 / 远见 / 奇迹 / 迅捷, and against every other bond showing nothing) — the
   payout stays the server's one implementation (`server/sim/content/bonds/core.js` payHammers).
+
+### 21.58 对局记录与回放 (the owner's request, 2026-10-21) — `server/history/store.js`, `server/lobby.js` (`onMatchEnd`), `server/http/websocket.js` (`history`), `server/index.js` (`historyFromEnv`), `.gitignore` (`data/history/`)
+
+- **Requested**: 「服务器记录已结束的对局，同时实现结束对局的回放功能」.
+- **Why not upstream**: the lobby already keeps the last match's frames for a reconnecting client
+  (`Lobby.buildReplay`: the encoded `m.public` / `m.result` of the match that just ended, in memory, dropped with the
+  room). Nothing survives a restart, nothing lists the matches of last week, and the frames replay only the last screen.
+- **Record** (`server/history/store.js`, DESIGN-cited as §21.58 because this file is the fork's design): one JSON per
+  finished match under `SP_HISTORY_DIR` (default `data/history/`, ignored by git) plus `index.json` (newest first, at most
+  `limit` = 100 entries; older files are deleted). A record carries the meta (id `<endedAtMs>-<roomCode>`, room, mode,
+  difficulty, rounds, result, seed, app version), the seats (playerId, name, isBot, seat, LP) and **`battles[]`** — each
+  field's `spec` (the deterministic input a client re-simulates, docs/SIM.md) plus its result. No frames and no private
+  state: a `b.start` spec is enough to replay a battle byte for byte on the same build. A record over `maxBytes`
+  (4 MiB) keeps its meta and drops the specs (`truncated: true`, `replayable: false`).
+- **Hook**: `Lobby.onMatchEnd` builds and stores the record before the match reference is dropped; a store failure is
+  logged and never fails the match. `SP_HISTORY=off` disables recording (`opts.history` wins in tests), `SP_HISTORY_DIR`
+  moves the files. The server's `startServer` result carries the store (`history`).
+- Tests: `test/match/history.test.js` — `buildMatchRecord` (spec from `f.spec` or `Battle.opts`, result of a server-run
+  field, a match without battles not replayable), the store (index round-trip across a reopen, prune deleting the file,
+  the size cap, the id guard, an unreadable record) and a real `startServer` + `room.start` + `finish` writing one record.
 
 ---
 

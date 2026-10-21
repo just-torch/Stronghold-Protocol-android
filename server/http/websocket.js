@@ -52,17 +52,18 @@ export function narrowDeflateOffer(header) {
  * @param {{ MatchClass?: Function, seedFn?: () => number, [option: string]: any }} opts startServer() options
  * @param {{ data: object, log: object, content?: { cs: string } | null,
  *   plugins?: ReturnType<typeof import('../plugins/roomSets.js').createRoomSets> | null,
- *   hosts?: ReturnType<typeof import('../match/host/index.js').createMatchHosts> | null }} deps the game data the lobby's
+ *   hosts?: ReturnType<typeof import('../match/host/index.js').createMatchHosts> | null,
+ *   history?: ReturnType<typeof import('../history/store.js').createMatchHistory> | null }} deps the game data the lobby's
  *   matches use, the logger, the vanilla content (server/plugins/identity.js: welcome / room.state content, BattleSpec
  *   cs), the room sets a room's host chooses from (room.setPlugins: visual and content sets), the match hosts a room with
- *   gameplay plugins plays in (DESIGN §32.6)
+ *   gameplay plugins plays in (DESIGN §32.6), the finished-match store (server/history/store.js, DESIGN §21.58)
  * @returns {{ registry: SessionRegistry, lobby: Lobby, network: Network }}
  */
-export function createSessionStack(opts, { data, log, content = null, plugins = null, hosts = null }) {
+export function createSessionStack(opts, { data, log, content = null, plugins = null, hosts = null, history = null }) {
   const netOptions = netOptionsFrom(opts);
   const registry = new SessionRegistry({ reconnectWindowMs: netOptions.reconnectWindowMs ?? NET_DEFAULTS.reconnectWindowMs });
   const lobbyOptions = lobbyOptionsFrom(opts);
-  const lobby = new Lobby({ registry, log, MatchClass: opts.MatchClass, getData: () => data, seedFn: opts.seedFn, content, plugins, hosts, options: lobbyOptions });
+  const lobby = new Lobby({ registry, log, MatchClass: opts.MatchClass, getData: () => data, seedFn: opts.seedFn, content, plugins, hosts, history, options: lobbyOptions });
   const network = new Network({ registry, handler: lobby, log, options: netOptions });
   return { registry, lobby, network };
 }

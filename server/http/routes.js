@@ -13,6 +13,10 @@
 //     start, WebSocket wire and payload bytes) for a loopback or private-network client only — the maintainer's
 //     decision of 2026-10-12: the figures are the host's, so any other client, also one a tunnel or proxy on this
 //     machine forwards, gets the plain report (net.js clientAddress, honouring TRUST_PROXY like the WebSocket limits);
+//   * GET /api/history[?limit=N] → `{ v: 1, matches: [...] }`, the finished matches of this server (newest first, the
+//     list entries without battle specs); GET /api/history/<id> → one record including its battles' `spec`s, which is
+//     what a 回放 re-simulates (server/history/store.js, DESIGN §21.58); an unknown id is a JSON 404. Absent when the
+//     server runs with SP_HISTORY=off (then the path falls through to the static files);
 //   * everything else → the static files (static.js).
 // Every response's body bytes count in the traffic counters (traffic.js meter). A route that throws is logged and
 // answers 500.
@@ -28,7 +32,9 @@ const MAX_URL_LENGTH = 4096;
 function pluginCount(lobby) {
   let n;
   try { n = Number(lobby?.plugins?.unofficial?.()) || 0; } catch { n = 0; }
-  return n > 0 ? { plugins: n } : {};
+  let notices = false;
+  try { notices = lobby?.plugins?.hasNotices?.() === true; } catch { /* optional catalogue hint */ }
+  return { ...(n > 0 ? { plugins: n } : {}), ...(notices ? { notices: true } : {}) };
 }
 
 /** The content sets with gameplay plugins rooms hold now (DESIGN §32.6; 0 without any). */
@@ -69,6 +75,32 @@ export function healthReport({ startedAt, network, registry, lobby, content = nu
 const wantsTraffic = (query) => /(?:^|&)traffic(?:=(?:1|true|yes))?(?:&|$)/i.test(query || '');
 
 /**
+ * GET /api/history[?limit=N] and GET /api/history/<id> (DESIGN §21.58): the finished matches of this server, newest
+ * first; one record carries its battles' specs, which is what a 回放 re-simulates. Never cached (a new match lands in the
+ * list while a page is open); a bad or unknown id is a plain JSON 404, not the HTML error page.
+ */
+function sendHistory(req, res, parts, history) {
+  const rest = parts.rawPath.slice('/api/history'.length);
+  if (!rest) {
+    const raw = new URLSearchParams(parts.query || '').get('limit');
+    const n = Number.parseInt(raw ?? '', 10);
+    const limit = Number.isFinite(n) && n > 0 ? Math.min(n, 500) : 50;
+    sendJson(req, res, 200, { v: 1, matches: history.list({ limit }) });
+    return;
+  }
+  if (!rest.startsWith('/') || rest.slice(1).includes('/')) {
+    sendJson(req, res, 404, { error: 'not found' });
+    return;
+  }
+  const rec = history.load(decodeURIComponent(rest.slice(1)));
+  if (!rec) {
+    sendJson(req, res, 404, { error: 'no such match' });
+    return;
+  }
+  sendJson(req, res, 200, rec);
+}
+
+/**
  * The request listener for `http.createServer`.
  * @param {{ serveStatic: (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse,
  *             rawPath: string, query: string) => Promise<void>,
@@ -79,7 +111,7 @@ const wantsTraffic = (query) => /(?:^|&)traffic(?:=(?:1|true|yes))?(?:&|$)/i.tes
  *   plugin studio (server/studio/index.js), or none
  * @returns {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => void}
  */
-export function createRequestHandler({ serveStatic, health, log, trustProxy = 'auto', studio = null, csp = null, trustedRuntime = null }) {
+export function createRequestHandler({ serveStatic, health, log, trustProxy = 'auto', studio = null, csp = null, trustedRuntime = null, history = null }) {
   async function handleRequest(req, res) {
     const url = req.url || '/';
     if (url.length > MAX_URL_LENGTH) { sendError(req, res, 414, '请求地址过长 · URI too long'); return; }
@@ -95,6 +127,12 @@ export function createRequestHandler({ serveStatic, health, log, trustProxy = 'a
     if (parts.rawPath === '/healthz') {
       const withTraffic = wantsTraffic(parts.query) && isLocalIp(clientAddress(req, trustProxy).ip);
       sendJson(req, res, 200, healthReport(health, withTraffic));
+      return;
+    }
+    // 对局记录 (DESIGN §21.58): the finished matches of this server, and one record with its battle specs. No store
+    // configured (SP_HISTORY=off) is the same as an empty one: the client shows its own empty state.
+    if (history && (parts.rawPath === '/api/history' || parts.rawPath.startsWith('/api/history/'))) {
+      sendHistory(req, res, parts, history);
       return;
     }
     await serveStatic(req, res, parts.rawPath, parts.query);

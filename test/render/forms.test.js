@@ -566,10 +566,11 @@ test('render/app.js hands the `form` of a sim fx (shared/protocol.js fxForm) wit
   assert.match(src, /const x = late > 0 \? \{ \.\.\.e\[4\], late, \.\.\.\(Number\(e\[4\]\.dur\) > 0 \? \{ dur: Math\.max\(0, Number\(e\[4\]\.dur\) - late\) \} : \{\}\) \} : e\[4\];/);
   // …and UnitView.setForm skips a change clip that would already have ended
   assert.match(readFileSync(path.join(ROOT, 'public/js/render/units.js'), 'utf8'), /!\(late > 0 && late >= \(this\.actor\.dur\?\.\(f\.change\) \?\? Infinity\)\)/);
-  // (a kit fx the official skill / talent effects stand for is not drawn procedurally either: render/vfx/skillfx.js
-  // simFx, talentfx.js fx; nor a 重生's telegraph / revive the talents' rows stand for: wiring.form, talentfx.js form)
+  // (a kit fx the official skill / talent effects stand for is not drawn procedurally either — nor one an installed
+  // plugin's own effect plays: render/vfx/skillfx.js simFx, talentfx.js fx, vfx/pluginPlayer.js; nor a 重生's telegraph /
+  // revive the talents' rows stand for: wiring.form, talentfx.js form)
   assert.match(src, /if \(fv\) officialForm = wiring\.form\(fv, form, x\);/);
-  assert.match(src, /const official = !\(late > 0\) && wiring\.simFx\(e\[1\], Number\(e\[2\]\), Number\(e\[3\]\), e\[4\]\);\s*if \(!\(late > 0\) && !official && !officialForm\) fx\.simFx\(/);
+  assert.match(src, /const custom = !\(late > 0\) && pluginFx\.simFx\(e\[1\], Number\(e\[2\]\), Number\(e\[3\]\), e\[4\]\);\s*const official = !\(late > 0\) && wiring\.simFx\(e\[1\], Number\(e\[2\]\), Number\(e\[3\]\), e\[4\]\);\s*if \(!\(late > 0\) && !official && !officialForm && !custom\) fx\.simFx\(/);
   assert.match(src, /interp\.takeEvents\(renderT, EVS, renderT - 1\.5, LATE\);/);
 });
 

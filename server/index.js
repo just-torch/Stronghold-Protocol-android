@@ -52,6 +52,7 @@ import { createContentSets } from './plugins/contentSets.js';
 import { createPluginPolicy } from './plugins/policy.js';
 import { createRoomSets } from './plugins/roomSets.js';
 import { createMatchHosts } from './match/host/index.js';
+import { historyFromEnv } from './history/store.js';
 import { createTrustedRuntime } from './plugins/trustedRuntime.js';
 import { trustedHostAllowed } from './plugins/trusted.js';
 import { createStudio } from './studio/index.js';
@@ -123,7 +124,7 @@ export async function startServer(opts = {}) {
   // long cache works exactly as it does for a bundled public/assets. The `fonts` root stays under public/.
   const artRoots = assetsDir ? { rootDirs: { assets: path.resolve(assetsDir) } } : {};
   const assetIndex = indexOptions ? createAssetIndex({ publicDir, log, ...indexOptions, ...artRoots }) : null;
-  const views = assetIndex ? createManifestViews({ dataDir, index: assetIndex, log }) : null;
+  const views = createManifestViews({ dataDir, index: assetIndex, log });
   // the visual sets of the cosmetic plugins (DESIGN §32 P1a): what a room's host switches on, served at /vs/ and /p/
   const visual = createVisualSets({ registry: packs, log });
   // the server owner's policy (plugins/config.json), the content sets of the gameplay plugins (served at /cs/<cs16>/…),
@@ -135,7 +136,10 @@ export async function startServer(opts = {}) {
   // an out-of-memory abort in a worker thread ends the whole server)
   const transport = String(process.env.SP_MATCH_HOST || '').trim().toLowerCase() === 'worker' ? 'worker' : 'process';
   const hosts = createMatchHosts({ contents, log, options: { transport, maxWorkers: Math.max(1, policy.get().maxSets), ...(opts.matchHost || {}) } });
-  const { registry, lobby, network } = createSessionStack(opts, { data, log, content, plugins: roomSets, hosts });
+  // finished matches on disk (DESIGN §21.58): SP_HISTORY=off turns it off, SP_HISTORY_DIR moves the files. `opts.history`
+  // wins (a test passes its own store, or null for none).
+  const history = opts.history !== undefined ? opts.history : historyFromEnv(process.env, path.join(ROOT, 'data', 'history'), { log });
+  const { registry, lobby, network } = createSessionStack(opts, { data, log, content, plugins: roomSets, hosts, history });
   // debug console (DESIGN §21.34): an explicit option wins, else SP_CONSOLE ('auto' = loopback clients only). Upstream's
   // createSessionStack (server/http/websocket.js) builds the Lobby from the LOBBY_OPTION_KEYS of http/config.js, which
   // this fork-only option is not part of — so it is set on the Lobby right after construction (`startMatch` reads
@@ -154,7 +158,7 @@ export async function startServer(opts = {}) {
   buildTag();
 
   const traffic = createTrafficCounter();
-  const server = http.createServer(createRequestHandler({ serveStatic, csp: process.env.SP_CSP === 'off' ? null : siteCsp(publicDir), health: { startedAt, network, registry, lobby, content, traffic, assetIndex, views, trusted:trustedRuntime?.health }, log, trustProxy: network.opts.trustProxy, studio, trustedRuntime }));
+  const server = http.createServer(createRequestHandler({ serveStatic, csp: process.env.SP_CSP === 'off' ? null : siteCsp(publicDir), health: { startedAt, network, registry, lobby, content, traffic, assetIndex, views, trusted:trustedRuntime?.health }, log, trustProxy: network.opts.trustProxy, studio, trustedRuntime, history }));
   server.on('clientError', answerClientError);
   const wss = attachWebSocket(server, { network, log, traffic });
 
@@ -191,6 +195,9 @@ export async function startServer(opts = {}) {
     const actual = server.address();
     const scriptHost = actual && typeof actual === 'object' ? actual.address : '';
     packs.setScriptHost(scriptHost);
+    const testGate = lobby.setTestHost(scriptHost);
+    if (testGate.warn) log.warn(`[test-mode] ${testGate.warn}`);
+    else if (testGate.enabled) log.info('[test-mode] test rooms enabled');
     if (!trustedHostAllowed(scriptHost, scriptMode)) {
       lobby.trustedRuntime = null;
       await trustedRuntime?.close();
@@ -237,7 +244,7 @@ export async function startServer(opts = {}) {
     return closing;
   }
 
-  return { port: actualPort, host: boundHost, url, server, wss, lobby, network, registry, packs, content, visual, contents, hosts, traffic, assetIndex, views, studio, close };
+  return { port: actualPort, host: boundHost, url, server, wss, lobby, network, registry, packs, content, visual, contents, hosts, history, traffic, assetIndex, views, studio, close };
 }
 
 // `node server/index.js` / npm start: listen, print the banner, stop on SIGINT / SIGTERM (http/boot.js).

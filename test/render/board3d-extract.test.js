@@ -41,13 +41,15 @@ describe('extract.py board jobs', { skip: !PY && 'no python3' }, () => {
     assert.equal(by['map/common'].bundle, 'arts/maps/common/res.ab');
     assert.ok(new RegExp(by['map/common'].keep).test('TX_wind_device') && !new RegExp(by['map/common'].keep).test('TX_R6_bomb'));
     assert.ok(new RegExp(by['map/water'].keep).test('[ucp]TX_water_normal'));
-    // the board meshes of DESIGN §15 (the four of the mesh job table) and the official 射击台 model (round 40): of the
-    // 卫戍协议 device bundle only trap_1106_achplat's mesh / texture / material / GameObject are kept
+    // the board meshes of DESIGN §15 (the four of the mesh job table) and the official devices (round 40's 射击台,
+    // 0.3.1 / GitHub #663's 阻隔工事 crate): of the 卫戍协议 device bundle only their mesh / texture / material /
+    // GameObject are kept
     assert.equal(jobs.filter((j) => j.sub.startsWith('mesh/')).length, 5);
     assert.equal(by['mesh/trap_110'].bundle, 'arts/maps/common/trap/trap_110.ab');
     const keep = new RegExp(by['mesh/trap_110'].keep);
-    for (const n of ['trap_1106_achplat', 'TX_trap_1106_achplat', 'MT_trap_1106_achplat']) assert.ok(keep.test(n), n);
-    for (const n of ['trap_1105_accrate', 'TX_trap_1105_accrate', 'TX_trap_1101_acplane_D', 'trap_1106_achplat_old']) assert.ok(!keep.test(n), n);
+    for (const n of ['trap_1106_achplat', 'TX_trap_1106_achplat', 'MT_trap_1106_achplat',
+      'trap_1105_accrate', 'TX_trap_1105_accrate', 'MT_trap_1105_accrate']) assert.ok(keep.test(n), n);
+    for (const n of ['TX_trap_1101_acplane_D', 'trap_1106_achplat_old']) assert.ok(!keep.test(n), n);
     assert.deepEqual(derived.map((d) => [d.sub, d.from, d.derive, d.name]), [
       ['map/autochess', 'TX_autochessi_N', 'normal_rg', 'TX_autochessi_N_rgb'],
       ['map/autochess', 'TX_autochessi_M', 'rough_from_gloss', 'TX_autochessi_M_rough'],
@@ -182,7 +184,32 @@ describe('extracted board files (when a local client was extracted)', { skip: !m
   const pngOf = (p) => p.replace(/\.webp$/, '.png');  // a WebP copy (extract.py WEBP) keeps its PNG beside it
   const hasFiles = existsSync(path.join(ROOT, 'public/assets/local/map/fx'));
 
-  test('every pack slot the renderer loads is in the manifest (and on disk)', () => {
+  // A local extraction that is incomplete or older than this release's extractor lists entries for files it never wrote
+  // (0.3.1: the 阻隔工事 crate in mesh/trap_110, the lossless / emission scene maps). Those checks skip with the missing
+  // files, as the other "when the local client was extracted" tests skip without assets, instead of failing on such a
+  // machine; a current extraction runs them.
+  const staleReason = (files) => `the local extraction is incomplete or older than this release's extractor — ${files.length} file(s) missing ` +
+    `(${files.slice(0, 4).join(', ')}${files.length > 4 ? ', …' : ''}); re-run node tools/setup.mjs --local`;
+  const groups = manifest?.groups || {};
+  const packGap = [];
+  if (hasFiles) {
+    for (const [slot, [g, n]] of [...Object.entries(PACK_IMAGES), ...Object.entries(PACK_MESHES)]) {
+      const e = groups[g]?.[n];
+      if (e?.path && !existsSync(onDisk(e.path))) packGap.push(`${slot}: ${e.path}`);
+    }
+  }
+  const webpGap = [];
+  if (hasFiles) {
+    for (const [g, entries] of Object.entries(groups)) {
+      for (const [n, e] of Object.entries(entries)) {
+        if (!/\.webp$/.test(e?.path || '')) continue;
+        if (!existsSync(onDisk(e.path))) webpGap.push(`${g}/${n}: ${e.path}`);
+        else if (!existsSync(onDisk(pngOf(e.path)))) webpGap.push(`${g}/${n}: ${pngOf(e.path)}`);
+      }
+    }
+  }
+
+  test('every pack slot the renderer loads is in the manifest (and on disk)', { skip: packGap.length > 0 && staleReason(packGap) }, () => {
     for (const [slot, [g, n]] of [...Object.entries(PACK_IMAGES), ...Object.entries(PACK_MESHES)]) {
       const e = manifest.groups[g]?.[n];
       assert.ok(e && e.path, `${slot}: ${g}/${n}`);
@@ -211,7 +238,7 @@ describe('extracted board files (when a local client was extracted)', { skip: !m
     for (let i = 0; i < m.rgba.length; i += 4 * 131) assert.equal(r.rgba[i + 1], 255 - m.rgba[i + 3]);
   });
 
-  test('the WebP copies the manifest lists are on disk with their PNGs beside them', { skip: !hasFiles && 'files not extracted' }, () => {
+  test('the WebP copies the manifest lists are on disk with their PNGs beside them', { skip: webpGap.length > 0 && staleReason(webpGap) }, () => {
     for (const [g, entries] of Object.entries(manifest.groups)) {
       for (const [n, e] of Object.entries(entries)) {
         if (!/\.webp$/.test(e?.path || '')) continue;

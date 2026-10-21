@@ -67,6 +67,9 @@ const NOT_SCALED = [
   /\.spcard/,
   // decorative wordmarks and boot/rotate overlays whose size is the composition
   /\.title-cn/, /\.title-en/, /\.title-bg__target/, /\.brief-boss__q/, /\.boot__/, /\.rotate-hint/,
+  // the round-start / 联防 capsule animation's wordmark (开始作战 / 联防开始, css/screens/game.css .capfx): drawn inside the
+  // capsule as part of the animation's composition, like the wordmarks above
+  /\.capfx/,
   // the join code's letter-spaced field, the px-floored 本局信息 dialog, the 16 px diagnostics box (iOS zoom guard)
   /\.field--code/, /\.minfo-dlg/, /\.set-diag__text/,
   // the keyboard hints of the 快捷键 list (a shared rule with the HUD's .toolbtn kbd)

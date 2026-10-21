@@ -145,12 +145,15 @@ describe('simulation', () => {
   test('scaling mode Local: the node scale sizes the particles; Shape: it does not', () => {
     const E = { m_Bursts: [{ time: 0, countCurve: 1, cycleCount: 1, repeatInterval: 0.01, probability: 1 }] };
     const big = frameAt(0, 0, 0, [0, 0, 0, 1], [2, 2, 2]);
+    // 0.3.1 (§34.6): a local-space particle keeps its own size and the Local scaling mode's scale is applied as it is
+    // drawn (sizeScale), so a node a clip grows still grows the particles it holds; Shape ignores that scale.
     const local = new PSys(compileSystem(sys({ I: { startSize: 0.5 }, E })), {});
     local.play(big); local.update(1 / 60, big);
-    assert.equal(local.sx[0], 1);
+    assert.equal(local.sx[0], 0.5, 'born at its own size, not baked with the node scale');
+    assert.equal(local.sx[0] * local.sizeScale(0), 1, 'drawn at the node scale');
     const shape = new PSys(compileSystem(sys({ top: { scalingMode: 2 }, I: { startSize: 0.5 }, E })), {});
     shape.play(big); shape.update(1 / 60, big);
-    assert.equal(shape.sx[0], 0.5);
+    assert.equal(shape.sx[0] * shape.sizeScale(0), 0.5, 'Shape does not scale the particle');
   });
 });
 

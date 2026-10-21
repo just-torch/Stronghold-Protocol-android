@@ -443,7 +443,7 @@ describe('the 秘术师 charge (b.snap energy)', () => {
     assert.equal(live(handles, 'indigo_attack_charge_02').length, 0);
   });
 
-  test('works with 设置「秘术师能量」 off: the readout rides in every snapshot (the view reads v.energy, not the setting)', async () => {
+  test('works with 设置「显示弹药与能量数量」 off: the readout rides in every snapshot (the view reads v.energy, not the setting)', async () => {
     const { handles, view, frame } = await setup();
     const u = view(1, 'char_469_indigo', 5);
     u.energy = [3, 3]; frame();

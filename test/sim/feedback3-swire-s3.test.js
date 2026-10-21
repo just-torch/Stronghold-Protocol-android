@@ -1,6 +1,7 @@
-// test/sim/feedback3-swire-s3.test.js — 琳琅诗怀雅 S3 千金一掷. Owner 2026-10-04: at the purse cap of 10
-// she shoots once a ground enemy is in the skill attack range (the 1-tile range). Below the cap, or with
-// the enemy only further ahead, the skill stays open and the coins stay. A manual close still spends.
+// test/sim/feedback3-swire-s3.test.js — 琳琅诗怀雅 S3 千金一掷 under the official 卫戍协议 rule (0.3.1, maintainer
+// 2026-10-17): the toggle never closes by itself, a full purse of 10 neither fires a coin burst nor pushes anyone, and
+// ending it — a manual close, a retreat, the battle's end — spends nothing. The old 2026-10-04 cap-triggered close and
+// its front-range burst are gone (CHANGELOG 0.3.1 「琳琅诗怀雅三技能改为遵循官方卫戍协议」).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -26,49 +27,54 @@ const arm = (h) => {
   assert.ok(u.skill.active || u.skill.activate('test', { free: true }));
   return u;
 };
+/** Damage events the coin burst would have tagged (there is none any more). */
+const coinHits = (h) => h.hooksOf('damaged').filter((c) => (c.dmg?.tags || []).includes('swire2Cash'));
 
-test('琳琅诗怀雅 S3 shoots at the cap only once an enemy is in the skill attack range', REAL, () => {
-  const under = battle([10, 6]);
-  const u9 = arm(under);
-  u9.mem.coins = 9;
-  under.run(2);
-  assert.equal(u9.skill.active, true, '9 coins do not close it');
-  assert.equal(u9.mem.coins, 9);
-
-  const far = battle([10, 7]); // two tiles ahead: outside the 1-tile attack range, inside nothing she swings at
-  const uf = arm(far);
-  uf.mem.coins = 10;
-  far.run(0.5);
-  assert.equal(uf.skill.active, true, 'an enemy outside the attack range does not make her shoot');
-  assert.equal(uf.mem.coins, 10);
-
-  const none = battle(null);
-  const un = arm(none);
-  un.mem.coins = 10;
-  none.run(0.5);
-  assert.equal(un.skill.active, true, 'nobody in range: the purse stays');
-  assert.equal(un.mem.coins, 10);
-
-  const h = battle([10, 6]); // one tile ahead: the skill attack range
+test('琳琅诗怀雅 S3: a full purse keeps the skill open and fires no coin burst', REAL, () => {
+  const h = battle([10, 6]);
   const u = arm(h);
-  const e = h.enemies()[0];
-  const hp0 = e.hp;
-  u.mem.coins = 10;
-  h.run(0.2);
-  assert.equal(u.skill.active, false, 'the enemy in the attack range is shot');
-  assert.equal(u.mem.coins, 0, 'every coin is spent');
-  assert.ok(e.hp < hp0, 'the coins hit that enemy');
+  u.mem.coins = 9;
+  h.run(2);
+  assert.equal(u.skill.active, true, '9 coins do not close it');
+  assert.equal(u.mem.coins, 9);
+
+  u.mem.coins = 10; // the cap
+  h.run(2);
+  assert.equal(u.skill.active, true, 'a full purse does not close the toggle');
+  assert.equal(u.mem.coins, 10, 'the purse stays full');
+  assert.equal(coinHits(h).length, 0, 'no coin burst');
+  assert.equal(u.skill.activations, 1, 'no re-cast either');
   assert.equal(h.b.errors.length, 0);
   checkInvariants(h.b);
 });
 
-test('琳琅诗怀雅 S3: a manual close below the cap still spends', REAL, () => {
-  const h = battle(null);
+test('琳琅诗怀雅 S3: the coins never push, and ending the skill spends nothing', REAL, () => {
+  const h = battle([10, 6]);
   const u = arm(h);
+  const e = h.enemies()[0];
+  const x0 = e.x;
+  u.mem.coins = 10;
+  h.run(1);
+  assert.ok(Math.abs(e.x - x0) < 1e-6, 'not pushed by the coins');
+  assert.equal(coinHits(h).length, 0);
+
   u.mem.coins = 4;
   assert.doesNotThrow(() => u.skill.end('manual'));
   assert.equal(u.skill.active, false);
-  assert.equal(u.mem.coins, 0);
-  assert.equal(h.hooksOf('damaged').length, 0);
+  assert.equal(u.mem.coins, 4, 'a manual close keeps the coins');
+  assert.equal(coinHits(h).length, 0, 'and hits nobody');
+  checkInvariants(h.b);
+});
+
+test('琳琅诗怀雅 S3: a kill at the cap does not raise the purse past 10', REAL, () => {
+  const h = battle(null);
+  const u = arm(h);
+  u.mem.coins = 10;
+  h.spawn('e_sw', { pos: [10, 6] });
+  const weak = h.enemies()[0];
+  weak.hp = 1; // a kill pays a coin — the cap holds it at 10
+  h.run(3);
+  assert.equal(u.mem.coins, 10);
+  assert.equal(u.skill.active, true);
   checkInvariants(h.b);
 });

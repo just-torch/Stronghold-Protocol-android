@@ -92,5 +92,11 @@ test('unchanged: a loop that is the skill idle (蕾缪安 S3) and a skill withou
   u.log.length = 0;
   u.attack(1.2);
   run(u, 1.2 * 1.4 + 0.1);
-  assert.deepEqual(names(u).slice(-2), ['Skill_End', 'Idle'], 'its spell of attacks still ends as before');
+  // 0.3.1 (CHANGELOG: 白面鸮 S2 etc.): a held loop with no OnAttack of its own stays the stance — an attack no longer
+  // returns her to Idle / replays the beginning; the End clip is for the skill's end only
+  assert.deepEqual(names(u), [], 'an attack changes no clip');
+  assert.equal(u.mode, 'base', 'no attack mode: nothing is played over the loop');
+  u.setSkill(false);
+  run(u, u.dur('Skill_End') + 0.1);
+  assert.deepEqual(names(u), ['Skill_End', 'Idle'], 'the skill ends on its End clip, then the plain idle');
 });

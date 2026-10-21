@@ -273,7 +273,7 @@ test('3_04 琳琅诗怀雅 S1 仗义疏财 (owner\'s decision): an injured ally 
   done(h);
 });
 
-test('3_04 琳琅诗怀雅 S3 千金一掷: 二连击, kills pay a coin, a full purse is cashed out on the front range (hits + push)', () => {
+test('3_04 琳琅诗怀雅 S3 千金一掷: 二连击, kills pay a coin, a full purse stays open (no burst, no push)', () => {
   for (const id of BOTH('chess_char_3_04_a')) {
     const b = SB(id, 'skchr_swire2_3'), t0 = TB(id, 0);
     const h = makeBattle({ defs: { enemies: { enemy_heavy: dummy('enemy_heavy', { mass: 9 }), enemy_weak: dummy('enemy_weak', { hp: 1 }) } }, timeLimit: 90, hooks: ['damaged', 'attack', 'deploy'], captureNoisy: true, flags: { dpInit: 60, dpMax: 99 },
@@ -293,20 +293,18 @@ test('3_04 琳琅诗怀雅 S3 千金一掷: 二连击, kills pay a coin, a full 
     h.spawn('enemy_weak', { pos: [9, 5] });
     assert.ok(h.runUntil(() => u.mem.coins === c0 + 1, 3), 'a kill pays a coin');
     assert.ok(u.skill.active, 'still on');
+    // 0.3.1 (official): a full purse never closes the toggle, spends its coins or pushes anything
     u.mem.coins = b.sp; // full purse (10)
     h.step();
-    assert.equal(u.skill.active, false, 'closed once full');
-    const cash = tagged(h, 'swire2Cash', u);
-    assert.equal(cash.length, b.sp, 'one hit per coin');
-    for (const c of cash) approx(c.amount, u.s.atk * b.atk_scale);
-    assert.equal(u.mem.coins, 0);
+    h.run(2);
+    assert.ok(u.skill.active, 'a full purse keeps the skill open');
+    assert.equal(tagged(h, 'swire2Cash', u).length, 0, 'no coin burst');
+    assert.equal(u.mem.coins, b.sp, 'the coins stay');
     assert.equal(u.skill.activations, 1);
-    assert.ok(h.runUntil(() => u.skill.activations === 2, 10), 'recast once SP is full again');
-    assert.equal(u.mem.coins, t0.sp);
     assert.ok(!h.hooksOf('deploy').some((c) => c.unit.defId === 'token_10031_swire2_gdtrap'), 'no bombs');
     done(h);
   }
-  // the push: a light enemy is shoved forward (and out of the range: the remaining coins are spent on nobody)
+  // a full purse pushes nobody: the coins are not spent on the front range any more
   const id = 'chess_char_3_04_a';
   const g = makeBattle({ defs: { enemies: { enemy_light: dummy('enemy_light') } }, timeLimit: 30, hooks: ['damaged'], captureNoisy: true, flags: { dpInit: 60, dpMax: 99 },
     units: [U(id, 'skchr_swire2_3', 9, 5)], enemies: [{ key: 'enemy_light', pos: [9, 6] }] });
@@ -318,8 +316,9 @@ test('3_04 琳琅诗怀雅 S3 千金一掷: 二连击, kills pay a coin, a full 
   const x0 = e.x;
   v.mem.coins = SB(id, 'skchr_swire2_3').sp;
   g.step();
-  assert.ok(e.x > x0 + 0.3, 'pushed forward');
-  assert.ok(tagged(g, 'swire2Cash', v).length >= 1);
+  g.run(2);
+  assert.ok(Math.abs(e.x - x0) < 1e-6, 'not pushed');
+  assert.equal(tagged(g, 'swire2Cash', v).length, 0, 'no cash-out of the purse');
   done(g);
 });
 

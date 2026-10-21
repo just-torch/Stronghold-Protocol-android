@@ -150,5 +150,5 @@ test('onHealth: told every /healthz body a check reads — what else the page re
   g.stop();
   assert.equal(bodies.length, 3, 'the guard\'s first check hands it over');
   const main = (await import('node:fs')).readFileSync(new URL('../../public/js/main.js', import.meta.url), 'utf8');
-  assert.match(main, /onHealth: \(h\) => \{ const n = pluginCount\(h\.content\); if \(n !== store\.get\(\)\.installedPlugins\) store\.set\(\{ installedPlugins: n \}\); \}/);
+  assert.match(main, /onHealth: \(h\) => \{\n\s+const n = pluginCount\(h\.content\), notices = h\.content\?\.notices === true;\n\s+if \(n !== store\.get\(\)\.installedPlugins \|\| notices !== store\.get\(\)\.installedNotices\) store\.set\(\{ installedPlugins: n, installedNotices: notices \}\);\n\s+\},/);
 });

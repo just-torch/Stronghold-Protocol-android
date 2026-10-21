@@ -103,23 +103,20 @@ test('奥术法阵 on the field: 炎佑\'s damage silences its target (PRTS 盟�
   }
 });
 
-test('琳琅诗怀雅 S3 pays her coins to the ground enemies of range 2-4 in front (PRTS 备注), not only her 1-1 attack range', () => {
+test('琳琅诗怀雅 S3 no longer spends her coins on anyone (0.3.1: the official 卫戍协议 never closes the toggle)', () => {
   const id = 'chess_char_3_04_a';
   const h = makeBattle({ defs: { enemies: { enemy_dummy: dummy() } }, units: [{ chessId: id, row: 10, col: 3, skillIndex: 2 }], timeLimit: 60, hooks: ['damaged'], captureNoisy: true, autoFinish: false });
   h.step();
   const u = h.unit(id);
   assert.equal(u.skill.id, 'skchr_swire2_3');
-  const near = h.spawn('enemy_dummy', { pos: [10, 4] });   // her attack range (1-1)
-  const far = h.spawn('enemy_dummy', { pos: [10, 5] });    // range 2-4 only (two tiles ahead)
-  const side = h.spawn('enemy_dummy', { pos: [11, 4] });   // range 2-4's diagonal front
-  const out = h.spawn('enemy_dummy', { pos: [10, 6] });    // outside both
+  h.spawn('enemy_dummy', { pos: [10, 4] });
+  h.spawn('enemy_dummy', { pos: [10, 5] });
   assert.ok(h.runUntil(() => u.skill.active, 20), 'S3 on');
   u.mem.coins = 10;
-  const cash = () => h.hooksOf('damaged').filter((c) => c.source === u && (c.dmg?.tags || []).includes('swire2Cash'));
-  assert.ok(h.runUntil(() => cash().length >= 10, 10), 'the full purse is spent');
-  const hit = new Set(cash().map((c) => c.target));
-  assert.ok(hit.has(far) || hit.has(side), 'coins reach range 2-4 beyond her attack range');
-  assert.ok(!hit.has(out), 'nothing outside range 2-4');
-  for (const e of hit) assert.ok([near, far, side].includes(e));
+  h.run(3);
+  const cash = h.hooksOf('damaged').filter((c) => (c.dmg?.tags || []).includes('swire2Cash'));
+  assert.equal(cash.length, 0, 'a full purse is never spent');
+  assert.equal(u.skill.active, true);
+  assert.equal(u.mem.coins, 10);
   checkInvariants(h.b);
 });

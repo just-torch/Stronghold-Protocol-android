@@ -255,7 +255,7 @@ test('B5 audit: every displacement source × ground / static air / dynamic air /
   assert.deepEqual(wrong, []);
 });
 
-test('B5 audit: 琳琅诗怀雅 S3\'s coins push ground enemies only (PRTS 备注 "地面敌方单位…弹道（不可对空）")', REAL, () => {
+test('B5 audit: 琳琅诗怀雅 S3\'s coins no longer push anyone (0.3.1: the official 卫戍协议 never spends them)', REAL, () => {
   const id = 'chess_char_3_04_a';
   const h = makeBattle({
     units: [{ chessId: id, row: 10, col: 3, dir: 'RIGHT', skillIndex: 2 }], flags: { dpInit: 60, dpMax: 99 },
@@ -269,8 +269,9 @@ test('B5 audit: 琳琅诗怀雅 S3\'s coins push ground enemies only (PRTS 备�
   const [g, f] = h.b.enemies;
   u.mem.coins = u.skill.bb.sp;
   h.step(3);
-  assert.ok(!u.skill.active && u.mem.coins === 0, 'the coins are spent');
-  assert.ok(g.x > 4.3, `the ground enemy is pushed forward (${g.x})`);
+  assert.equal(u.skill.active, true, 'a full purse keeps it open');
+  assert.equal(u.mem.coins, u.skill.bb.sp, 'and keeps its coins');
+  approx(g.x, 4, 1e-9, 'the ground enemy is not pushed');
   approx(Math.hypot(f.x - 5, f.y - 10), 0, 1e-9, 'the drone is never paid');
 });
 

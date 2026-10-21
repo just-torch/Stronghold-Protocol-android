@@ -61,7 +61,7 @@ describe('game.js wiring', () => {
   const game = read('public/js/screens/game.js');
 
   test('deployFold is derived from the interaction state on the own editable prep board, never written into `collapsed`', () => {
-    assert.match(game, /const deployFold = deployFoldsShop\(\{\n\s+ownPrep: !!view && viewModeRef\.current === 'prep' && showPrep, editable, pen, drag: !!drag, facing: !!facing,\n\s+\}\);/);
+    assert.match(game, /const deployFold = deployFoldsShop\(\{\n\s+ownPrep: !!view && viewModeRef\.current === 'prep' && showPrep, editable, pen, drag: !!drag, facing: !!facing,\n\s+enabled: playerSettings\.prepDeployFold !== false,\n\s+\}\);/);
     // the player's own state feeds the camera state only ORed with the temporary fold (pen behavior untouched)
     assert.match(game, /const shopFolded = showShop && \(pen \? penRef\.current\.collapsed : \(collapsed \|\| deployFold\)\);/);
     assert.match(game, /const barCollapsed = collapsed \|\| deployFold;/);
@@ -70,16 +70,20 @@ describe('game.js wiring', () => {
   });
 
   test('the camera effect zooms on pickup before the hand-made fold logic, and both fold flights use the short duration', () => {
-    const branch = game.indexOf('if (deployFold) {');
-    assert.ok(branch > 0, 'the deployFold branch exists');
-    assert.match(game.slice(branch), /if \(cur\.kind !== want\.kind \|\| cur\.opts\?\.shop !== false\) setCam\(want\.kind, \{ \.\.\.want\.opts, ms: FOLD_CAMERA_MS \}\);\n\s+return;/);
-    // the branch sits in front of the deferred foldCamera call, inside the same effect
-    const foldCall = game.indexOf('const next = foldCamera({', branch);
-    const effectEnd = game.indexOf('}, [view, deployFold, shopFolded, showPrep, pen, !!drag, !!facing, prepCamKey]);', branch);
-    assert.ok(foldCall > branch && effectEnd > foldCall, 'branch first, foldCamera after, deployFold in the deps');
+    // gameLogic prepDeployCamera keeps the order: the deployFold zoom first, foldCamera (the hand-made 收起 path) only
+    // when no deploy fold is in effect, and the release frame (setting off mid-drag) skips the busy deferral
+    const step = game.indexOf('const step = deployZoomStep(deployZoomedRef.current, deployFold);');
+    assert.ok(step > 0, 'the effect reads this frame\'s deploy zoom step');
+    const deployCam = game.indexOf('const next = prepDeployCamera({', step);
+    assert.ok(deployCam > step, 'and asks prepDeployCamera, which zooms for the deploy fold first');
+    assert.match(game, /pub, myId, deployFold, releaseDeploy: step\.release, folded: shopFolded,/);
+    const effectEnd = game.indexOf('}, [view, deployFold, shopFolded, showPrep, pen, !!drag, !!facing, prepCamKey]);', deployCam);
+    assert.ok(effectEnd > deployCam, 'inside the fold / deploy camera effect, deployFold in the deps');
+    // a release frame that could not apply (the pen is open) keeps the zoom owed until the pen closes
+    assert.match(game, /deployZoomedRef\.current = deployZoomRemember\(step, \{ next, pen \}\);/);
     // the zoom is a quick flight (a hand-made 收起 / 准备就绪 fold flies the same way), never a generic 750 ms one
     assert.equal(FOLD_CAMERA_MS < CAMERA_MS, true, `${FOLD_CAMERA_MS} ms is shorter than the ${CAMERA_MS} ms camera flight`);
-    assert.equal((game.match(/ms: FOLD_CAMERA_MS/g) || []).length, 2, 'the pickup zoom and the fold / unfold restore');
+    assert.equal((game.match(/ms: FOLD_CAMERA_MS/g) || []).length, 1, 'the one prepDeployCamera flight: the pickup zoom and the fold / unfold restore');
     assert.match(game, /import \{ FOLD_CAMERA_MS \} from '\.\.\/render\/app\/tune\.js';/);
   });
 

@@ -15,6 +15,8 @@ public/fonts/
 # public/assets/ above). Downloaded bundles live in .cache/official-scenes/ (already ignored by .cache/ below).
 # The repository never stores those official files.
 data/local-assets.json
+# server/history/store.js → the finished matches of this server (DESIGN §21.58; SP_HISTORY_DIR moves them)
+data/history/
 # tools/local-extract/fx.py → the official battle effects' file list (DESIGN §33; the files under public/assets/local/fx/)
 data/local-fx.json
 # download caches, upstream tables, ledgers, reports, setup state
@@ -65,3 +67,8 @@ desktop.ini
 .claude/
 # tools/sim-check.mjs: the corpus and its Node traces for /dev/sim-check.html
 public/dev/simcheck/data/
+
+# --- this fork's local scratch (probes, upstream zips, screenshots) — never shipped -----------------
+.scratch/
+/screenshot/
+Stronghold-Protocol-v*.zip
