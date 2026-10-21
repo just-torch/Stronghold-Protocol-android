@@ -137,8 +137,13 @@ export async function startServer(opts = {}) {
   const transport = String(process.env.SP_MATCH_HOST || '').trim().toLowerCase() === 'worker' ? 'worker' : 'process';
   const hosts = createMatchHosts({ contents, log, options: { transport, maxWorkers: Math.max(1, policy.get().maxSets), ...(opts.matchHost || {}) } });
   // finished matches on disk (DESIGN §21.58): SP_HISTORY=off turns it off, SP_HISTORY_DIR moves the files. `opts.history`
-  // wins (a test passes its own store, or null for none).
-  const history = opts.history !== undefined ? opts.history : historyFromEnv(process.env, path.join(ROOT, 'data', 'history'), { log });
+  // wins (a test passes its own store, or null for none). Under `node --test` (NODE_TEST_CONTEXT set in every test file's
+  // process) it stays off unless a test asked for a store: a suite that starts a hundred servers must not litter the
+  // checkout with match records.
+  const inTests = !!(typeof process !== 'undefined' && process.env && process.env.NODE_TEST_CONTEXT);
+  const history = opts.history !== undefined ? opts.history
+    : inTests ? null
+      : historyFromEnv(process.env, path.join(ROOT, 'data', 'history'), { log });
   const { registry, lobby, network } = createSessionStack(opts, { data, log, content, plugins: roomSets, hosts, history });
   // debug console (DESIGN §21.34): an explicit option wins, else SP_CONSOLE ('auto' = loopback clients only). Upstream's
   // createSessionStack (server/http/websocket.js) builds the Lobby from the LOBBY_OPTION_KEYS of http/config.js, which

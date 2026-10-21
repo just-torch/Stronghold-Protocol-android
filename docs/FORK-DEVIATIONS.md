@@ -621,7 +621,9 @@ User: 「给每个卫戍干员都加语音」, then, after the first build, 「�
   (4 MiB) keeps its meta and drops the specs (`truncated: true`, `replayable: false`).
 - **Hook**: `Lobby.onMatchEnd` builds and stores the record before the match reference is dropped; a store failure is
   logged and never fails the match. `SP_HISTORY=off` disables recording (`opts.history` wins in tests), `SP_HISTORY_DIR`
-  moves the files. The server's `startServer` result carries the store (`history`).
+  moves the files. The server's `startServer` result carries the store (`history`). Under `node --test`
+  (`NODE_TEST_CONTEXT` is set in every test file's process) the store stays off unless a test passes one, so a suite that
+  starts a hundred servers leaves no records in the checkout.
 - **API** (`server/http/routes.js`): `GET /api/history[?limit=N]` → `{ v: 1, matches: [...] }` (list entries only, newest
   first, `limit` capped at 500); `GET /api/history/<id>` → one record including the `spec`s; an unknown id or a deeper path
   is a JSON 404 (never the HTML error page). Both are `no-store`. With `SP_HISTORY=off` the route is absent and the path
