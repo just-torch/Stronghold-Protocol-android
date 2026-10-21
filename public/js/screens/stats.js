@@ -28,6 +28,8 @@ import { TITLE_HEX_SECTORS, titleSectorClip } from '../ui/titleHexagon.js';
 import { store, createStore, useStore, selectRoute } from '../store.js';
 import { ResultView } from './result.js';
 import { toast, toastError } from '../ui/toasts.js';
+import { ServerHistory } from '../ui/serverHistory.js';
+import { BattleReplay } from '../ui/battleReplay.js';
 import {
   loadStats, saveStats, emptyStats, importStats, exportStats, aggregateStats, countsTowardStats, selfRowOf, roundsOf, isModdedRecord,
   recordToResult, MAX_RECORDS, FULL_KEEP, IMPORT_MAX_CHARS,
@@ -57,6 +59,9 @@ const TABS = [
   { id: 'bands', name: N_('盟约&策略'), micro: 'ALLIANCES / STRATEGIES' },
   { id: 'totals', name: N_('战斗累计'), micro: 'COMBAT TOTALS' },
   { id: 'history', name: N_('对局记录'), micro: 'HISTORY' },
+  // DESIGN §21.58: the server's own record of finished matches (also those played from other devices), each battle
+  // replayable from its spec
+  { id: 'server', name: N_('服务器记录'), micro: 'SERVER' },
 ];
 
 const pct = (n, d) => (d > 0 ? `${Math.round((n / d) * 100)}%` : '—');
@@ -485,10 +490,14 @@ function StatsScreen({ tab }) {
   const gd = useMemo(() => makeLookups(ready), [ready, data.locale()]);
   const [stats, setStats] = useState(() => loadStats());
   const [replay, setReplay] = useState(null);
+  // DESIGN §21.58: { record, battle } of the battle being replayed in the field view
+  const [battleReplay, setBattleReplay] = useState(null);
   const boxRef = useRef(null);
   const fileRef = useRef(null);
   const replayRef = useRef(null);
   replayRef.current = replay;
+  const battleReplayRef = useRef(null);
+  battleReplayRef.current = battleReplay;
   const inMatch = useStore((s) => selectRoute(s) === 'game');
   const nickname = useStore((s) => s.me.name);
   useDocClass('sp-stats-open');
@@ -499,7 +508,7 @@ function StatsScreen({ tab }) {
     const onKey = (e) => {
       if (e.key !== 'Escape' || document.querySelector('.modal')) return; // a confirm dialog on top takes the Esc
       e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-      if (replayRef.current) setReplay(null); else closeStats();
+      if (battleReplayRef.current) setBattleReplay(null); else if (replayRef.current) setReplay(null); else closeStats();
     };
     window.addEventListener('keydown', onKey, true);
     const timer = setTimeout(() => boxRef.current?.focus?.(), 30);
@@ -550,6 +559,10 @@ function StatsScreen({ tab }) {
     toast(t('已清空本机统计数据'), 'success');
   };
 
+  if (battleReplay) return html`<div class="st st--replay" ref=${boxRef} tabindex="-1" role="dialog" aria-modal="true" aria-label=${t('战斗回放')}>
+    <${BattleReplay} battle=${battleReplay.battle} record=${battleReplay.record} onClose=${() => setBattleReplay(null)} />
+  </div>`;
+
   if (replay) return html`<div class="st st--replay" ref=${boxRef} tabindex="-1" role="dialog" aria-modal="true" aria-label=${t('统计数据')}>
     <${Replay} rec=${replay} onBack=${() => setReplay(null)} />
   </div>`;
@@ -570,24 +583,27 @@ function StatsScreen({ tab }) {
         </div>
       </div>
       <div class="st-top__right">
-        <${Button} variant="ghost" size="sm" data-testid="stats-export" disabled=${empty || stats.newer} onClick=${doExport} title=${t('导出为文件（可在别的设备上导入）')}>${t('导出')}<//>
-        <${Button} variant="ghost" size="sm" data-testid="stats-import" disabled=${stats.newer} onClick=${() => fileRef.current?.click()} title=${t('从导出的文件导入（与现有记录合并）')}>${t('导入')}<//>
+        <${Button} variant="ghost" size="sm" data-testid="stats-export" disabled=${tab === 'server' || empty || stats.newer} onClick=${doExport} title=${tab === 'server' ? t('这些是本机的统计数据（服务器记录只读）') : t('导出为文件（可在别的设备上导入）')}>${t('导出')}<//>
+        <${Button} variant="ghost" size="sm" data-testid="stats-import" disabled=${tab === 'server' || stats.newer} onClick=${() => fileRef.current?.click()} title=${t('从导出的文件导入（与现有记录合并）')}>${t('导入')}<//>
         <input ref=${fileRef} type="file" accept="application/json,.json" hidden onChange=${doFile} />
-        <${Button} variant="secondary" size="sm" data-testid="stats-clear" disabled=${empty || stats.newer} onClick=${doClear} title=${t('清空本机的统计数据')}>${t('清空')}<//>
+        <${Button} variant="secondary" size="sm" data-testid="stats-clear" disabled=${tab === 'server' || empty || stats.newer} onClick=${doClear} title=${t('清空本机的统计数据')}>${t('清空')}<//>
       </div>
     </header>
-    <p class="st-note"><${Icon} name="info" />${t('本机数据：只保存在这个浏览器里，不会上传到服务器；同盟对局里队友的代号也会存在本机（导出文件里也有）。')}</p>
+    ${tab === 'server'
+      ? html`<p class="st-note"><${Icon} name="info" />${t('服务器记录：由这台服务器保存，换设备也能看到；回放会重新演算当时的战斗（不下载录像）。')}</p>`
+      : html`<p class="st-note"><${Icon} name="info" />${t('本机数据：只保存在这个浏览器里，不会上传到服务器；同盟对局里队友的代号也会存在本机（导出文件里也有）。')}</p>`}
     ${stats.damaged ? html`<p class="st-note is-warn"><${Icon} name="warn" />${t('本机保存的统计数据无法读取，已另存为备份，从现在起重新记录。')}</p>` : null}
     ${stats.dropped ? html`<p class="st-note is-warn"><${Icon} name="warn" />${t('有 {n} 条记录已损坏，已忽略。', { n: stats.dropped })}</p>` : null}
     <div class="ui-slot" data-ui-slot="stats.tab" aria-label=${t('界面插件')} dangerouslySetInnerHTML=${{ __html: '' }}></div>
     <main class="st-body" data-tab=${tab}>
       ${!ready ? html`<div class="st-loading"><${Spinner} size="md" /></div>`
-        : stats.newer ? html`<p class="st-empty">${t('检测到更新版本的统计数据，请先升级客户端再查看，以免覆盖数据。')}</p>`
-          : empty ? html`<p class="st-empty">${t('还没有记录 —— 完成一局对局后，这里会开始积累。')}</p>`
-            : tab === 'bands' ? html`<${Bands} agg=${agg} gd=${gd} records=${stats.records} />`
-              : tab === 'totals' ? html`<${CombatSums} agg=${agg} />`
-                : tab === 'history' ? html`<${History} records=${stats.records} gd=${gd} onOpen=${setReplay} />`
-                  : html`<${Overview} agg=${agg} gd=${gd} nickname=${nickname} records=${stats.records} />`}
+        : tab === 'server' ? html`<${ServerHistory} onReplay=${setBattleReplay} />`
+          : stats.newer ? html`<p class="st-empty">${t('检测到更新版本的统计数据，请先升级客户端再查看，以免覆盖数据。')}</p>`
+            : empty ? html`<p class="st-empty">${t('还没有记录 —— 完成一局对局后，这里会开始积累。')}</p>`
+              : tab === 'bands' ? html`<${Bands} agg=${agg} gd=${gd} records=${stats.records} />`
+                : tab === 'totals' ? html`<${CombatSums} agg=${agg} />`
+                  : tab === 'history' ? html`<${History} records=${stats.records} gd=${gd} onOpen=${setReplay} />`
+                    : html`<${Overview} agg=${agg} gd=${gd} nickname=${nickname} records=${stats.records} />`}
     </main>
   </div>`;
 }

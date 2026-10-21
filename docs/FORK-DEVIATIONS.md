@@ -53,7 +53,7 @@ carries a **v0.2.0 status** line under its heading. The table is the summary:
 | §21.55 | 本局地图 — the battlefield drawn in the briefing / 本局信息 | **keep (fork-only)**: upstream names the stage only (`战场#03`) |
 | §21.56 | 语音语言 can be previewed in 设置 | **keep (fork-only)**: upstream has the switch and the per-operator picker, no preview of the global dub |
 | §21.57 | 层数奖励 — a bond's `<every N layers>` progress in its popup | **keep (fork-only)**: the payout is upstream's (`bonds/core.js` payHammers); the progress line is this fork's answer to the 2026-10-17 report |
-| §21.58 | 对局记录与回放 — finished matches stored on the server, replayed from their battle specs | **keep (fork-only)**: upstream keeps only the last match's frames in memory for a reconnecting client (`Lobby.buildReplay`); nothing survives a restart |
+| §21.58 | 对局记录与回放 — finished matches stored on the server, replayed from their battle specs (统计数据 → 服务器记录) | **keep (fork-only)**: upstream keeps only the last match's frames in memory for a reconnecting client (`Lobby.buildReplay`); nothing survives a restart and nothing can be replayed |
 
 Appendix A lists the fork's edits that sit *inside* upstream's own sections (§6.3, §8.2, §8.3, §19.8, §21.1, §21.11,
 §21.20 and §22's intro) — wording that upstream's `docs/design/*` and `docs/history/*` do not carry. Each one is either
@@ -622,9 +622,23 @@ User: 「给每个卫戍干员都加语音」, then, after the first build, 「�
 - **Hook**: `Lobby.onMatchEnd` builds and stores the record before the match reference is dropped; a store failure is
   logged and never fails the match. `SP_HISTORY=off` disables recording (`opts.history` wins in tests), `SP_HISTORY_DIR`
   moves the files. The server's `startServer` result carries the store (`history`).
+- **API** (`server/http/routes.js`): `GET /api/history[?limit=N]` → `{ v: 1, matches: [...] }` (list entries only, newest
+  first, `limit` capped at 500); `GET /api/history/<id>` → one record including the `spec`s; an unknown id or a deeper path
+  is a JSON 404 (never the HTML error page). Both are `no-store`. With `SP_HISTORY=off` the route is absent and the path
+  falls through to the static files, which the client reads as 「这台服务器没有开启对局记录」.
+- **Client** (`public/js/ui/historyClient.js`, `ui/serverHistory.js`, `ui/battleReplay.js`, `screens/stats.js`): a fifth tab
+  「服务器记录」 in 统计数据 — the server's list, a row opens its battles (round / kind / kills) and 「回放」 opens the player.
+  The player re-simulates the spec in the page (`InPageSimHost` from `battle/simHost.js`, the same engine the game screen
+  runs), feeds `view.pushSnapshot` / `pushEvents` at 30 Hz × the chosen speed (1× / 2× / 4×, pause, restart) and frames the
+  field the way the game does (`view.enterBattle` + `view.setCamera`). No video, no server round-trip; the page loads the
+  sim data files once (the same ones a match loads), which is why the first 回放 shows a spinner for a few seconds.
+  A record from another build (`record.app !== APP_VERSION`) warns that the picture may differ.
 - Tests: `test/match/history.test.js` — `buildMatchRecord` (spec from `f.spec` or `Battle.opts`, result of a server-run
   field, a match without battles not replayable), the store (index round-trip across a reopen, prune deleting the file,
-  the size cap, the id guard, an unreadable record) and a real `startServer` + `room.start` + `finish` writing one record.
+  the size cap, the id guard, an unreadable record) and a real `startServer` + `room.start` + `finish` writing one record;
+  `test/match/history-api.test.js` — the list, `?limit`, one record, the 404s and a server without a store;
+  `test/ui/history-client.test.js` — the page's reading of the wire (404 = off, a body without battles refused, the list
+  cached for 5 s, a failed fetch retried, a record fetched once).
 
 ---
 

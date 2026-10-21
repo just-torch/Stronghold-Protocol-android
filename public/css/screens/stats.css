@@ -359,3 +359,42 @@
 }
 .sp-coarse .st-tab, .sp-coarse .st-table tr.is-clickable td { min-height: 30px; }
 @media (prefers-reduced-motion: reduce) { .st { animation: none; } }
+
+/* ---- 服务器记录 (DESIGN §21.58) ---------------------------------------------------------------- */
+.st-table--server { max-width: max(12.4rem, 900px); }
+.st-table--server tbody tr[role="button"] { cursor: pointer; }
+.st-table--server tbody tr.is-open td { background: rgba(78, 216, 175, .08); }
+.st-srv__names { max-width: max(3.4rem, 220px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-srv__detail > td { padding: 0; background: rgba(0, 0, 0, .25); }
+.st-srv__battles { display: flex; flex-direction: column; gap: .06rem; padding: .14rem .2rem .18rem; }
+.st-srv__meta { font-size: max(.14rem, 10px); color: var(--text-lo); }
+.st-srv__battle { display: grid; grid-template-columns: max(2.2rem, 160px) max(1.4rem, 120px) minmax(0, 1fr) auto; align-items: center; gap: .12rem; padding: .05rem 0; }
+.st-srv__bround { color: var(--text-hi); font-weight: 700; }
+.st-srv__bkind { color: var(--text-md); }
+.st-srv__bstat { color: var(--text-lo); font-family: var(--font-num); font-size: max(.15rem, 10px); }
+
+/* ---- 战斗回放 (ui/battleReplay.js) ------------------------------------------------------------ */
+.brep { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.brep__host { position: absolute; inset: 0; }
+.brep__bar {
+  position: relative; z-index: 2; margin-top: auto; display: flex; flex-wrap: wrap; align-items: center; gap: .12rem .2rem;
+  padding: .1rem .24rem calc(.1rem + var(--sa-b, 0px));
+  background: linear-gradient(0deg, rgba(6, 9, 8, .96), rgba(6, 9, 8, .72));
+  border-top: 1px solid var(--line);
+}
+.brep__title { display: flex; flex-direction: column; gap: .02rem; min-width: max(2.4rem, 180px); }
+.brep__title b { color: var(--text-hi); font-size: max(.18rem, 13px); letter-spacing: .04em; }
+.brep__title span { color: var(--text-lo); font-size: max(.14rem, 10px); }
+.brep__stats { display: flex; gap: .2rem; color: var(--text-md); font-family: var(--font-num); font-size: max(.16rem, 11px); }
+.brep__track { flex: 1 1 max(2.4rem, 200px); height: max(.06rem, 4px); background: var(--line); order: 5; }
+.brep__track i { display: block; height: 100%; background: var(--mint-500); transition: width 120ms linear; }
+.brep__ctl { display: flex; align-items: center; gap: .08rem; margin-left: auto; order: 4; }
+.brep__done, .brep__err, .brep__warn { flex-basis: 100%; font-size: max(.14rem, 10px); }
+.brep__done { color: var(--mint-500); }
+.brep__err { color: var(--danger, #e0625a); }
+.brep__warn { color: var(--text-lo); }
+.brep__fallback { position: absolute; top: .2rem; left: 50%; transform: translateX(-50%); z-index: 2; padding: .05rem .14rem; background: rgba(0, 0, 0, .6); color: var(--text-md); font-size: max(.14rem, 10px); }
+@media (max-width: 720px) {
+  .brep__ctl { order: 4; margin-left: 0; flex-wrap: wrap; }
+  .brep__track { order: 6; flex-basis: 100%; }
+}
