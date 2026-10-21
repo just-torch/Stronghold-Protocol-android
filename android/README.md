@@ -22,6 +22,16 @@
 
 ---
 
+## 0.3.1-fork.1 带来什么（2026-10-21）
+
+以上游 v0.3.1（2026-10-18）为基线合并（规则、插件、界面与开服的大量上游更新，见仓库 `CHANGELOG.md` 的 0.3.1 一节），
+并新增本 fork 的「服务器记录已结束的对局 + 回放」（`docs/FORK-DEVIATIONS.md` §21.58）：
+
+- **服务器记录对局**：每局结束由服务器写进 `data/history/`（默认最多 100 局；`SP_HISTORY=off` 关闭，`SP_HISTORY_DIR`
+  改目录），只存结果、座位与各场战斗的开局数据（阵容、装备、盟约层数、种子、敌波）。
+- **回放**：统计页新增「服务器记录」标签，列出这台服务器打完的每一局（含队友在自己设备上打完的），点开一局列出每场战斗，
+  点「回放」在本机用同一套模拟重新演算整场战斗——播放 / 暂停 / 1× / 2× / 4× / 重播，不下载录像。
+
 ## 0.3.0-fork.2 带来什么（2026-10-17）
 
 与 fork.1 相比**没有规则改动**（黄金结果仍 288/288、素材包 `artId` 不变，已下载的素材可继续用），只有界面与玩法上的四项，
@@ -39,8 +49,8 @@
 
 | 项目 | 值 |
 |---|---|
-| 文件 | `android/dist/Stronghold-Protocol-0.3.0-arm64.apk` |
-| 体积 | **816.8 MB**（APK 内 33 987 个条目；0.2.0 的自选干员素材与语音把它从 0.1.4 的 479.9 MB 推上来，0.2.1 补入 39 个召唤物模型 +3.6 MB，0.2.5 又随素材清单补入新干员、255 个音效与整套日文语音 +91 MB、本地叠加层 11 张官方战场场景 +61 MB，随后一轮压缩去掉 226 MB（−28.7 %）；0.3.0 再随素材清单补入三套配音 **+168.7 MB** 与官方战斗特效 **+69.0 MB**，见下） |
+| 文件 | `android/dist/Stronghold-Protocol-0.3.1-arm64.apk` |
+| 体积 | **817.3 MB**（APK 内 33 987 个条目；0.2.0 的自选干员素材与语音把它从 0.1.4 的 479.9 MB 推上来，0.2.1 补入 39 个召唤物模型 +3.6 MB，0.2.5 又随素材清单补入新干员、255 个音效与整套日文语音 +91 MB、本地叠加层 11 张官方战场场景 +61 MB，随后一轮压缩去掉 226 MB（−28.7 %）；0.3.0 再随素材清单补入三套配音 **+168.7 MB** 与官方战斗特效 **+69.0 MB**，见下） |
 | 架构 | `arm64-v8a`（只有这一个；2016 年以后几乎所有的 Android 手机） |
 | 系统要求 | `minSdkVersion 23`（Android 6.0）／`targetSdkVersion 35`；**建议 Android 8.0 以上**，并保持「Android System WebView」/ Chrome 为较新版本 |
 | 内嵌运行时 | Node.js 24.5.0（`lib/arm64-v8a/libnode.so`，约 92 MB；0.2.5 起压缩存放，装机时由系统解压到私有 `lib/arm64/`） |
@@ -51,10 +61,10 @@
 | 发现协议端口 | UDP `45777`（主机广播到这里，加入方监听）与 `45778`（加入方询问，主机监听），见[局域网自动发现](#局域网自动发现) |
 | 签名 | 自签名，v1 + v2 方案（`android/android/stronghold-release.jks`，由构建脚本自动生成） |
 | 应用名 / 包名 | 卫戍协议：盟约 / `io.github.sganggs.strongholdprotocol` |
-| slim 变体 | `android/dist/Stronghold-Protocol-0.3.0-arm64-slim.apk`，**42.0 MB**（不含 `public/assets`，首启在应用内下载 **725 MB / 17 个分卷**的素材包，素材包在**单独的** [assets-0.3.0](https://github.com/just-torch/Stronghold-Protocol-android/releases/tag/assets-0.3.0) 发布里），见[素材包与首启下载](#素材包与首启下载-slim-变体2026-10-13) |
+| slim 变体 | `android/dist/Stronghold-Protocol-0.3.1-arm64-slim.apk`，**42.7 MB**（不含 `public/assets`，首启在应用内下载 **725 MB / 17 个分卷**的素材包，素材包在**单独的** [assets-0.3.0](https://github.com/just-torch/Stronghold-Protocol-android/releases/tag/assets-0.3.0) 发布里），见[素材包与首启下载](#素材包与首启下载-slim-变体2026-10-13) |
 
 另外还可以构建一份**测试版 APK**（`-Variant devtest`，见[测试版 APK](#测试版-apkadjacent)）：同一个游戏、另一个包名
-（`…strongholdprotocol.dev`）、应用名「卫戍协议：盟约·测试」、版本号 `0.3.0-dev`，**可以和正式版同时装在手机上**，
+（`…strongholdprotocol.dev`）、应用名「卫戍协议：盟约·测试」、版本号 `0.3.1-dev`，**可以和正式版同时装在手机上**，
 并且内嵌服务器的**调试控制台**强制开着。
 
 APK 体积较大的原因是**素材必须随包分发**：主机手机要能在完全离线、不联外网的情况下把素材发给同一 Wi-Fi 里的
@@ -83,7 +93,7 @@ APK 体积较大的原因是**素材必须随包分发**：主机手机要能在
 
 | | 正式包 | slim 变体 |
 |---|---|---|
-| 安装包 | 816.8 MB | **42.0 MB** |
+| 安装包 | 817.3 MB | **42.7 MB** |
 | 首次启动 | 解包约 1.05 GB（几十秒） | 服务器几秒就绪，素材在后台下载（725 MB；4G 下约 15–40 分钟） |
 | 每次更新 | 重新下载约 816 MB | 约 42 MB（素材不用重下） |
 | 占用空间 | APK 816 MB + 解压 1.05 GB ≈ 1.87 GB | APK 42 MB + 代码与素材约 1.05 GB ≈ 1.1 GB |
@@ -232,7 +242,7 @@ Java 那份挪到桌面 JVM 上、对着真正的 JS 广播端跑，等于在没
 
 1. 把 APK 传到手机（数据线、微信文件传输、网盘、`adb install` 都行）。
 2. 在手机上点开安装。系统会提示「来自未知来源的应用」，按提示允许（这是自签名 APK 的正常提示）。
-   - 用 `adb`：`adb install -r android\dist\Stronghold-Protocol-0.3.0-arm64.apk`
+   - 用 `adb`：`adb install -r android\dist\Stronghold-Protocol-0.3.1-arm64.apk`
 3. 首次启动会稍慢：点「建立主机」后，应用要把约 1.05 GB 的游戏文件（完整包；slim 包只有 54 MB）从 APK 里解压到自己的
    私有目录（界面上会显示「正在准备游戏文件（已用 N 秒）」）。**这一步每个版本只做一次**，之后再启动就很快。
    老手机上这一步可能要 **3 分钟左右**（在 Galaxy C7 2016 上实测约 150–180 秒），所以 `0.3.0-fork.2` 起把等待服务器
@@ -578,7 +588,7 @@ pwsh -File android\scripts\build-apk.ps1 -NoArt           # 出 slim 变体（�
 - 正文改写用本地脚本 `.scratch/gh-release-edit.cjs edit <tag> --name … --body-file … [--prerelease true]`
   （`show`/`bodies` 可以核对结果；不入仓库）。发布页正文与仓库文档不一致时，以仓库文档为准。
 
-### slim 变体（不含素材的 42.0 MB 包）
+### slim 变体（不含素材的 42.7 MB 包）
 
 `-NoArt` 装配时跳过 `public/assets`，产物是 `android/dist/Stronghold-Protocol-<版本>-arm64-slim.apk`；它需要配一份素材包
 （`android/dist/art/`，17 个分卷 + 索引 + manifest）放在**单独的素材包 Release** 上，见
@@ -591,10 +601,10 @@ pwsh -File android\scripts\build-apk.ps1 -NoArt           # 出 slim 变体（�
 
 | | 正式版（默认） | 测试版（`-Variant devtest`） |
 |---|---|---|
-| 产物 | `android/dist/Stronghold-Protocol-0.3.0-arm64.apk` | `android/dist/Stronghold-Protocol-0.3.0-dev-arm64.apk` |
+| 产物 | `android/dist/Stronghold-Protocol-0.3.1-arm64.apk` | `android/dist/Stronghold-Protocol-0.3.1-dev-arm64.apk` |
 | 包名 | `io.github.sganggs.strongholdprotocol` | `io.github.sganggs.strongholdprotocol.dev` |
 | 应用名 | 卫戍协议：盟约 | 卫戍协议：盟约·测试 |
-| 版本名 | `0.3.0` | `0.3.0-dev`（versionCode 相同） |
+| 版本名 | `0.3.1` | `0.3.1-dev`（versionCode 相同） |
 | 内嵌服务器的调试控制台 | 服务器默认 `auto`：**本机**（App 自己的 WebView）有控制台 | `SP_CONSOLE=1`：**所有**连到这台测试版 App 的客户端都有（包括局域网里加入的朋友） |
 | 签名 | 同一个自签名密钥 | 同一个自签名密钥 |
 
