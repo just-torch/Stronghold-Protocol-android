@@ -238,7 +238,7 @@ export async function createFieldView(host, options = {}) {
     // MSAA only where it pays: dense (DPR ≥ 1.5) screens are sharp enough without it and it would cost 4× the fill
     // transparent: the 3D board canvas shows through (the 2D board paints an opaque backdrop itself)
     width: s0.width, height: s0.height, antialias: opts.antialias ?? (settings.quality === 'high' && (globalThis.devicePixelRatio || 1) < 1.5), backgroundColor: 0x0a0e0d, backgroundAlpha: 0,
-    resolution: dpr(), autoDensity: true, powerPreference: 'high-performance',
+    resolution: dpr(), autoDensity: true, powerPreference: opts.powerPreference || 'high-performance',
   });
   const canvas = app.view;
   setupCleanup.push(() => {

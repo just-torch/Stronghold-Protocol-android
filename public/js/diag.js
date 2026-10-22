@@ -101,6 +101,27 @@ export function clearErrorLog() { log.length = 0; total = 0; dropped = 0; }
 const traffic = new Map();
 let trafficMeter = null;
 
+// ---- the renderer: engine or the simplified DOM view ---------------------------------------------------------
+//
+// ui/fieldHost.js mounts the Pixi/three engine and, when that fails, falls back to the DOM view (fallbackField.js).
+// Until 0.3.1 that failure only reached the console, so a player's report said 「errors: none recorded」 while the
+// screen was already the simplified view — the report now carries the stage and the error, and the toast names it.
+/** @type {{ stage: string, message: string, at: number } | null} */
+let renderFailure = null;
+
+/** The engine failed at `stage` ('assets' | 'engine import' | 'create' | 'api' | 'retry'): log it and keep it for the report. */
+export function recordRenderFailure(stage, err, at = Date.now()) {
+  const message = stripHosts(messageOf(err));
+  renderFailure = { stage: String(stage), message, at };
+  return recordError('render', err, `stage: ${stage}`, at);
+}
+
+/** The engine mounted: a failure of an earlier attempt no longer describes this page. */
+export function clearRenderFailure() { renderFailure = null; }
+
+/** The last renderer failure of this page (null while the engine is up), for the report. */
+export const renderState = () => (renderFailure ? { ...renderFailure } : null);
+
 /**
  * Add one Resource Timing entry (a PerformanceResourceTiming, or the page's own navigation entry) to the totals: bytes
  * on the wire (`transferSize`; headers included, 0 when the browser cache answered — counted as `cached`). A same-origin
@@ -302,6 +323,7 @@ export function buildDiagnostics(input) {
   lines.push(`time: ${new Date(now).toISOString()} | page open ${spanOf(now - (input.pageStart ?? pageStart))}`);
   if (env.ua) lines.push(`browser: ${env.ua}`);
   if (env.gpu) lines.push(`gpu: ${env.gpu}`);
+  if (input.render) lines.push(`render: fallback at ${input.render.stage} — ${input.render.message}`);
   lines.push(`device: ${join(env.viewport, env.dpr ? `@${env.dpr}x` : null, env.touch ? 'touch' : null, env.cores ? `${env.cores} threads` : null,
     env.memoryGB ? `${env.memoryGB} GB` : null, env.lang ? `lang ${env.lang}` : null, env.uiLang ? `ui ${env.uiLang}` : null) || 'unknown'}`);
   const c = state.connection || {};
@@ -380,5 +402,5 @@ export function browserEnv() {
  * @param {{ state: any, settings?: any, attachBattle?: boolean }} opts
  */
 export function diagnosticsText({ state, settings = null, attachBattle = false, personal = [] }) {
-  return buildDiagnostics({ state, settings, env: browserEnv(), battle: attachBattle ? currentBattle() : null, traffic: trafficSummary(), personal });
+  return buildDiagnostics({ state, settings, env: browserEnv(), battle: attachBattle ? currentBattle() : null, traffic: trafficSummary(), render: renderState(), personal });
 }

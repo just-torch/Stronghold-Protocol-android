@@ -16,7 +16,7 @@ const METHODS = ['setStage', 'setCamera', 'setPrep', 'enterBattle', 'pushSnapsho
 const flush = async () => { for (let i = 0; i < 16; i++) await Promise.resolve(); };
 
 function fixture() {
-  const timers = new Map(), requests = [], fallbacks = [], warnings = [];
+  const timers = new Map(), requests = [], fallbacks = [], warnings = [], renderFailures = [];
   let timerId = 0;
   const unrelated = { name: 'unrelated' };
   const host = {
@@ -41,6 +41,8 @@ function fixture() {
     setTimeout(fn) { timers.set(++timerId, fn); return timerId; },
     clearTimeout(id) { timers.delete(id); },
     importAssets: async () => null,
+    recordRenderFailure: (stage, err) => renderFailures.push({ stage, message: String(err && err.message || err) }),
+    clearRenderFailure: () => renderFailures.length = 0,
     importApp: async () => ({
       createFieldView(_host, opts) {
         // Deliberately ignore cancellation: the host must still dispose a factory's late return value.
@@ -55,7 +57,7 @@ function fixture() {
   });
   vm.runInContext(source + '\nglobalThis.mount = mountFieldView;', context, { filename: sourcePath.pathname });
   return {
-    host, unrelated, timers, requests, fallbacks, warnings, view,
+    host, unrelated, timers, requests, fallbacks, warnings, renderFailures, view,
     mount: (signal) => context.mount(host, { signal }),
     timeout() { const fn = [...timers.values()].at(-1); assert.ok(fn, 'initialization has a deadline'); fn(); },
   };
@@ -154,5 +156,44 @@ test('a timed-out factory returning late cannot remove a replacement view or unr
   assert.equal(f.fallbacks[0].rendererAborted, true);
   assert.equal(f.timers.size, 0);
   assert.deepEqual(f.host.children, [f.unrelated, replacement.node]);
+  mounted.destroy();
+});
+
+test('a failed engine mount records the stage and the error for the diagnostics (diag.js)', async () => {
+  const f = fixture();
+  const pending = f.mount();
+  await flush();
+  const invalid = f.view('invalid', false);
+  f.requests[0].resolve(invalid);
+  const fallback = await pending;
+  assert.equal(fallback.kind, 'fallback');
+  assert.equal(f.renderFailures.length, 1, 'one entry: the failed attempt');
+  assert.equal(f.renderFailures[0].stage, 'api');
+  assert.match(f.renderFailures[0].message, /view lacks/);
+  fallback.destroy();
+});
+
+test('a timeout is not retried; a failed context creation is (one conservative retry)', async () => {
+  const f = fixture();
+  const timed = f.mount();
+  await flush();
+  f.timeout();
+  const fallback = await timed;
+  assert.equal(fallback.kind, 'fallback');
+  assert.equal(f.requests.length, 1, 'a timeout does not start a second attempt');
+  fallback.destroy();
+
+  const g = fixture();
+  const pending = g.mount();
+  await flush();
+  g.requests[0].reject(new Error('Unable to create a WebGL context'));
+  await flush();
+  assert.equal(g.requests.length, 2, 'a context failure retries once');
+  assert.equal(g.renderFailures[0].stage, 'create');
+  const retried = g.view('engine-retry');
+  g.requests[1].resolve(retried);
+  const mounted = await pending;
+  assert.equal(mounted.kind, 'engine');
+  assert.equal(retried.destroyCalls, 0);
   mounted.destroy();
 });

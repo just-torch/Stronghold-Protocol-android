@@ -14,6 +14,7 @@ import { data } from '../data.js';
 import { audio } from '../audio.js';
 import { store } from '../store.js';
 import { settingsStore } from './settings.js';
+import { recordRenderFailure, clearRenderFailure } from '../diag.js';
 
 const LOAD_TIMEOUT_MS = 12000;
 const METHODS = ['setStage', 'setCamera', 'setPrep', 'enterBattle', 'pushSnapshot', 'pushEvents', 'highlightTiles', 'on', 'resize', 'destroy'];
@@ -273,12 +274,19 @@ export async function mountFieldView(host, { signal } = {}) {
   checkActive(signal);
   const pref = renderPref();
   const opts = { data, assets: data.get('assets'), audio, settings: settingsStore.get(), padding: hudPadding, hud: hudBands };
-  if (pref !== 'fallback') {
+
+  /**
+   * One engine attempt. Its own controller: a failed attempt aborts only its own loads, so the conservative retry below
+   * starts clean. `extra` is the retry's profile (no MSAA, the default GPU, the lowest quality).
+   * @returns {Promise<null | ReturnType<typeof guardView>>}
+   */
+  async function attempt(extra, failure = null) {
     const controller = new AbortController();
     const onAbort = () => controller.abort(abortError(signal));
     signal?.addEventListener('abort', onAbort, { once: true });
     if (signal?.aborted) onAbort();
     let engineView = null;
+    let stage = 'assets';
     const dispose = (view) => { try { view?.destroy?.(); } catch { /* ignore */ } };
     try {
       checkActive(controller.signal);
@@ -292,27 +300,46 @@ export async function mountFieldView(host, { signal } = {}) {
         opts.assets = am.assets;
         seedAssets(am.assets);
       }
+      stage = 'engine import';
       const mod = await withTimeout(import('../render/app.js'), LOAD_TIMEOUT_MS, 'render engine import', controller.signal);
       checkActive(controller.signal);
       if (typeof mod?.createFieldView !== 'function') throw new Error('createFieldView missing');
+      stage = 'create';
       // A factory that ignores cancellation still belongs to this attempt when it eventually returns.
-      const pending = Promise.resolve(mod.createFieldView(host, { ...opts, signal: controller.signal })).then((view) => {
+      const pending = Promise.resolve(mod.createFieldView(host, {
+        ...opts, signal: controller.signal, ...(extra ? { antialias: false, powerPreference: 'default', settings: { ...opts.settings, quality: 'low' } } : {}),
+      })).then((view) => {
         if (controller.signal.aborted) dispose(view); else engineView = view;
         return view;
       });
       const view = await withTimeout(pending, LOAD_TIMEOUT_MS, 'createFieldView', controller.signal);
       checkActive(controller.signal);
+      stage = 'api';
       const missing = METHODS.filter((k) => typeof view?.[k] !== 'function');
       if (missing.length) throw new Error(`view lacks ${missing.join(', ')}`);
+      clearRenderFailure();
       return guardView(view, 'engine');
     } catch (err) {
       controller.abort();
       dispose(engineView);
-      checkActive(signal);
-      console.warn('[field] render engine unavailable, using the simplified view:', err?.message || err);
+      if (signal?.aborted) throw abortError(signal); // the caller cancelled: not a renderer failure
+      if (failure) { failure.stage = stage; failure.message = String(err?.message || err); }
+      recordRenderFailure(stage, err);
+      console.warn(`[field] render engine unavailable at ${stage}${extra ? ' (conservative retry)' : ''}:`, err?.message || err);
+      return null;
     } finally {
       signal?.removeEventListener('abort', onAbort);
     }
+  }
+
+  if (pref !== 'fallback') {
+    const failure = { stage: null, message: '' };
+    const first = await attempt(null, failure);
+    // One conservative retry (lowest quality, no MSAA, the default GPU) only when the engine got far enough to create its
+    // renderer: a module that failed to load, or a timeout, does not get better on a second identical try.
+    const retryable = failure.stage === 'create' && !/failed to load|missing|tim(?:eout|ed out)/i.test(failure.message || '');
+    const engine = first || (pref === 'auto' && retryable ? await attempt('conservative', failure) : null);
+    if (engine) return engine;
   }
   checkActive(signal);
   return guardView(createFallbackView(host, { ...opts, assets: data.get('assets') }), 'fallback');

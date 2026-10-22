@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import {
   recordError, errorLog, errorCount, clearErrorLog, messageOf, stackOf, stripHosts, redact, redactValues, secretsOf, buildDiagnostics,
   setBattleSource, currentBattle, contentLine, LOG_MAX, STACK_LINES, recordResourceEntry, trafficSummary, trafficLine, clearTraffic, installTrafficMeter,
+  recordRenderFailure, clearRenderFailure, renderState,
 } from '../public/js/diag.js';
 import { APP_VERSION } from '../shared/constants.js';
 
@@ -264,5 +265,36 @@ describe('the page\'s traffic (host bandwidth layer 0)', () => {
     assert.deepEqual(trafficSummary().code, { requests: 2, bytes: 147000, cached: 0 });
     assert.equal(installTrafficMeter(win), true, 'already installed');
     assert.equal(trafficSummary().code.requests, 2, 'not twice');
+  });
+});
+
+describe('the renderer line (ui/fieldHost.js fallback)', () => {
+  beforeEach(() => { clearErrorLog(); clearRenderFailure(); });
+
+  test('a failed engine mount is reported with its stage, and cleared once the engine is up', () => {
+    assert.equal(renderState(), null);
+    recordRenderFailure('create', new Error('Unable to create a WebGL context'), Date.UTC(2026, 9, 21, 2, 0, 0));
+    const r = renderState();
+    assert.equal(r.stage, 'create');
+    assert.match(r.message, /WebGL context/);
+    assert.equal(errorCount(), 1, 'the log keeps it too, as source render');
+    assert.equal(errorLog()[0].source, 'render');
+    assert.match(errorLog()[0].detail, /stage: create/);
+
+    const text = buildDiagnostics({ state: {}, env: {}, render: renderState(), now: Date.UTC(2026, 9, 21, 2, 1, 0), pageStart: Date.UTC(2026, 9, 21, 2, 0, 0) });
+    assert.match(text, /render: fallback at create — Unable to create a WebGL context/);
+    assert.match(text, /errors: 1 recorded/);
+
+    clearRenderFailure();
+    assert.equal(renderState(), null);
+    const clean = buildDiagnostics({ state: {}, env: {}, render: renderState(), now: 0, pageStart: 0 });
+    assert.ok(!/^render:/m.test(clean), 'no render line while the engine is up');
+  });
+
+  test('a later successful mount clears an earlier failure', () => {
+    recordRenderFailure('retry', { message: 'timeout: createFieldView' });
+    assert.ok(renderState());
+    clearRenderFailure();
+    assert.equal(renderState(), null);
   });
 });

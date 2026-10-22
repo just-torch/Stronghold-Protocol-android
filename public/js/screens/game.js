@@ -131,6 +131,7 @@ import { ResultScreen } from './settle.js';
 import { ProtocolBoot, preloadBootArt, bootArtReady, BOOT_LEAVE_MS } from '../ui/protocolBoot.js';
 import { net } from '../net.js';
 import { store, useStore, shallowEqual, serverNow, isSpectating } from '../store.js';
+import { renderState } from '../diag.js';
 import { battleRunner } from '../battle/runner.js';
 import '../ui/pluginFrame.js';
 import { isClientCombat, observeTarget, teammateProgress, cameraLayers, layerCamera, loneHalf, sidesOf, resumedWatch, followedScout } from '../battle/observe.js';
@@ -194,6 +195,14 @@ export function GameScreen() {
 
 /** A card of a unit of the battle on screen: a unit's, or a crate's / turret's (a device card with its `unitId`, #228). */
 const inBattleCard = (d) => d?.kind === 'unit' || (d?.kind === 'device' && d.device?.unitId != null);
+
+/** The short reason in the 简化视图 toast: what the renderer failed with (diag.js renderState; null when it is up). */
+function renderReason() {
+  const r = renderState();
+  if (!r || !r.message) return null;
+  const msg = String(r.message).replace(/^Error:\s*/, '').replace(/\s+/g, ' ').trim();
+  return msg.length > 64 ? `${msg.slice(0, 63)}…` : msg;
+}
 
 function MatchScreen() {
   useDocClass('sp-in-match');
@@ -806,13 +815,17 @@ function MatchScreen() {
     setCam(field.kind === 'hidden' ? 'boss' : field.kind, layerCamera(field, k, sidesOf(field)[myId] || 'L'));
   }, [view, watchWho, field, phase]);
 
-  // graceful degradation: without WebGL / the render engine the DOM view takes over — say so once per match
+  // graceful degradation: without WebGL / the render engine the DOM view takes over — say so once per match, with the
+  // reason (ui/fieldHost.js records it: a player's report then names what failed instead of 「errors: none recorded」)
   useEffect(() => {
     if (viewKind !== 'fallback') return;
     let asked = null;
     try { asked = new URLSearchParams(globalThis.location?.search || '').get('render'); } catch { asked = null; }
     if (asked === 'fallback' || globalThis.__SP_RENDER__ === 'fallback') return;
-    toast(t('渲染器暂时未能加载，已切换为简化视图（功能不受影响，可刷新重试）'), 'info', { ttl: 5000 });
+    const why = renderReason();
+    toast(why
+      ? t('渲染器暂时未能加载（{reason}），已切换为简化视图（功能不受影响，可刷新重试）', { reason: why })
+      : t('渲染器暂时未能加载，已切换为简化视图（功能不受影响，可刷新重试）'), 'info', { ttl: 5000 });
   }, [viewKind]);
 
   // phase changes: banners, sounds, resets
