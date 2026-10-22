@@ -17,6 +17,11 @@ import { settingsStore } from './settings.js';
 import { recordRenderFailure, clearRenderFailure } from '../diag.js';
 
 const LOAD_TIMEOUT_MS = 12000;
+// The engine's own construction gets longer: it waits for the art manifest, the fonts, PIXI and pixi-spine, and on a
+// Galaxy C7 2016 (WebView 138, an 8 GB phone is faster) a normal mount measured 8.6 s on this machine's test phone —
+// close enough to 12 s that a slower phone dropped to the simplified view for the whole match. 20 s only delays that
+// fallback; the player sees the mount spinner meanwhile (2026-10-22, the renderer report).
+const CREATE_TIMEOUT_MS = 20000;
 const METHODS = ['setStage', 'setCamera', 'setPrep', 'enterBattle', 'pushSnapshot', 'pushEvents', 'highlightTiles', 'on', 'resize', 'destroy'];
 // direction-step hooks (ui/facingWheel.js): optional — the wheel falls back to the engine's dev hooks when absent;
 // setPen (enemy preview pen list), prepField ({ kind, side, mirror } of the Final Assault prep), stripesUnder (the view
@@ -312,7 +317,7 @@ export async function mountFieldView(host, { signal } = {}) {
         if (controller.signal.aborted) dispose(view); else engineView = view;
         return view;
       });
-      const view = await withTimeout(pending, LOAD_TIMEOUT_MS, 'createFieldView', controller.signal);
+      const view = await withTimeout(pending, CREATE_TIMEOUT_MS, 'createFieldView', controller.signal);
       checkActive(controller.signal);
       stage = 'api';
       const missing = METHODS.filter((k) => typeof view?.[k] !== 'function');
