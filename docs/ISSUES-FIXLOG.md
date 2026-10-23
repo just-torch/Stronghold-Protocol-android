@@ -444,7 +444,8 @@
 
 ### 12.7 本轮验证
 
-- `node --test`（分区跑）：`test/ui/**` 935 通过 0 失败、`test/match/**` 947/0、`test/render/**` 936/0、`test/sim/**` 928/0、`test/content/**` 2360/0；`test/*.test.js` 1347 通过 / 6 失败——6 条全是本机素材环境问题（`public/assets/audio/sfx/player/…` 缺 4 个 mp3、`.cache/gamedata` 未提取导致 manifest 重新生成与「docs 指向 release tag」等用例不成立），与本次改动无关，换一台有完整素材的机器即恢复。
+- `node --test`（分区跑）：`test/ui/**` 935 通过 0 失败、`test/match/**` 947/0、`test/render/**` 936/0、`test/sim/**` 928/0、`test/content/**` 2360/0；`test/*.test.js` 1347 通过 / 6 失败——6 条全是本机素材环境问题（`public/assets/audio/sfx/player/…` 缺 4 个 mp3、`.cache/gamedata` 未提取导致 manifest 重新生成与「docs 指向 release tag」等用例不成立），与本次改动无关，换一台有完整素材的机器即恢复。`test/plugins/**`（253/39）与 `test/studio/**`（82/16）同样在本机沙箱下失败：这些用例要起子进程 / 沙箱探针 / 工作台子进程（`SIGTERM` 探针、Forge 导入、文件夹监视），失败信息里没有一条指向本轮改动的文件；`test/e2e/**` 8/0。
 - `npm run golden`：roster 49 / bonds 46 / fields 22 / matches 21 / standins 10 / diy 140 全部 match，**0 漂移**。
 - `node tools/i18n.mjs check --all --strict`：四包各 2294 msgid，100 %。
 - `npm run lint` 0 error、`npm run typecheck` 0、`node tools/check-imports.mjs` 只有 4 条既有 baseline note。
+- 线上冒烟（部署后的本机服务器 `build 8d81b4de17e3`）：WebSocket 依次跑 `room.create{capacity:8}` → `room.state.capacity = 8 / seats 8`、`room.setCapacity{3}` → 3、`{1}` 与 `{9}` 都被拒（`BAD_MSG`）、`{8}` 生效；公网 `https://frp-arm.com:16019/healthz` 同一 build。
