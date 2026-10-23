@@ -179,8 +179,23 @@ html:not(.sp-in-match) .toast-host { margin-top: var(--sa-t); }
   .mode-card__points, .diff-card__effects, .tips, .create-box__hint { display: none; }
   .diff-list { gap: .1rem; }
   .diff-card { padding-top: .12rem; padding-bottom: .12rem; }
-  .create-box { margin-top: .18rem; }
+  /* the four difficulty cards drop their description line too: with the 人数上限 row (2026-10-23) above 创建同盟 the
+     column no longer fit a 640×360 phone — the name, code and every effect chip stay (the effects row is hidden here,
+     the name/code and the check mark carry the choice) */
+  .diff-card__desc { display: none; }
+  .create-box { margin-top: .12rem; gap: .08rem; }
   .create-box .btn--xl { height: .8rem; }
+}
+
+/* Very short landscape phones (≤ 400 CSS px tall — a 640×360 or 568×320 viewport): 1rem is clamped at 40 px, so the
+   19.2 × 10.8 rem design is taller than the screen and the last row (人数上限 + 创建同盟) fell past the bottom. The
+   bilingual section headers go (they cost .45rem above each column and carry no state) and the last rows tighten a
+   little more, which puts 创建同盟 fully on screen again — the single row that must never need a scroll. */
+@media (max-height: 400px) {
+  .lobby-body .section-label { display: none; }
+  .diff-list { gap: .04rem; }
+  .create-cap__opt { height: 26px; }
+  .create-box .btn--xl { height: .72rem; }
 }
 
 .rotate-hint__pwa { pointer-events: auto; margin-top: 6px; }

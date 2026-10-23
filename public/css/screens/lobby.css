@@ -235,7 +235,7 @@
 .diff-card.is-selected .diff-card__check span { opacity: 1; }
 
 /* ---- create ------------------------------------------------------------------------------------------ */
-.create-box { margin-top: .3rem; display: flex; flex-direction: column; gap: .12rem; }
+.create-box { margin-top: .24rem; display: flex; flex-direction: column; gap: .1rem; }
 .create-box__test {
   display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: .04rem .1rem;
   color: #e8b84a; font-size: calc(.16 * var(--t));
@@ -249,15 +249,25 @@
 }
 .create-box .btn--xl { height: .92rem; font-size: calc(.32 * var(--t)); letter-spacing: .3em; }
 .create-box__hint { display: flex; align-items: center; justify-content: center; min-height: .3rem; font-size: calc(.14 * var(--t)); color: var(--text-lo); }
-/* 人数上限 (room.create.capacity, co-op): the seat cap the host starts the room with — 2–8, default 4 */
-.create-cap { display: flex; flex-wrap: wrap; align-items: center; gap: .06rem .12rem; font-size: calc(.15 * var(--t)); }
-.create-cap__label { color: var(--text-lo); letter-spacing: .08em; }
+/* 人数上限 (room.create.capacity, co-op): the seat cap the host starts the room with — 2–8, default 4.
+   It sits in the same one-screen budget as the four difficulty cards, so it is ONE compact row: label, the 2–8
+   segments, then the hint inline. The hint wraps (and is dropped on narrow / short screens) rather than pushing
+   创建同盟 off the bottom — the 640×360 regression of 2026-10-23. */
+.create-cap { display: flex; flex-wrap: wrap; align-items: center; gap: .04rem .1rem; font-size: calc(.15 * var(--t)); }
+.create-cap__label { color: var(--text-lo); letter-spacing: .08em; white-space: nowrap; }
 .create-cap__opts { display: flex; border: 1px solid var(--line-2); background: rgba(0, 0, 0, .3); }
-.create-cap__opt { width: .46rem; height: .4rem; border: 0; border-right: 1px solid var(--line-2); background: transparent; color: var(--text-lo); font-size: calc(.2 * var(--t)); cursor: pointer; }
+.create-cap__opt { width: .38rem; height: .34rem; padding: 0; border: 0; border-right: 1px solid var(--line-2); background: transparent; color: var(--text-lo); font-size: calc(.18 * var(--t)); cursor: pointer; }
 .create-cap__opt:last-child { border-right: 0; }
 .create-cap__opt:hover { color: var(--text-hi); background: rgba(255, 255, 255, .03); }
 .create-cap__opt.is-active { color: var(--mint-400); background: rgba(78, 216, 175, .14); background: color-mix(in srgb, var(--mint-400) 17%, transparent); box-shadow: inset 0 -3px 0 var(--mint-400); }
-.create-cap__hint { flex-basis: 100%; font-size: calc(.13 * var(--t)); }
-@media (max-width: 720px) {
-  .create-cap__opt { width: 40px; height: 36px; font-size: 16px; }
+.create-cap__hint { font-size: calc(.13 * var(--t)); color: var(--text-lo); }
+/* narrow or short: the hint drops (the room screen repeats the number) and the segments shrink so the eight of them
+   still fit beside the label */
+@media (max-width: 820px), (max-height: 460px) {
+  .create-cap__hint { display: none; }
+  .create-cap__opt { width: 30px; height: 28px; font-size: 15px; }
+}
+@media (max-width: 400px) {
+  .create-cap__label { display: none; }
+  .create-cap__opt { width: 27px; height: 28px; font-size: 14px; }
 }

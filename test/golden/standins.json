@@ -124,7 +124,7 @@
       "hooks": [1,92,5700,331,331,565,534,0,30,87,6,6,0,12694,0,12,68,57,1,30,3,0,41],
       "events": {"atk":337,"cast":1,"deploy":24,"die":30,"dmg":534,"engage":11,"fx":82,"layer":3,"leak":57,"skill":12,"spawn":80},
       "fx": {"aoe":4,"dodge":41,"dp":3,"explode":29,"garrison":3,"garrisonGrant":1,"zone":1},
-      "snaps": "bb11ef91 a398f8b2 550394c7 7b8be73c 78119f00 87bccaac cc94c4a1 ade43780 9b192798 7ce7157e 21ebf85b d5649f78 d50a4b2a b388deb8 54597414 8e506106 8c95c9f7 cbdddf2f b8a57613"
+      "snaps": "bb11ef91 a398f8b2 2e0a1ce6 cf09277c 04b3c9c0 4805226c bd5a55e1 91138240 aeab06d8 6400733e 29a5c51b 1d5078b8 91bd35ea 899923f8 4e1eb6d4 580da2c6 de222237 9baf2bef 50ccb1d3"
     },
     "standin-03": {
       "about": "normal band 5 as stand-ins: chess_char_5_08_a→char_610_acfend chess_char_5_14_a→char_608_acpion chess_char_5_19_a→char_617_sharp2 chess_char_5_07_a→char_601_cguard chess_char_5_13_a→char_609_acguad chess_char_5_17_a→char_615_acspec chess_char_5_10_a→char_606_csuppo chess_char_5_11_a→char_613_acmedc chess_char_5_12_a→char_614_acsupo chess_char_5_15_a→char_603_csnipe chess_char_5_18_a→char_611_acnipe chess_char_5_20_a→char_614_acsupo",

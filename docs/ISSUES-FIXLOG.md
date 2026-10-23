@@ -433,16 +433,24 @@
 - 修法（`public/js/render/interp.js`）：时钟**永不后退**（超前时减速或保持，等流追上）；限长步进不越过外推保护；本地 feed 用已知速率（`setFixedRate`）而不是到达时间估计；网络流用最近到达间隔的**中位数**，一次突发不改速率。位置插值抽成纯函数 `interpolatePosition(prev, next, t, opts)`（乱序、重复快照、传送/再部署都按规则处理）。
 - 测试：`test/render/interp.test.js`。
 
-### 12.5 遗留（未修，需要维护者决定）
+### 12.5 近地悬浮 / 浮空的客户端抬升（2026-10-23 同日追加修掉）
 
-- `server/sim/snapshot.js` `flagsOf` 的 `UF.FLYING` 只跟 `motion==='FLY'`：近地悬浮 / 浮空的敌人在服务端是 `isFlying`（S3 能打、测试已覆盖），客户端却画在地面、命中数字锚在脚下。正确修法是 `if (u.isFlying) bits |= UF.FLYING;`，但它改变快照内容，会让 golden 的 `.snaps` 漂移（实测 roster-001 漂移，改回即 match），按「golden 不得漂移」的硬规则本轮没有动。要修就在同一个提交里跑 `npm run golden:update` 并点名移动的场景。
+- 原先 `server/sim/snapshot.js` `flagsOf` 的 `UF.FLYING` 只跟 `motion === 'FLY'`：近地悬浮（`float`）/ 浮空（`levitate`）在服务端是 `isFlying`（S3 能打），客户端却画在地面、命中数字锚在脚下。
+- 现在改用 `Unit.isFlying`（与 `ai.js:412` 的索敌判定同一个 getter）：FLY、`float`、`levitate` 都置位，`groundbind`（缚地）时自动清零；`test/content/svrash-s3-air.test.js` 增加了三条 `flagsOf` 断言（悬浮 / 浮空置位、地面不置位、缚地清零）。
+- golden：`npm run golden:update` 后有 **27 个场景**的 `.snaps` 摘要按预期移动 —— roster-001/008/016/032/035/043、bond-indomShip-low、bond-preciShip-low、bond-preciShip-high、bond-steadShip-low、bond-swiftShip-high、hidden-boss_10-pair、standin-02、diy-005/006/007/011/019/021/035/036/037/112/113/114/125/126；每个场景只有 `snaps` 变化，伤害 / 击杀 / 结果字段一个没动，`npm run golden` 重跑全绿。
 
-### 12.6 两项新功能
+### 12.6 界面适配（640×360 这类矮横屏，2026-10-23 追加）
+
+- 现象：新增的「人数上限」一行把大厅右栏推高，640×360（1rem 被钳在 40 px，19.2 × 10.8 rem 的设计比屏幕高）下 `创建同盟` 被挤出屏幕 64 px；1280×720 也溢出 4 px。
+- 修法（`public/css/screens/lobby.css`、`public/css/devices.css`）：人数上限改成一行（标签 + 2–8 分段 + 内联说明），窄屏 / 矮屏隐藏说明；`max-height: 460px` 下难度卡去掉描述行；`max-height: 400px` 下再收掉分节标题、间距与按钮高度。
+- 实测（headless Edge，Emulation 设视口）：1920×1080 / 1280×720 / 1024×768 / 960×540 / 844×390 / 640×360 六档下 `创建同盟` 底边都在屏幕内（640×360 恰好 360）；8 人等待室同六档下座位卡、人数上限与「准备就绪」都不越界。568×320 与更矮的极端视口仍需要滚动（`.lobby-body` 本身是 `overflow:auto`），属可接受退化。
+
+### 12.7 两项新功能
 
 - **房主可设 8 人上限**：`FORK-DEVIATIONS.md` §21.59。默认仍是官方 4 人，房主显式选择才 2–8；`room.create { capacity }` / `room.setCapacity`，服务端校验（不超 8、不低于 2、不能挤掉已在座的人），`room.state.capacity` 随每次状态下发。
 - **休整期观战看队友商店**：`FORK-DEVIATIONS.md` §21.60。只读商店搭在现有的 prep-scout `m.field` 里，只有「玩家看队友」能拿到，观战席仍然拿不到（`test/match/spectator.test.js` 的「never a private view」照旧成立）。
 
-### 12.7 本轮验证
+### 12.8 本轮验证
 
 - `node --test`（分区跑）：`test/ui/**` 935 通过 0 失败、`test/match/**` 947/0、`test/render/**` 936/0、`test/sim/**` 928/0、`test/content/**` 2360/0；`test/*.test.js` 1347 通过 / 6 失败——6 条全是本机素材环境问题（`public/assets/audio/sfx/player/…` 缺 4 个 mp3、`.cache/gamedata` 未提取导致 manifest 重新生成与「docs 指向 release tag」等用例不成立），与本次改动无关，换一台有完整素材的机器即恢复。`test/plugins/**`（253/39）与 `test/studio/**`（82/16）同样在本机沙箱下失败：这些用例要起子进程 / 沙箱探针 / 工作台子进程（`SIGTERM` 探针、Forge 导入、文件夹监视），失败信息里没有一条指向本轮改动的文件；`test/e2e/**` 8/0。
 - `npm run golden`：roster 49 / bonds 46 / fields 22 / matches 21 / standins 10 / diy 140 全部 match，**0 漂移**。

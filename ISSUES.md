@@ -39,7 +39,6 @@
 - **技能范围型 MANUAL 技能的触发策略**：带 `SKILL_RANGE` 的 MANUAL 技能走 `DEFAULT` 还是 `SKILL_RANGE`，决定它「能不能自动开到打得到敌人的那一刻」。复核忍冬三技能时实测：只有技能 +1 距离内的敌人时 `cast = false`（`DEFAULT` 要求初始射程内有敌人）。属策略裁定，未改。
 - **AOE 特效聚合**：见 §1 的 #143 行（应按同一 `attackId` 的命中数聚合，而不是扩白名单）。
 - **绝食 × 生命回复通道**：#96 / #137 已由上游 0.2.0 按「生命回复速度不再算作治疗」修好（`server/sim/damage.js` 的 `hpRegen` 通道，见 FIXLOG §7）；原报告里「海嗣 boss 爆条频率」子项仍未单独复核。
-- **近地悬浮 / 浮空的客户端抬升（2026-10-23 复核银灰 S3 对空时发现）**：`server/sim/snapshot.js` 的 `flagsOf` 只把 `motion === 'FLY'` 标成 `UF.FLYING`，所以 `float`（掠海漂移体等）与 `levitate` 在服务端是空中单位（技能打得到，测试已覆盖），客户端却把它们画在地面、命中数字也锚在脚下。一行修法：`if (u.isFlying) bits |= UF.FLYING;`——但它改的是快照内容，会让 golden 的 `.snaps` 漂移，需要维护者同意后连 `npm run golden:update` 一起做（见 FIXLOG §12.5）。
 
 ## 4. 维护方式
 

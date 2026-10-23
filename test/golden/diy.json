@@ -210,7 +210,7 @@
       "hooks": [1,82,6233,458,458,2607,2607,29560,21,75,28,27,0,285,83,77,60,54,1,21,0,0,0],
       "events": {"atk":455,"cast":6,"deploy":22,"die":21,"dmg":2607,"engage":7,"fx":39,"leak":54,"skill":55,"spawn":72,"status":160},
       "fx": {"aoe":34,"slash":5},
-      "snaps": "29ef6c91 afca2df1 f0cff506 5d2559f5 247d1d73 e6c346f1 71de883b 4720680b c7eedf72 8299f491 2f407c48 30a7a241 c18c0144 710d8e67 380c52aa a65adb89 985e81cc 1c1f8eca 345eccd2 f4d43a89 7273b2dc"
+      "snaps": "68934402 6ae6747a e441c49b 8e8dea9e 93f81d3b 348ed47b 327c7d65 93956e5d 2218a5c6 f5d5beca 38c60167 7e8c1f33 3b393357 f182611b 4e534d0d 06badd52 e2a4644c bc0e7080 726dfa6d 9e988c73 a1db72fc"
     },
     "diy-006": {
       "about": "5_diy1_b=irene/S1/004_irene 5_diy2_b=irene/S2/004_irene 5_diy1_b=irene/S3/004_irene 6_diy1_a=irene/S1 6_diy2_a=irene/S2 6_diy1_a=irene/S3 6_diy2_b=irene/S1 6_diy1_b=irene/S2 6_diy2_b=irene/S3 6_diy1_b=irene/S1/002_irene 6_diy2_b=irene/S2/002_irene 6_diy1_b=irene/S3/002_irene",
@@ -249,7 +249,7 @@
       "hooks": [1,103,6467,230,230,468,468,0,26,103,4,4,0,103,6,33,81,77,1,26,0,0,0],
       "events": {"atk":225,"cast":23,"deploy":22,"die":26,"dmg":468,"engage":10,"fx":26,"leak":77,"skill":8,"spawn":93,"status":38},
       "fx": {"slash":1,"zone":25},
-      "snaps": "3f498b93 19508fc9 20747ca9 eac83d70 74eb2ae7 00fb3738 b9c7f7eb 246ece90 ed720bab e5e944da 63a53dcf 146cd000 46050f79 471931d8 9b22d611 6e39b718 eadab44d 8d5df398 8d503127 87060969 c0d56f85 93620dfc"
+      "snaps": "3f498b93 63b52ae8 30f6b360 3ad3b403 a0cdd2f0 24c55bdf 7e7152f8 8cdaf277 8512e90c 4e7eecfd 613e7ea0 a8f6bbb7 cd38e79a 91fbe39f 2e6b176e e24cad93 caa5255e 430d2893 de285ca8 dcbed96e 62cb9ac3 0c6aa392"
     },
     "diy-007": {
       "about": "6_diy1_b=irene/S1/003_irene 6_diy2_b=irene/S2/003_irene 6_diy1_b=irene/S3/003_irene 6_diy2_b=irene/S1/004_irene 6_diy1_b=irene/S2/004_irene 6_diy2_b=irene/S3/004_irene 5_diy1_a=helage/S1 5_diy2_a=helage/S2 5_diy1_a=helage/S3 5_diy2_b=helage/S1 5_diy1_b=helage/S2 5_diy2_b=helage/S3",
@@ -290,7 +290,7 @@
       "hooks": [1,147,6686,433,433,651,645,2996,38,145,24,24,0,4917,16,48,123,107,1,38,0,0,6],
       "events": {"atk":454,"deploy":22,"die":38,"dmg":645,"engage":12,"fx":269,"heal":190,"leak":107,"skill":48,"spawn":137,"status":56},
       "fx": {"aoe":11,"dodge":6,"expose":252},
-      "snaps": "1d839894 12aa6c36 4d5b4739 6975eb7b 40fe0b02 dedfa91c d7413324 e5792caa 4ee2a6ce 3f5b5e18 899a2243 ab78dcb0 26d7db00 8f41a753 84f32df7 ef60e6d4 766ba36b 755c9d8f 75e4ed3f 14df09ef 1a7b65ee 2b3016f8 162c7cfc"
+      "snaps": "1d839894 12aa6c36 cc548899 774bf85b 95ec1c62 96f466fc bc90ba84 37a7160a af07632e 99747af8 adafae23 63629090 50632360 e2100bb3 38d9ccd7 089f0934 bf57674b 77bfd76f f95eff1f edd2ba4f 13925a4e cd409e58 86eb76dc"
     },
     "diy-008": {
       "about": "5_diy1_b=helage/S1/002_helage 5_diy2_b=helage/S2/002_helage 5_diy1_b=helage/S3/002_helage 5_diy2_b=helage/S1/003_helage 5_diy1_b=helage/S2/003_helage 5_diy2_b=helage/S3/003_helage 6_diy1_a=helage/S1 6_diy2_a=helage/S2 6_diy1_a=helage/S3 6_diy2_b=helage/S1 6_diy1_b=helage/S2 6_diy2_b=helage/S3",
@@ -453,7 +453,7 @@
       "hooks": [1,169,6445,901,901,1121,1392,327,24,167,53,53,0,21521,0,3,144,143,1,24,0,38,0],
       "events": {"atk":905,"deploy":23,"die":24,"dmg":1364,"fx":82,"heal":327,"leak":143,"skill":106,"spawn":158,"status":208},
       "fx": {"burst":38,"shield":44},
-      "snaps": "fada5d32 60eb8874 551edd44 8ca1485b 2bdedf03 ec0f7e61 35628c67 428c9e20 ba52209a cc674f1e edb6996e bfceaa4c bf2361bb 71f645f4 eaf8d27f fb073255 78feaf72 8786995d 955c647b 58ee99cf 4b9ccbd2 54883b10"
+      "snaps": "743307a5 7d0916d4 acee866b 01e79412 122b6722 0527349d 5718c73e e885e4ab cdb63174 ebc73301 d0804eee 991086c9 ebfeb250 332e5402 2e078572 a18fbff2 adf9a402 25217de6 8a2abd08 43f60900 df492ba8 7653264a"
     },
     "diy-012": {
       "about": "5_diy1_b=cgbird/S1/002_cgbird 5_diy2_b=cgbird/S2/002_cgbird 5_diy1_b=cgbird/S3/002_cgbird 5_diy2_b=cgbird/S1/003_cgbird 5_diy1_b=cgbird/S2/003_cgbird 5_diy2_b=cgbird/S3/003_cgbird 6_diy1_a=cgbird/S1 6_diy2_a=cgbird/S2 6_diy1_a=cgbird/S3 6_diy2_b=cgbird/S1 6_diy1_b=cgbird/S2 6_diy2_b=cgbird/S3",
@@ -776,7 +776,7 @@
       "hooks": [1,147,6747,284,289,373,373,0,24,146,15,15,0,8878,59,15,123,122,1,24,0,0,0],
       "events": {"atk":297,"cast":6,"deploy":24,"die":24,"dmg":373,"engage":12,"fx":107,"leak":122,"skill":30,"spawn":135,"status":133},
       "fx": {"tornado":98,"tornadoPulse":9},
-      "snaps": "e0fea744 00d7371f 23bb42ac 8b3644fe da96a990 9552fa8f 9d97830b 0ad2354d 3ac4c86d 655c6f47 3bc31f2a 99eec214 1be1859d 908293fd acdbbb8d 31a0a48f 96fd2cd9 ad5ab1d7 6830f943 b1595c97 bac19eab c8fdbd53 0d4fddc6"
+      "snaps": "7848adab 76e65e8b df5bf6de 0676d39e 1db9dc30 4f9f69af 5b180bab 3ccf5fed 9f481d8d 0c75d567 fea04f4a 1026ec34 328f343d 7aa4ef1d 7e31022d 2010a62f 19fbb3f9 8a1a1af7 47168ce3 f8a3f637 fe760fcb 43de8273 a1e7f9e6"
     },
     "diy-020": {
       "about": "5_diy1_b=heyak/S1/002_heyak 5_diy2_b=heyak/S2/002_heyak 5_diy1_b=heyak/S3/002_heyak 5_diy2_b=heyak/S1/003_heyak 5_diy1_b=heyak/S2/003_heyak 5_diy2_b=heyak/S3/003_heyak 5_diy1_b=heyak/S1/004_heyak 5_diy2_b=heyak/S2/004_heyak 5_diy1_b=heyak/S3/004_heyak 6_diy1_a=heyak/S1 6_diy2_a=heyak/S2 6_diy1_a=heyak/S3",
@@ -859,7 +859,7 @@
       "hooks": [1,145,6258,832,915,1807,1807,19112,55,131,83,82,0,39775,1099,19,123,76,1,55,0,0,0],
       "events": {"atk":1703,"deploy":19,"die":55,"dmg":1807,"engage":12,"fx":1922,"leak":76,"skill":165,"spawn":138,"status":1203},
       "fx": {"expose":346,"tornado":1442,"tornadoPulse":134},
-      "snaps": "9509320c e1f41ebc dbd8acc7 ff1526b0 098ebfd6 e9a6eef0 084ede1c edf05ea6 a2c9cd70 069bd9f6 18c71ff7 b4d4345f c4b3f81a 73992e32 6fca6220 b7227a79 a7b06ca2 40ae00e1 69650a09 c7b2cbab 76989368"
+      "snaps": "9509320c 207e9f0a d267fe60 58d032e8 3f2e8728 9b49c227 e659f9c1 2d64c8be 2718edad e55b6c13 5210342f e95c0d20 f411394a 0eb1fd29 74051c6e 3f1a3fac c3b1a72f 3519ac3c c17f8d34 e449050a 7aaf2235"
     },
     "diy-022": {
       "about": "5_diy1_a=poca/S1 5_diy2_a=poca/S2 5_diy1_a=poca/S3 5_diy2_b=poca/S1 5_diy1_b=poca/S2 5_diy2_b=poca/S3 5_diy1_b=poca/S1/002_poca 5_diy2_b=poca/S2/002_poca 5_diy1_b=poca/S3/002_poca 5_diy2_b=poca/S1/003_poca 5_diy1_b=poca/S2/003_poca 5_diy2_b=poca/S3/003_poca",
@@ -1428,7 +1428,7 @@
       "hooks": [1,167,6559,980,980,1161,1133,455,54,158,145,145,0,22374,14,44,150,104,1,54,0,0,0],
       "events": {"atk":980,"deploy":17,"die":54,"dmg":1107,"engage":7,"fx":64,"heal":278,"leak":104,"skill":290,"spawn":162,"status":55},
       "fx": {"aoe":28,"shield":4,"shieldBreak":32},
-      "snaps": "8c2fe75d 67eaaf4d 4460daf9 3d44d9c7 0018a4bb ddcd3c7d 620fd3d4 a0a35382 4fab11a4 40ecee51 55cec945 585f7d87 f314991f cc331b49 260ca3bd 67d4ecaf 3a920cd9 f0fd6d41 bf5f75f1 15c6cbc1 2aa6b7a8 e54f43c4"
+      "snaps": "8c2fe75d 67eaaf4d 4460daf9 4392e9aa a320b6b2 15f7afb8 25276675 ad416137 6909d5ed 22300efc 8fedb534 bcaea36a 94f0b227 037a9271 be885fc4 727be2fa 961dae74 81e44b94 56eb9da0 ec63cca4 5b362d65 8e7ed5f9"
     },
     "diy-036": {
       "about": "5_diy1_b=chyue/S1/002_chyue 5_diy2_b=chyue/S2/002_chyue 5_diy1_b=chyue/S3/002_chyue 5_diy2_b=chyue/S1/003_chyue 5_diy1_b=chyue/S2/003_chyue 5_diy2_b=chyue/S3/003_chyue 6_diy1_a=chyue/S1 6_diy2_a=chyue/S2 6_diy1_a=chyue/S3 6_diy2_b=chyue/S1 6_diy1_b=chyue/S2 6_diy2_b=chyue/S3",
@@ -1477,7 +1477,7 @@
       "hooks": [1,296,6063,940,940,1109,1099,0,175,288,106,106,0,11230,6,92,264,113,1,175,0,0,10],
       "events": {"atk":940,"deploy":29,"die":175,"dmg":1099,"engage":12,"fx":118,"leak":113,"skill":212,"spawn":279,"status":29},
       "fx": {"aoe":42,"buff":2,"dodge":10,"summon":64},
-      "snaps": "04c26eb7 a30c70b2 e5f0de10 85d84487 ef02955e 568fe115 3e9c2bcb 799f13cf 0189562e 5141af53 92c3c111 fdbef259 e967684f aa642837 e27c2a86 8fad1d10 a14089fa ece3c356 c0462902 9ea297fc 90be9194"
+      "snaps": "04c26eb7 497b5bc8 92383ce6 1ff06669 e6ff03d4 ba41c6cf d07314f5 4e7e5919 08c6cb44 523f1629 41c93ba6 57d9301e 4e2a7a10 23bba950 f6bf22ad 034d6b4f 2c53111f b7afb772 316f89b6 fe63e270 fda0e148"
     },
     "diy-037": {
       "about": "5_diy1_a=huang/S1 5_diy2_a=huang/S2 5_diy1_a=huang/S3 5_diy2_b=huang/S1 5_diy1_b=huang/S2 5_diy2_b=huang/S3 6_diy1_b=chyue/S1/002_chyue 6_diy2_b=chyue/S2/002_chyue 6_diy1_b=chyue/S3/002_chyue 6_diy2_b=chyue/S1/003_chyue 6_diy1_b=chyue/S2/003_chyue 6_diy2_b=chyue/S3/003_chyue",
@@ -1519,7 +1519,7 @@
       "hooks": [1,145,6366,820,820,3314,3303,11,37,137,64,64,0,11360,14,61,114,100,1,37,0,0,13],
       "events": {"atk":1046,"deploy":28,"die":37,"dmg":3205,"engage":12,"fx":66,"heal":11,"leak":100,"skill":128,"spawn":129,"status":32},
       "fx": {"aoe":42,"dodge":13,"heal":11},
-      "snaps": "4805e304 36e2aee2 366aaf45 7fda9ddc d93a4123 d89bd38a c3ee2e76 58483033 f1b9a0e4 dc57cd56 deecee98 e6c72f4b 5588edd4 123ea315 f25bccc5 9cea8813 9341940a 50cf2509 8dcb66ed f137ae17 b6cc1e7f 79e3b4ef"
+      "snaps": "d9d39e99 e886e3c6 66aef15d 6e59f457 ad8fa8ac 8a67abb5 69ba8fa1 d93c6bb8 7a79b31f cfa5fb99 96fd7720 5e6e5043 6e25c79c 0750b14d 2236f76d 800801cb 6442b022 3c091411 0244aa65 9b629f0f ebbb05b7 ea9d0c87"
     },
     "diy-038": {
       "about": "5_diy1_b=huang/S1/002_huang 5_diy2_b=huang/S2/002_huang 5_diy1_b=huang/S3/002_huang 5_diy2_b=huang/S1/003_huang 5_diy1_b=huang/S2/003_huang 5_diy2_b=huang/S3/003_huang 6_diy1_a=huang/S1 6_diy2_a=huang/S2 6_diy1_a=huang/S3 6_diy2_b=huang/S1 6_diy1_b=huang/S2 6_diy2_b=huang/S3",
@@ -4777,7 +4777,7 @@
       "hooks": [1,192,5957,440,440,443,520,0,33,192,3,3,0,2235,37,14,135,134,1,33,0,0,0],
       "events": {"atk":432,"deploy":57,"die":58,"dmg":520,"engage":12,"fx":43,"leak":134,"skill":6,"spawn":172,"status":68},
       "fx": {"explode":17,"mark":1,"summon":25},
-      "snaps": "86f3f54e 74833444 91b4129e 4c1f2600 60510650 30fb57e5 ee5b32c5 c6db5372 bf7398d6 05413cd3 3e07a245 dbcdf647 3b6b4eed 08f7732f 81e394b3 416c1604 39c77d22 7293c5de f0bce634 6faf8a01"
+      "snaps": "46703085 72c86f19 ab818efe 99de77dc 5deda9dd ecc6ca20 496d30c2 aff6ca83 5e8f4895 62e1babe a2be7519 6197bca7 ecf87d65 0670864b 87603b5e d7834d5c 78c15394 2c630a9a 319ab8f3 cf7752bb"
     },
     "diy-113": {
       "about": "6_diy1_a=doroth/S1 6_diy2_a=doroth/S2 6_diy1_a=doroth/S3 6_diy2_b=doroth/S1 6_diy1_b=doroth/S2 6_diy2_b=doroth/S3 6_diy1_b=doroth/S1/002_doroth 6_diy2_b=doroth/S2/002_doroth 6_diy1_b=doroth/S3/002_doroth 6_diy2_b=doroth/S1/003_doroth 6_diy1_b=doroth/S2/003_doroth 6_diy2_b=doroth/S3/003_doroth",
@@ -4843,7 +4843,7 @@
       "hooks": [1,201,6179,728,728,729,880,0,61,197,8,8,0,5242,17,8,144,112,1,61,0,23,0],
       "events": {"atk":718,"deploy":54,"die":85,"dmg":880,"engage":12,"fx":58,"leak":112,"skill":16,"spawn":183,"status":117},
       "fx": {"burst":23,"explode":11,"summon":24},
-      "snaps": "773722a1 51336346 27569f93 ebe07252 04bdce5e 52a263a4 38ba7bd5 6d300788 60229bcf d240503b a4f6f156 1aad7793 705983b8 fad3583f f82f4a94 c92bdb16 ec310425 b0f8b0c0 d7b975da 981ac700 05ed73c9"
+      "snaps": "888fe81a 1d257bef d894c88e 110ca707 5e33088b aaaf40e3 8c6788ea 04a4cde1 039496d9 a3d06448 cbba94e3 3a76e795 2988d11b c6197b0e 4c5cd72f 6e8c1168 bea73470 872e294f 1f956f39 15525956 395c9d0f"
     },
     "diy-114": {
       "about": "5_diy1_a=aglna2/S1 5_diy2_a=aglna2/S2 5_diy1_a=aglna2/S3 5_diy2_b=aglna2/S1 5_diy1_b=aglna2/S2 5_diy2_b=aglna2/S3 6_diy1_a=aglna2/S1 6_diy2_a=aglna2/S2 6_diy1_a=aglna2/S3 6_diy2_b=aglna2/S1 6_diy1_b=aglna2/S2 6_diy2_b=aglna2/S3",
@@ -4891,7 +4891,7 @@
       "hooks": [1,278,6395,784,784,3175,2811,0,238,271,19,17,213,11795,22,54,252,33,1,268,0,0,0],
       "events": {"atk":1504,"deploy":23,"die":238,"dmg":2811,"engage":12,"fx":193,"leak":33,"skill":36,"spawn":267,"status":767},
       "fx": {"dash":5,"ember":30,"revive":2,"shieldBreak":54,"summon":53,"takeoff":19,"telegraph":30},
-      "snaps": "ad9c65fa 8dabb3a2 b2a76b7a 990ac6de 24ce268c 832255f7 d63fecc9 e33d0a76 d704effc b72cdd7f 1ec65561 cb6bea74 dc1267fe d96f35b8 b6ca37fa 414f7049 4fa33da7 7be55afb aacc0c75 f5cfbe71 c9ae3b24 0d512877"
+      "snaps": "b763efc0 d66322e6 3652c04e 04921812 d45d79cc 193278b7 16e95d09 92abd336 97f1fcbc 80d2274a 98f6d449 45164814 f90b0998 53b3e7a6 251ab080 ed276d2f bf4f0395 a63b7611 545cdc27 0f0c66e7 68abd2fe 0b926759"
     },
     "diy-115": {
       "about": "5_diy1_a=ebnhlz/S1 5_diy2_a=ebnhlz/S2 5_diy1_a=ebnhlz/S3 5_diy2_b=ebnhlz/S1 5_diy1_b=ebnhlz/S2 5_diy2_b=ebnhlz/S3 5_diy1_b=ebnhlz/S1/002_ebnhlz 5_diy2_b=ebnhlz/S2/002_ebnhlz 5_diy1_b=ebnhlz/S3/002_ebnhlz 5_diy2_b=ebnhlz/S1/003_ebnhlz 5_diy1_b=ebnhlz/S2/003_ebnhlz 5_diy2_b=ebnhlz/S3/003_ebnhlz",
@@ -5395,7 +5395,7 @@
       "hooks": [1,118,5545,1337,1337,2622,2798,1053,103,103,25,21,0,23667,129,66,102,0,1,103,0,27,0],
       "events": {"atk":1715,"cast":8,"deploy":13,"die":103,"dmg":2798,"engage":10,"fx":1218,"heal":879,"skill":46,"spawn":117,"status":1003},
       "fx": {"aoe":357,"burst":27,"heal":350,"levitate":121,"shield":363},
-      "snaps": "9c5289cd d7200cbc 37f46369 58da4c81 497daf13 929f0af2 b3d97117 d65d1e93 e5aed881 606afb30 f7d60c27 2fc60eae 6401c96d 27e0e063 2c92bb45 2c0054f4 75c01bcb 679709e8 5ec457b8"
+      "snaps": "9c5289cd 3022d07a 44b1e8d8 a988cc0e ce1c2356 989895cb ae17cd94 0d0e9998 1c5be032 fc51854b 4604e454 f90300b5 c3fc4527 4457d382 e3a49a39 b98f5361 1fef3d8a 652a8f7d cb8f37d0"
     },
     "diy-126": {
       "about": "6_diy1_b=haruka/S1 6_diy2_b=haruka/S2 6_diy1_b=haruka/S3 6_diy2_b=haruka/S1/002_haruka 6_diy1_b=haruka/S2/002_haruka 6_diy2_b=haruka/S3/002_haruka 5_diy1_a=phatm2/S1 5_diy2_a=phatm2/S2 5_diy1_a=phatm2/S3 5_diy2_b=phatm2/S1 5_diy1_b=phatm2/S2 5_diy2_b=phatm2/S3",
@@ -5444,7 +5444,7 @@
       "hooks": [1,127,6900,892,892,3153,5031,35,91,112,67,61,0,25369,253,83,105,17,1,91,0,212,0],
       "events": {"atk":1008,"deploy":22,"die":95,"dmg":5031,"engage":12,"fx":459,"heal":23,"leak":17,"skill":128,"spawn":127,"status":788},
       "fx": {"aoe":7,"burst":212,"heal":18,"levitate":3,"palsy":179,"shield":30,"summon":10},
-      "snaps": "040ec2fb 984570a5 cb216c99 de9f02bc 8863f6df f7ddb9b8 c8340f31 d1fc3bcf 8a7b43df 14f8d1c2 e9076927 6063df96 dd4d3190 11f6f59e bc2a7de6 59e67860 e35030eb 617dd50f 15d82ecf eed2480b 49042712 e184716c d484e740"
+      "snaps": "040ec2fb 984570a5 cb216c99 de9f02bc 8863f6df f7ddb9b8 c8340f31 d1fc3bcf 8a7b43df 14f8d1c2 e9076927 6063df96 dd4d3190 11f6f59e bc2a7de6 86d99744 91876fa7 380b7793 ca9e96bb 081ef11f d2b190c6 58db7268 9ee159dc"
     },
     "diy-127": {
       "about": "5_diy1_b=phatm2/S1/002_phatm2 5_diy2_b=phatm2/S2/002_phatm2 5_diy1_b=phatm2/S3/002_phatm2 6_diy1_a=phatm2/S1 6_diy2_a=phatm2/S2 6_diy1_a=phatm2/S3 6_diy2_b=phatm2/S1 6_diy1_b=phatm2/S2 6_diy2_b=phatm2/S3 6_diy1_b=phatm2/S1/002_phatm2 6_diy2_b=phatm2/S2/002_phatm2 6_diy1_b=phatm2/S3/002_phatm2",

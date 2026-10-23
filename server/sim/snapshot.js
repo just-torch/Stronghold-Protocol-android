@@ -94,7 +94,10 @@ export function flagsOf(u) {
   if (f.invulnerable) bits |= UF.INVULN;
   if (f.cold) bits |= UF.COLD;
   if (f.sleep) bits |= UF.SLEEP;
-  if (u.motion === 'FLY') bits |= UF.FLYING;
+  // 空中单位 for the client's drawing (units.js liftTo / FLY_HOVER): the same getter every targeting rule reads —
+  // FLY movers, plus 近地悬浮 (float) and 浮空 (levitate) enemies, minus a 缚地 (groundbind) one (units.js isFlying).
+  // Reading `motion` alone drew a levitated enemy on the ground while the sim hit it as an air unit (2026-10-23).
+  if (u.isFlying) bits |= UF.FLYING;
   return bits;
 }
 

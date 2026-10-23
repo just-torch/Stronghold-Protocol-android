@@ -555,7 +555,9 @@ Getters: `s` (aggregated stats), `maxHp`, `atk`, `hpRatio`, `sp`, `spMax`, `canA
 `dmgType`, `weight`. `isFlying` = an **air unit** for every targeting / ground-only rule: `motion` FLY, or an enemy with
 flag `float` (近地悬浮, PRTS 术语释义 "算作空中单位") or `levitate` (浮空 "变为空中单位") — never an enemy under 缚地 (flag
 `groundbind`, "目标变为地面单位") unless a 浮空 lifts it again; movement and pathing read `motion` (a hovering enemy keeps
-walking the ground path). `deploySeq` counts deployments (and identifies one: `seq === u.deploySeq`);
+walking the ground path). The snapshot's `UF.FLYING` bit is this same getter (`snapshot.js` flagsOf, since 2026-10-23): a
+hovering or levitated enemy is lifted by the client (`render/units.js` FLY_HOVER) exactly while the sim treats it as an air
+unit, and a 缚地 enemy drops back down. `deploySeq` counts deployments (and identifies one: `seq === u.deploySeq`);
 `aggroSeq` is the aggro order (= deploySeq, except the summons of the initial deployment and prepared 外勤医疗 map
 characters, §1).
 

@@ -6,9 +6,8 @@
 // charged, which can read as "S3 does not hit air"; a synthetic high-HP target isolates the skill. The engine's only
 // air filter is server/sim/ai.js:412 (`!prof.canHitFly && e.isFlying && !prof.splashHitsFly`), and S3 inherits the 领主
 // profile's canHitFly: true. Also covers docs/SIM.md's air-unit rule: 近地悬浮 (flag `float`) and 浮空 (`levitate`) are
-// air units (`Unit.isFlying`), so the S3 hits them. (The client lifts only data flyers — flagsOf's UF.FLYING follows
-// `motion` alone — so a hovering / levitated enemy is still DRAWN on the ground; that is a presentation gap recorded in
-// the PR, not a targeting one, and changing the snapshot bit would move every golden `.snaps` digest.)
+// air units (`Unit.isFlying`), so the S3 hits them — and since 2026-10-23 the snapshot's UF.FLYING follows the same
+// getter, so the client draws (and lifts) them as the air units the sim treats them as, while a 缚地 enemy drops back.
 // Run: node --test test/content/svrash-s3-air.test.js
 
 import { test } from 'node:test';
@@ -95,6 +94,11 @@ test('近地悬浮 (float) and 浮空 (levitate) are air units: S3 hits both (th
   assert.deepEqual([hover.motion, hover.isFlying], ['WALK', true], '近地悬浮: a WALK mover that is an air unit');
   assert.deepEqual([lev.motion, lev.isFlying], ['WALK', true], '浮空: a WALK mover that is an air unit');
   assert.equal(ground.isFlying, false);
+  // the client's FLYING bit (server/sim/snapshot.js flagsOf): the same getter, so hovering / levitated enemies are
+  // lifted and drawn as air units instead of standing on the ground
+  assert.ok(flagsOf(hover) & UF.FLYING, '近地悬浮: the snapshot FLYING bit');
+  assert.ok(flagsOf(lev) & UF.FLYING, '浮空: the snapshot FLYING bit');
+  assert.equal(flagsOf(ground) & UF.FLYING, 0, 'a ground enemy: no FLYING bit');
   cast(h, u);
   assert.ok(h.runUntil(() => [hover, lev, ground].every((e) => skillHits(h, u).some((c) => c.target === e)), 3), 'S3 hits all three');
   for (const e of [hover, lev, ground]) {
@@ -102,8 +106,9 @@ test('近地悬浮 (float) and 浮空 (levitate) are air units: S3 hits both (th
     approx(hit.amount, u.s.atk, `${e.defId}: S3 damage = ATK`);
     assert.equal(!!(hit.target.isFlying), e !== ground, `${e.defId}: air / ground`);
   }
-  // 缚地 makes an air unit a ground one again (Unit.isFlying)
+  // 缚地 makes an air unit a ground one again (Unit.isFlying) — the snapshot bit follows it back down
   h.b.applyStatus(hover, 'groundbind', { duration: 9, source: null });
   assert.equal(hover.isFlying, false, '缚地: a ground unit');
+  assert.equal(flagsOf(hover) & UF.FLYING, 0, '缚地: the FLYING bit is cleared');
   done(h);
 });
