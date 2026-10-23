@@ -32,6 +32,8 @@ import { sanitizeSettings, HOTKEY_ACTIONS, DEFAULT_HOTKEYS, hotkeyLabel, rebindH
 import { audio } from '../audio.js';
 import { openGuide } from './guide.js';
 import { detectFeatures } from './device.js';
+import { net } from '../net.js';
+import { DEFAULT_SEATS, MIN_SEATS, MAX_SEATS } from '../../../shared/constants.js';
 import { LangToggle, machineTranslationNote } from './lang.js';
 import { t, tc, N_ } from '../../../shared/i18n.js';
 import { errorCount, currentBattle, diagnosticsText } from '../diag.js';
@@ -480,6 +482,37 @@ function StorageSection() {
   </section>`;
 }
 
+/**
+ * 同盟人数上限 (room.state.capacity, server/lobby.js `room.setCapacity`): the host's 2–8 seat cap. Moved here from the
+ * create panel and the room header (owner's request, 2026-10-23) — the lobby stays a one-screen layout without the extra
+ * row, and every room control now sits in the one 设置 dialog. Shown only to a co-op room's host before the match; the
+ * server still refuses a cap below a seated player, so the lower buttons stop at the highest occupied seat + 1.
+ * A change un-readies the other humans (server/lobby.js), which the hint says.
+ */
+function RoomSeats() {
+  const room = useStore((s) => s.room);
+  const me = useStore((s) => s.me);
+  const [busy, setBusy] = useState(false);
+  if (!room || room.mode !== 'coop' || room.inMatch || !me?.playerId || room.hostId !== me.playerId) return null;
+  const cap = Number.isInteger(room.capacity) ? room.capacity : DEFAULT_SEATS;
+  const min = Math.max(MIN_SEATS, ...(Array.isArray(room.seats) ? room.seats.map((s) => (s && Number.isInteger(s.seat) ? s.seat + 1 : 0)) : [0]));
+  const pick = (n) => {
+    if (busy || n === cap || n < min || n > MAX_SEATS) return;
+    setBusy(true);
+    net.request('room.setCapacity', { capacity: n }).finally(() => setBusy(false));
+  };
+  return html`<div class="set-row" data-testid="room-capacity">
+    <span class="set-row__label">${t('人数上限')}<${MicroLabel}>SEATS<//></span>
+    <div class="set-seg set-seats" role="radiogroup" aria-label=${t('人数上限')}>
+      ${Array.from({ length: MAX_SEATS - MIN_SEATS + 1 }, (_, i) => MIN_SEATS + i).map((n) => html`<button key=${n} type="button"
+        role="radio" aria-checked=${cap === n ? 'true' : 'false'} class=${cap === n ? 'is-on' : ''}
+        disabled=${busy || n < min} title=${n < min ? t('不能少于已在座的博士数') : t('{n} 名博士', { n })}
+        onClick=${() => pick(n)}>${n}</button>`)}
+    </div>
+  </div>
+  <p class="set-hint">${t('同盟房间的席位上限（2–8 人，默认 4 人）。改动只在开局前生效，其他已准备的博士会因此取消准备；不能少于已在座的博士数。')}</p>`;
+}
+
 export function SettingsModal({ open, onClose }) {
   const s = useSettings();
   const [tested, setTested] = useState(false);
@@ -502,6 +535,7 @@ export function SettingsModal({ open, onClose }) {
                         actions=${html`<${Button} variant="secondary" icon="book" class="set-guide" onClick=${() => openGuide(0)}>${t('玩法说明')}<//>
                         <${Button} variant="primary" icon="check" onClick=${onClose}>${t('完成')}<//>`}>
     <div class="set-list">
+      <${RoomSeats} />
       <div class="set-row">
         <span class="set-row__label">${t('语言')}<${MicroLabel}>LANGUAGE<//></span>
         <${LangToggle} class="set-lang" />

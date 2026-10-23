@@ -15,7 +15,7 @@
 import { TestMark } from '../ui/testConsole.js';
 import { ResumeMatchButton } from '../ui/resumeMatch.js';
 import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
-import { DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, ROOM_CODE_LEN, MAX_SEATS, MIN_SEATS, DEFAULT_SEATS, MAX_SPECTATORS, modeIdFor, ERR } from '../../../shared/constants.js';
+import { DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, ROOM_CODE_LEN, MAX_SEATS, MAX_SPECTATORS, modeIdFor, ERR } from '../../../shared/constants.js';
 import { html, confirmDialog, Button, Icon, MicroLabel, Panel, TextField, PingPill, AvatarFrame, Tooltip, Spinner, DifficultyIcon, doctorNo } from '../ui/components.js';
 import { toast, toastError } from '../ui/toasts.js';
 import { GuideButton } from '../ui/guide.js';
@@ -269,10 +269,9 @@ export function LobbyScreen() {
     return DIFFICULTIES.includes(d) ? d : 'FUNNY';
   });
   const [code, setCode] = useState('');
-  // co-op seat cap chosen at creation (room.create.capacity): starts at DEFAULT_SEATS every time, so a room whose host
-  // does not touch the control keeps today's 4 seats; the room's own control can still change it until the match starts
-  // (room.setCapacity, screens/room.js)
-  const [capacity, setCapacity] = useState(DEFAULT_SEATS);
+  // The co-op seat cap is a room setting now: the host changes it in 设置 → 人数上限 after creating the room
+  // (room.setCapacity, ui/settings.js RoomSeats; owner's request 2026-10-23), so creating always asks for the server's
+  // DEFAULT_SEATS and this screen keeps its one-screen layout without the extra row.
   const [asTest, setAsTest] = useState(false);
   const testMode = useStore((s) => s.testMode === true);
   const [busy, setBusy] = useState(null);
@@ -288,10 +287,6 @@ export function LobbyScreen() {
 
   const pickMode = (m) => { setRoomMode(m); savePref('lobby.mode', m); };
   const pickDifficulty = (d) => { setDifficulty(d); savePref('lobby.difficulty', d); };
-  const pickCapacity = (n) => {
-    if (!Number.isInteger(n) || n < MIN_SEATS || n > MAX_SEATS) return;
-    setCapacity(n);
-  };
 
   const run = async (kind, fn) => {
     if (inFlight.current) return;
@@ -305,8 +300,6 @@ export function LobbyScreen() {
   };
   const create = () => run('create', () => net.request('room.create', {
     mode: roomMode, difficulty,
-    // only the host's explicit co-op choice: a solo room is always one seat (and the server refuses a capacity there)
-    ...(roomMode === 'coop' ? { capacity } : {}),
     ...(testMode && asTest ? { test: true } : {}),
   }));
   const join = (c = code) => {
@@ -406,15 +399,6 @@ export function LobbyScreen() {
           ${DIFFICULTIES.map((d) => html`<${DifficultyCard} key=${d} roomMode=${roomMode} difficulty=${d} selected=${difficulty === d} onSelect=${pickDifficulty} />`)}
         </div>
         <div class="create-box">
-          ${roomMode === 'coop' ? html`<div class="create-cap" data-testid="create-capacity">
-            <span class="create-cap__label">${t('人数上限')}</span>
-            <div class="create-cap__opts" role="group" aria-label=${t('人数上限')}>
-              ${Array.from({ length: MAX_SEATS - MIN_SEATS + 1 }, (_, i) => MIN_SEATS + i).map((n) => html`<button key=${n} type="button"
-                class=${`create-cap__opt num${capacity === n ? ' is-active' : ''}`} aria-pressed=${capacity === n ? 'true' : 'false'}
-                title=${t('{n} 名博士', { n })} onClick=${() => pickCapacity(n)}>${n}</button>`)}
-            </div>
-            <span class="create-cap__hint t-dim">${t('默认 {n} 人；创建后创建者仍可在房间中调整', { n: DEFAULT_SEATS })}</span>
-          </div>` : null}
           ${testMode ? html`<label class="create-box__test" data-testid="create-test">
             <input type="checkbox" checked=${asTest} onChange=${(e) => setAsTest(e.target.checked)} />
             <span>${t('测试房间')}</span>

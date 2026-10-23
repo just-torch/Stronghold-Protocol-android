@@ -188,13 +188,12 @@ html:not(.sp-in-match) .toast-host { margin-top: var(--sa-t); }
 }
 
 /* Very short landscape phones (≤ 400 CSS px tall — a 640×360 or 568×320 viewport): 1rem is clamped at 40 px, so the
-   19.2 × 10.8 rem design is taller than the screen and the last row (人数上限 + 创建同盟) fell past the bottom. The
-   bilingual section headers go (they cost .45rem above each column and carry no state) and the last rows tighten a
-   little more, which puts 创建同盟 fully on screen again — the single row that must never need a scroll. */
+   19.2 × 10.8 rem design is taller than the screen. The bilingual section headers go (they cost .45rem above each
+   column and carry no state) and the last rows tighten a little more, which keeps 创建同盟 fully on screen — the one
+   row that must never need a scroll. (The 人数上限 row that used to sit there moved into 设置, ui/settings.js.) */
 @media (max-height: 400px) {
   .lobby-body .section-label { display: none; }
   .diff-list { gap: .04rem; }
-  .create-cap__opt { height: 26px; }
   .create-box .btn--xl { height: .72rem; }
 }
 

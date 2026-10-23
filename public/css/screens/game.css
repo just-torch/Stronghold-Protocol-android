@@ -865,6 +865,10 @@
 .set-preview .icon { width: .14rem; height: .14rem; color: var(--mint-500); }
 .set-preview__miss { flex-basis: 100%; font-size: calc(.13 * var(--t)); color: var(--amber); }
 .set-seg button { flex: 1 1 auto; min-width: .8rem; min-height: .38rem; height: auto; white-space: normal; background: #0a0d0c; border: 0; border-right: 1px solid var(--line-2); color: var(--text-lo); font-size: calc(.16 * var(--t)); }
+/* 人数上限 (ui/settings.js RoomSeats, moved out of the lobby / room 2026-10-23): seven numbers in one row — at the default
+   .8rem each the group wraps, so its buttons are short and square like the room's old stepper */
+.set-seg.set-seats { flex-wrap: nowrap; }
+.set-seg.set-seats button { flex: 0 0 auto; min-width: .38rem; padding: 0; }
 /* 文字大小 (ui/settings.js): four steps, so its buttons are narrower than the two- and three-step groups' — at .8rem each
    the group would be wider than the row's 1fr column on a phone (1rem = 40 px) */
 .set-seg.set-textsize button { min-width: .62rem; }

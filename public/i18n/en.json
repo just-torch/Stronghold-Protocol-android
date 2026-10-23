@@ -2350,5 +2350,7 @@
   "全员淘汰": "All eliminated",
   "超时": "Timed out",
   "放弃": "Abandoned",
-  "渲染器暂时未能加载（{reason}），已切换为简化视图（功能不受影响，可刷新重试）": "The renderer could not load ({reason}). Switched to the simplified view (functionality is unaffected — refresh to retry)."
+  "渲染器暂时未能加载（{reason}），已切换为简化视图（功能不受影响，可刷新重试）": "The renderer could not load ({reason}). Switched to the simplified view (functionality is unaffected — refresh to retry).",
+  "不能少于已在座的博士数": "Cannot be fewer than the doctors already seated",
+  "同盟房间的席位上限（2–8 人，默认 4 人）。改动只在开局前生效，其他已准备的博士会因此取消准备；不能少于已在座的博士数。": "Seat cap of the co-op room (2–8, 4 by default). A change only applies before the match starts and un-readies the other doctors; it can never drop below the doctors already seated."
 }

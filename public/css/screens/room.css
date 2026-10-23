@@ -321,12 +321,8 @@
 .ailast__opt:last-child { border-right: 1px solid var(--line-2); }
 .ailast__opt .icon { opacity: .25; }
 .ailast__opt .icon.is-on { opacity: 1; }
-/* 人数上限 (room.setCapacity): the host's 2–8 stepper beside the difficulty picker; the others read the number */
-.capctl { display: flex; align-items: center; font-size: calc(.14 * var(--t)); }
-.capctl__box { display: flex; align-items: center; gap: .04rem; padding: .02rem .06rem; border: 1px solid var(--line-2); background: rgba(0, 0, 0, .3); }
-.capctl__label { padding: 0 .1rem 0 .04rem; color: var(--text-lo); letter-spacing: .06em; }
-.capctl__num { min-width: .48rem; text-align: center; font-size: calc(.26 * var(--t)); color: var(--mint-400); }
-.capctl .btn--square { width: .36rem; height: .36rem; }
+/* the 人数上限 stepper lives in 设置 now (ui/settings.js RoomSeats, owner's request 2026-10-23) — the room bar keeps the
+   difficulty picker and the two toggles */
 
 .ready-count[hidden] { display: none; }
 .ready-count { display: flex; align-items: baseline; gap: .06rem; font-size: calc(.16 * var(--t)); }

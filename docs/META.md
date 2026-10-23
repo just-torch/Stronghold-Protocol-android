@@ -43,10 +43,12 @@ server/match/
 
 ## 1. Match flow
 
-**Room capacity (a remake option; `server/lobby.js`, `shared/constants.js`).** A co-op room still starts with the
-official `DEFAULT_SEATS` = 4 seats unless its host explicitly chooses another capacity: `room.create { capacity }`
-(2–8) and, before the match, `room.setCapacity { capacity }` (host-only; the other humans are un-readied like a
-difficulty change). The hard cap is `MAX_SEATS` = 8, the floor `MIN_SEATS` = 2; a solo room is always one seat (a
+**Room capacity (a remake option; `server/lobby.js`, `shared/constants.js`).** A co-op room starts with the official
+`DEFAULT_SEATS` = 4 seats; the host raises or lowers it **in 设置 → 人数上限** (the settings dialog's `RoomSeats` row,
+`room.setCapacity { capacity }`, ui/settings.js — moved out of the create panel and the room header by the owner's request
+of 2026-10-23). The host may also pass `room.create { capacity }` directly (2–8, used by the API and the older client);
+before the match, `room.setCapacity { capacity }` is host-only and un-readies the other humans like a difficulty change.
+The hard cap is `MAX_SEATS` = 8, the floor `MIN_SEATS` = 2; a solo room is always one seat (a
 capacity there is `BAD_MSG`, `room.setCapacity` is `BAD_TARGET`) and the server refuses a capacity below the seated
 players (`BAD_TARGET`: seat indexes never compact, so the highest occupied index counts too). `room.state.capacity`
 travels with every state and is the length of `seats`; the match receives up to 8 seats and needs no other protocol
