@@ -48,7 +48,7 @@
 // Pure logic, no Preact / DOM: Node-testable (test/ui/stats.test.js); localStorage is touched only by loadStats /
 // saveStats / their helpers.
 
-import { PHASE } from '../../../shared/constants.js';
+import { PHASE, MAX_SEATS } from '../../../shared/constants.js';
 import { sanitizeName } from './playerName.js';
 
 /** Current record-envelope version (bump + add a MIGRATIONS step when the record shape changes). */
@@ -94,7 +94,7 @@ const bool = (v, d = false) => (typeof v === 'boolean' ? v : d);
 const str = (v, max = 64) => (typeof v === 'string' && v.length ? v.slice(0, max) : null);
 
 // per-record bounds (an imported file is foreign data: nothing a row holds may grow without limit)
-const MAX_PLAYERS = 6; // the game seats 4
+const MAX_PLAYERS = MAX_SEATS; // the room's hard seat cap (4 by default, up to 8)
 const MAX_LINEUP = 12;
 const MAX_ITEMS = 4;
 const MAX_BONDS = 24;

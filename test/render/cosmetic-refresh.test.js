@@ -131,7 +131,8 @@ describe('views already drawn follow a changed manifest (render/units.js retryAs
     const layers = createCosmeticLayers();
     const loads = [];
     const vanilla = M.chars.char_002_amiya.spine.front.skel;
-    const a = createAssets({ manifest: M, cosmetics: layers, unloadSpine: () => {},
+    // `imageRetryDelays: []`: this test is the fallback path, not the retry loop (render/assets.test.js covers that)
+    const a = createAssets({ manifest: M, cosmetics: layers, unloadSpine: () => {}, imageRetryDelays: [],
       loadImage: async (u) => { if (u === PLUGIN_AVATAR) throw new Error('image failed'); return IMG; },
       loadSpine: async (e) => { loads.push(e.skel); if (e.skel === PLUGIN_SKEL) throw new Error('HTTP 404'); return { animations: [{ name: 'Idle' }] }; } });
     layers.setRoom(roomDoc);

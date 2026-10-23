@@ -18,6 +18,9 @@ test('every leader and difficulty: bloodPoint × the players alive (co-op), × 1
     for (const id of Object.keys(DATA.bosses)) {
       const base = DATA.bosses[id].bloodPoint[difficulty];
       for (const n of [1, 2, 3, 4]) assert.equal(bossPoolHp(gd, id, n), base * n, `${id} ${difficulty} ×${n}`);
+      // a room may seat up to 8 (room capacity): the leader keeps one share per player up to that hard cap
+      for (const n of [5, 6, 7, 8]) assert.equal(bossPoolHp(gd, id, n), base * n, `${id} ${difficulty} ×${n} (8-seat room)`);
+      assert.equal(bossPoolHp(gd, id, 9), base * 8, `${id} ${difficulty} at most 8 shares`);
       assert.equal(bossPoolHp(solo, id, 1), base, `${id} ${difficulty} solo`);
     }
   }

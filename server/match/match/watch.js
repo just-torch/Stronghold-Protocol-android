@@ -234,7 +234,9 @@ export class MatchWatch {
     }
     if (typeof fieldId === 'string' && fieldId.startsWith('n:')) {
       const target = this.players.get(fieldId.slice(2));
-      if (target && target.alive) this.sendTo(playerId, this.prepFieldMeta(target));
+      // a spectator seat never sees a player's shop (it is not a private view: test/match/spectator.test.js)
+      const shop = !this.spectators.has(playerId);
+      if (target && target.alive) this.sendTo(playerId, this.prepFieldMeta(target, { shop }));
     }
   }
 
@@ -255,6 +257,12 @@ export class MatchWatch {
     ps._prepScoutSig = sig;
     const dest = changed ? watchers : (to ? [to] : []);
     if (!dest.length) return;
-    for (const pid of dest) this.sendTo(pid, meta);
+    // the scouted player's read-only shop travels only to players scouting a teammate, never to a spectator seat
+    let withShop = null;
+    for (const pid of dest) {
+      if (this.spectators.has(pid)) { this.sendTo(pid, meta); continue; }
+      withShop ??= this.prepFieldMeta(ps, { shop: true });
+      this.sendTo(pid, withShop);
+    }
   }
 }

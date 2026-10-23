@@ -10,7 +10,7 @@ import {
   avatarUrl, portraitUrl, enemyIconUrl, tokenAvatarUrl, bondIconUrl, bandIconUrl, itemIconUrl, skillIconUrl, uiUrl,
   profIconUrl, subProfIconUrl, spineEntry, hasBackSpine, unitPictureUrl, bgmEntry, sfxUrl, unitSfxUrl, baseCharId,
   validSpine, RefLru, createAssets, unloadSpineData, spinePages, spineDataWeight, SPINE_WEIGHT_MIN, SPINE_IDLE_BYTES,
-  SPINE_IDLE_GRACE_MS, SPINE_EVICT_DELAY_MS, SPINE_QUIET_DELAY_MS,
+  SPINE_IDLE_GRACE_MS, SPINE_EVICT_DELAY_MS, SPINE_QUIET_DELAY_MS, loadImageElement, battleArtUrls, IMAGE_RETRY_MS,
 } from '../../public/js/assets.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -502,9 +502,10 @@ describe('createAssets store', () => {
   });
 
   test('image cache + preload progress (failures resolve to null)', async () => {
+    // `imageRetryDelays: []`: this test is about the cache / progress, not the retry loop (the next one covers that)
     const loaded = [];
     let fail = true;
-    const a = createAssets({ manifest: M, loadImage: async (u) => { loaded.push(u); if (u.includes('bad') && fail) throw new Error('x'); return { src: u }; } });
+    const a = createAssets({ manifest: M, imageRetryDelays: [], loadImage: async (u) => { loaded.push(u); if (u.includes('bad') && fail) throw new Error('x'); return { src: u }; } });
     const progress = [];
     const r = await a.preload(['/a.png', '/bad.png', '/a.png', null, ''], (d, t) => progress.push([d, t]));
     assert.deepEqual(r, { ok: 1, failed: 1, total: 2 });
@@ -516,9 +517,95 @@ describe('createAssets store', () => {
     assert.equal(await a.image(null), null);
     fail = false;
     assert.equal(await a.image('/bad.png'), null, 'ordinary consumers retain the remembered failure');
+    assert.equal(loaded.filter((u) => u === '/bad.png').length, 1);
     assert.equal((await a.image('/bad.png', { retry: true })).src, '/bad.png');
     assert.equal(loaded.filter((u) => u === '/bad.png').length, 2, 'explicit board retry performs a new load');
     assert.equal((await a.image('/bad.png')).src, '/bad.png');
+  });
+
+  test('a failed picture is retried with IMAGE_RETRY_MS backoff, then degrades and is reported once', async () => {
+    const waits = [];
+    const loads = new Map();
+    let badUp = false;
+    const a = createAssets({
+      manifest: M,
+      wait: async (ms) => { waits.push(ms); },
+      loadImage: async (u) => {
+        loads.set(u, (loads.get(u) || 0) + 1);
+        if (u.endsWith('bad.png')) { if (loads.get(u) < 3) throw new Error('offline'); return { src: u }; }
+        if (!badUp) throw new Error('offline');
+        return { src: u };
+      },
+    });
+    const failures = [];
+    a.onImageFailure((u, wasPlugin) => failures.push([u, wasPlugin]));
+    assert.equal((await a.image('/bad.png')).src, '/bad.png', 'the third attempt succeeds (two retries)');
+    assert.deepEqual(waits, [...IMAGE_RETRY_MS]);
+    assert.equal(loads.get('/bad.png'), 3, 'first attempt, then two retries');
+    assert.deepEqual(failures, []);
+    // every attempt fails: null (the caller's placeholder), the retry waits, one report
+    assert.equal(await a.image('/dead.png'), null);
+    assert.deepEqual(waits, [...IMAGE_RETRY_MS, ...IMAGE_RETRY_MS]);
+    assert.equal(loads.get('/dead.png'), 3);
+    assert.deepEqual(failures, [['/dead.png', false]]);
+    // the failure is remembered: other consumers do not hammer the link, and only one report is made
+    assert.equal(await a.image('/dead.png'), null);
+    assert.equal(loads.get('/dead.png'), 3);
+    assert.deepEqual(failures, [['/dead.png', false]]);
+    // an explicit retry loads again (a cosmetic layer re-resolved, the board retried)
+    badUp = true;
+    assert.equal((await a.image('/dead.png', { retry: true })).src, '/dead.png');
+    assert.equal(loads.get('/dead.png'), 4, 'the explicit retry loads once and succeeds');
+  });
+
+  test('a failure from before a listener existed (a room warm-up) is told to the next subscriber, still once', async () => {
+    const a = createAssets({ manifest: M, imageRetryDelays: [], loadImage: async () => { throw new Error('offline'); } });
+    assert.equal(await a.image('/early.png'), null);
+    const seen = [];
+    const off = a.onImageFailure((u, wasPlugin) => seen.push([u, wasPlugin]));
+    assert.deepEqual(seen, [['/early.png', false]]);
+    off();
+    const later = [];
+    const off2 = a.onImageFailure((u) => later.push(u));
+    assert.deepEqual(later, [], 'a URL is reported once');
+    off2();
+  });
+
+  test('a cosmetic plugin picture that fails keeps content.js\'s fallback report (`wasPlugin`)', async () => {
+    const layers = {
+      apply: (m) => m,
+      subscribe: () => () => {},
+      fail: (u) => String(u).includes('plugin'),
+    };
+    const a = createAssets({ manifest: M, cosmetics: layers, imageRetryDelays: [], loadImage: async () => { throw new Error('offline'); } });
+    const failures = [];
+    a.onImageFailure((u, wasPlugin) => failures.push([u, wasPlugin]));
+    assert.equal(await a.image('/plugin/avatar.png'), null);
+    assert.deepEqual(failures, [['/plugin/avatar.png', true]]);
+  });
+
+  test('preload never rejects the batch (allSettled) and keeps at most the asked concurrency', async () => {
+    let active = 0;
+    let peak = 0;
+    const urls = Array.from({ length: 20 }, (_, i) => `/i/${i}.png`);
+    const a = createAssets({
+      manifest: M,
+      imageRetryDelays: [],
+      loadImage: async (u) => {
+        active++;
+        peak = Math.max(peak, active);
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        active--;
+        if (u.endsWith('/3.png')) throw new Error('one picture down');
+        return { src: u };
+      },
+    });
+    const progress = [];
+    const r = await a.preload(urls, (done, total) => progress.push([done, total]), { concurrency: 4 });
+    assert.deepEqual(r, { ok: 19, failed: 1, total: 20 });
+    assert.ok(peak <= 4, `peak ${peak} is above the asked concurrency`);
+    assert.equal(progress.length, 20);
+    assert.deepEqual(progress.at(-1), [20, 20]);
   });
 
   test('spine acquire/release through the store with an injected loader', async () => {
@@ -530,6 +617,102 @@ describe('createAssets store', () => {
     a.spine.release(e);
     await assert.rejects(a.spine.acquire(null), /no spine/);
     assert.equal(a.spine.stats().refs, 0);
+  });
+});
+
+describe('loadImageElement (the default image loader)', () => {
+  /** Fake browser Image: `onload` fires after `src`; decode / naturalWidth are controllable. */
+  function fakeImage({ width = 2, decode = () => Promise.resolve() } = {}) {
+    return class {
+      constructor() { this.naturalWidth = width; this.naturalHeight = width; }
+      set src(url) { this._src = url; queueMicrotask(() => { if (this.onload) this.onload(); }); }
+      get src() { return this._src; }
+      decode() { return decode(); }
+    };
+  }
+
+  test('sets crossOrigin / async decoding and resolves once the bitmap is decoded', async () => {
+    const prev = globalThis.Image;
+    globalThis.Image = fakeImage();
+    try {
+      const img = await loadImageElement('/assets/a.png');
+      assert.equal(img.src, '/assets/a.png');
+      assert.equal(img.decoding, 'async');
+      assert.equal(img.crossOrigin, 'anonymous');
+    } finally {
+      if (prev === undefined) delete globalThis.Image; else globalThis.Image = prev;
+    }
+  });
+
+  test('onload alone is not enough: a decode failure or an empty bitmap rejects (the store retries)', async () => {
+    const prev = globalThis.Image;
+    try {
+      globalThis.Image = fakeImage({ decode: () => Promise.reject(new Error('bad decode')) });
+      await assert.rejects(loadImageElement('/assets/broken.png'), /decode/);
+      globalThis.Image = fakeImage({ width: 0 });
+      await assert.rejects(loadImageElement('/assets/empty.png'), /empty bitmap/);
+      // no decode() in this browser: onload is the confirmation
+      const noDecode = fakeImage();
+      delete noDecode.prototype.decode;
+      globalThis.Image = noDecode;
+      const img = await loadImageElement('/assets/old-browser.png');
+      assert.equal(img.src, '/assets/old-browser.png');
+    } finally {
+      if (prev === undefined) delete globalThis.Image; else globalThis.Image = prev;
+    }
+  });
+});
+
+describe('a picture that finally failed is visible', () => {
+  test('the field view subscribes to onImageFailure and says it once, in every pack', () => {
+    const app = readFileSync(new URL('../../public/js/render/app.js', import.meta.url), 'utf8');
+    assert.match(app, /assets\.onImageFailure\s*\(/, 'render/app.js listens to the store');
+    assert.match(app, /部分素材加载失败，已用占位图/, 'and names the message the toast shows');
+    for (const lang of ['en', 'zh-TW', 'ja', 'ko']) {
+      const pack = JSON.parse(readFileSync(new URL(`../../public/i18n/${lang}.json`, import.meta.url), 'utf8'));
+      assert.ok(Object.hasOwn(pack, '部分素材加载失败，已用占位图'), `${lang}.json has the message`);
+    }
+  });
+});
+
+describe('battleArtUrls (the art a room warms for the next battle)', () => {
+  const MANIFEST = {
+    ui: {
+      'battle/sprite_shadow': '/ui/shadow.png',
+      'entry/bg_mountains_tiled': '/ui/mountains.png',
+      'skillIcon/empty': '/ui/empty.png',
+      'other/not-warmed': '/ui/other.png',
+    },
+    prof: {
+      icon: { sniper: '/prof/sniper.png', caster: '/prof/caster.png' },
+      battlecard: { token: '/prof/token.png' },
+      sub: { fastshot: '/prof/sub/fastshot.png' },
+      large: { sniper: '/prof/large/sniper.png' }, // cards of the loadout screen only: not warmed
+    },
+    bonds: { yanShip: '/b/yan.png', bad: null },
+    bands: { band_bldsk: '/band/bldsk.png' },
+  };
+
+  test('field sprites, every profession icon and the bond / band discs — nothing else', () => {
+    const urls = battleArtUrls(MANIFEST);
+    assert.deepEqual(urls, [
+      '/ui/shadow.png', '/ui/mountains.png', '/ui/empty.png',
+      '/prof/sniper.png', '/prof/caster.png',
+      '/prof/token.png',
+      '/prof/sub/fastshot.png',
+      '/b/yan.png',
+      '/band/bldsk.png',
+    ]);
+    assert.ok(!urls.includes('/ui/other.png'), 'an unrelated UI sprite is not warmed');
+    assert.ok(!urls.includes('/prof/large/sniper.png'), 'the large cards stay on demand');
+    assert.equal(new Set(urls).size, urls.length, 'deduplicated');
+  });
+
+  test('missing / malformed groups give an empty list (never throws)', () => {
+    assert.deepEqual(battleArtUrls({}), []);
+    assert.deepEqual(battleArtUrls(null), []);
+    assert.deepEqual(battleArtUrls({ ui: { 'battle/sprite_shadow': null }, prof: 'nope', bonds: [] }), []);
+    assert.deepEqual(battleArtUrls({ prof: { icon: { a: '/same.png', b: '/same.png' } } }), ['/same.png']);
   });
 });
 

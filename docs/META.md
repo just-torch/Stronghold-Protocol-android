@@ -43,6 +43,19 @@ server/match/
 
 ## 1. Match flow
 
+**Room capacity (a remake option; `server/lobby.js`, `shared/constants.js`).** A co-op room still starts with the
+official `DEFAULT_SEATS` = 4 seats unless its host explicitly chooses another capacity: `room.create { capacity }`
+(2–8) and, before the match, `room.setCapacity { capacity }` (host-only; the other humans are un-readied like a
+difficulty change). The hard cap is `MAX_SEATS` = 8, the floor `MIN_SEATS` = 2; a solo room is always one seat (a
+capacity there is `BAD_MSG`, `room.setCapacity` is `BAD_TARGET`) and the server refuses a capacity below the seated
+players (`BAD_TARGET`: seat indexes never compact, so the highest occupied index counts too). `room.state.capacity`
+travels with every state and is the length of `seats`; the match receives up to 8 seats and needs no other protocol
+change. `Match` itself is seat-count agnostic (the round loop, 联防's ≤ 2 helpers, the boss pairing's
+`ceil(alive / 2)` groups of `b1…bN` all follow the alive list), and the leader pool keeps one `bloodPoint` share per
+player up to the 8-seat cap (`gamedata.js bossPoolShareOf`; the fixed-pool 0.1.x rule still uses the data's
+`aliveFull`). The room screen draws `capacity` seat cards (two rows for 5–8), the settlement scales its card strip for
+5–8, and the team panel scrolls when the rows exceed the viewport.
+
 ```
 LOBBY → INFO_CHECK (co-op 25 s; solo and single-human matches untimed; all humans confirmed ⇒ next) → BAND_DRAFT → BATTLE_CHECK (3 s)
 → for r = 1..lastRound (+ hidden):
@@ -228,6 +241,8 @@ a spectator — no PlayerState, a stand-in with `alive: false` — that every wa
 also resends the state on a join mid-match and each resume); it never gets `m.private` / `m.toast` / `m.unitStats`, is
 never a field's player or authority, its `b.start` spec omits the players' `contentInfo.funds` (`_spectatorSpec`: read by
 no battle effect), it gets the settlement's `m.result`, and `handle()` answers only its `g.watch` (else `SPECTATOR`).
+A prep scout's `m.field` also carries the scouted player's read-only shop (§5; task B): the same on-demand frame, so a
+teammate watching a 休整期 board sees that player's slots, prices, sold state and funds without a new message.
 The rest of this section is the legacy server-run mode
 (`SP_COMBAT=server`):
 `g.watch { fieldId }`: any live field during COMBAT / 联防; while no battle field is up (PREP, drafts, SETTLE)
@@ -862,7 +877,14 @@ same counts (its input's `bonds` come from `bondsView()`, PlayerState.battleInpu
 (once); the next round start clears them too.
 
 `m.field` = `{ fieldId, kind, rect, stageId, units, live }`; during prep `g.watch 'n:<pid>'` returns that board
-with `prep: true` and sends it again when the board changes (GitHub #87).
+with `prep: true` and sends it again when the board changes (GitHub #87). A PREP scout also carries `shop` (task B):
+the scouted player's read-only shop — `{ level, maxLevel, upgradePrice, refreshPrice, freeRefreshes, frozen,
+slots:[{ kind, id, price, basePrice, sold, frozen }|null], funds, deployCap, deployCount, ready, loadout }`
+(`PlayerState.scoutShopView`) — so a teammate scouting the board can see the shop it is looking at. It is minimal and
+on demand: only inside the `n:<pid>` prep-scout frame (requested with `g.watch`, re-sent on that player's
+`markPrivate`), never in `m.public`/`m.private`, never another player's reward offer, and absent outside PREP (the slots
+and funds are cleared at its end). The client draws it with the normal `ShopBar`, locked (`editable: false`), under a
+「正在查看 {name} 的调度中心（只读）」 badge; cards open their detail but no purchase, refresh, level or freeze is sent.
 
 **`b.snap` / `b.ev` game time**: every frame is `{ t: '<type>', … }`, so the snapshot's game time (DESIGN `b.snap.t`)
 is sent as **`gt`** (game seconds); `b.ev` carries the same `gt`. The client reads `gt` (`render/interp.js frameTime`,

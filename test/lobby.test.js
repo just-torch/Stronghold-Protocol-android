@@ -19,7 +19,7 @@ import { sanitizeName, TokenBucket, SessionRegistry, clientAddress, normalizeIp,
 import { StubMatch as Match } from '../server/match/StubMatch.js';
 import { Match as RealMatch } from '../server/match/Match.js';
 import { TestClient } from './helpers/wsClient.js';
-import { ERR, MAX_SEATS, MAX_SPECTATORS, PHASE, EMOTES } from '../shared/constants.js';
+import { ERR, DEFAULT_SEATS, MAX_SEATS, MIN_SEATS, MAX_SPECTATORS, PHASE, EMOTES } from '../shared/constants.js';
 
 const CODE_RE = new RegExp(`^[${CODE_ALPHABET}]{4}$`);
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -67,8 +67,8 @@ function clientPool(getUrl) {
   };
 }
 
-async function createRoom(c, mode = 'coop', difficulty = 'NORMAL') {
-  const r = await c.request({ t: 'room.create', mode, difficulty });
+async function createRoom(c, mode = 'coop', difficulty = 'NORMAL', extra = {}) {
+  const r = await c.request({ t: 'room.create', mode, difficulty, ...extra });
   assert.equal(r.t, 'ok', JSON.stringify(r));
   return c.waitFor('room.state', (s) => s.hostId === c.id && s.mode === mode);
 }
@@ -675,7 +675,8 @@ describe('websocket lobby', () => {
     assert.equal(st.mode, 'coop');
     assert.equal(st.difficulty, 'HARD');
     assert.equal(st.inMatch, false);
-    assert.equal(st.seats.length, MAX_SEATS);
+    assert.equal(st.seats.length, DEFAULT_SEATS);
+    assert.equal(st.capacity, DEFAULT_SEATS);
     assert.deepEqual(st.seats[0], { seat: 0, playerId: host.id, name: 'Host', isBot: false, ready: false, connected: true });
     assert.deepEqual(st.seats.slice(1), [null, null, null]);
 
@@ -737,6 +738,73 @@ describe('websocket lobby', () => {
     assert.equal(soloState.mode, 'solo');
     await expectError(late, { t: 'room.join', code: soloState.code }, ERR.ROOM_FULL);
     await expectError(solo, { t: 'room.addBot' }, ERR.ROOM_FULL);
+  });
+
+  // room capacity (server/lobby.js header; shared/constants.js DEFAULT_SEATS / MIN_SEATS / MAX_SEATS): a co-op room
+  // starts at the official 4 unless the host chose more, up to the hard cap 8.
+  test('seat capacity: default 4, host creates an 8-seat room, joins fill exactly 8, protocol bounds', async () => {
+    const host = await pool.player('Host');
+    const dflt = await createRoom(host);
+    assert.equal(dflt.capacity, DEFAULT_SEATS);
+    assert.equal(dflt.seats.length, DEFAULT_SEATS);
+    assert.deepEqual(dflt.seats.slice(1), Array(DEFAULT_SEATS - 1).fill(null));
+    // the wire bounds (protocol validation): 1 and 9 and non-integers are bad messages, a solo capacity too
+    for (const capacity of [1, 9, 0, 4.5, '8']) {
+      await expectError(host, { t: 'room.create', mode: 'coop', difficulty: 'NORMAL', capacity }, ERR.BAD_MSG);
+    }
+    await expectError(host, { t: 'room.create', mode: 'solo', difficulty: 'FUNNY', capacity: 4 }, ERR.BAD_MSG);
+    assert.equal(MIN_SEATS, 2);
+    assert.equal(MAX_SEATS, 8);
+
+    const st = await createRoom(host, 'coop', 'NORMAL', { capacity: MAX_SEATS });
+    assert.equal(st.capacity, MAX_SEATS);
+    assert.equal(st.seats.length, MAX_SEATS);
+    assert.deepEqual(st.seats.slice(1), Array(MAX_SEATS - 1).fill(null));
+    const guests = [];
+    for (let i = 1; i < MAX_SEATS; i++) {
+      const g = await pool.player(`G${i}`);
+      guests.push(g);
+      await joinRoom(g, st.code);
+    }
+    const full = await host.waitFor('room.state', (s) => s.seats.every(Boolean));
+    assert.deepEqual(full.seats.map((s) => s.seat), [0, 1, 2, 3, 4, 5, 6, 7]);
+    const late = await pool.player('Late');
+    await expectError(late, { t: 'room.join', code: st.code }, ERR.ROOM_FULL);
+    await expectError(host, { t: 'room.addBot' }, ERR.ROOM_FULL);
+    // leave no room behind for the code-driven fuzz below: the last human disposes it at once
+    for (const c of [host, ...guests]) await c.request({ t: 'room.leave' }).catch(() => {});
+  });
+
+  test('seat capacity: host-only, never below a seated player, un-readies guests, solo refuses', async () => {
+    const host = await pool.player('Host');
+    const st = await createRoom(host);
+    const a = await pool.player('A');
+    const b = await pool.player('B');
+    await joinRoom(a, st.code);
+    await joinRoom(b, st.code);
+    await expectOk(a, { t: 'room.ready', ready: true });
+    await host.waitFor('room.state', (s) => seatOf(s, a.id)?.ready === true);
+
+    await expectError(a, { t: 'room.setCapacity', capacity: 8 }, ERR.NOT_HOST);
+    await expectError(host, { t: 'room.setCapacity', capacity: 9 }, ERR.BAD_MSG);
+    await expectError(host, { t: 'room.setCapacity', capacity: 1 }, ERR.BAD_MSG);
+    const grown = await expectOk(host, { t: 'room.setCapacity', capacity: 8 });
+    assert.equal(grown.t, 'ok');
+    const wide = await host.waitFor('room.state', (s) => s.capacity === 8);
+    assert.equal(wide.seats.length, 8);
+    assert.equal(seatOf(wide, a.id).ready, false, 'a capacity change un-readies the other humans');
+    // seats never compact: seat 2 is occupied, so 3 is the smallest this room may become
+    await expectOk(host, { t: 'room.setCapacity', capacity: 3 });
+    const shrunk = await host.waitFor('room.state', (s) => s.capacity === 3 && s.seats.length === 3);
+    assert.equal(shrunk.seats.length, 3);
+    assert.equal(seatOf(shrunk, b.id).seat, 2);
+    await expectError(host, { t: 'room.setCapacity', capacity: 2 }, ERR.BAD_TARGET);
+
+    const soloHost = await pool.player('SoloHost');
+    await createRoom(soloHost, 'solo', 'FUNNY');
+    await expectError(soloHost, { t: 'room.setCapacity', capacity: 2 }, ERR.BAD_TARGET);
+    // no rooms left behind for the fuzz below
+    for (const c of [host, a, b, soloHost]) await c.request({ t: 'room.leave' }).catch(() => {});
   });
 
   // community report #26 (a remake feature): spectator seats — server/lobby.js header

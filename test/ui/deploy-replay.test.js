@@ -76,7 +76,7 @@ describe('roundStartReplay — once per round, in 回合开始, on the own board
     assert.match(src, /if \(plan && view && view\.replayDeploys\?\.\(plan\.uids\) > 0\) replayedRef\.current = plan\.round;/);
     assert.doesNotMatch(src, /deployPiece|deploySequence/, 'no landing at the wheel\'s confirm: the state that shows the move lands the piece once');
     const host = readFileSync(path.join(ROOT, 'public/js/ui/fieldHost.js'), 'utf8');
-    assert.match(host, /'stripesUnder', 'replayDeploys'\]/, 'an optional view method (the simplified board has none)');
+    assert.match(host, /'stripesUnder', 'replayDeploys', 'holdBattleEnd'\]/, 'an optional view method (the simplified board has none)');
   });
 });
 

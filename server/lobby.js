@@ -4,12 +4,14 @@
 // Rules (the choices where DESIGN is silent are marked ▸):
 //   * Rooms are keyed by 4-letter codes from an unambiguous alphabet (no I/O, letters only). Join codes are
 //     case-insensitive.
-//   * 'solo' rooms hold exactly one human and never bots. 'coop' rooms have 4 seats (humans + AI bots).
-//     Humans and bots take the lowest free seat index; seat indexes never compact.
+//   * 'solo' rooms hold exactly one human and never bots. 'coop' rooms have DEFAULT_SEATS (4) seats (humans + AI bots)
+//     unless the host chose a capacity at room.create { capacity } or changed it with room.setCapacity: MIN_SEATS (2) to
+//     MAX_SEATS (8); the room.state carries it and the seats array is that long. A capacity may never drop a seated
+//     player (BAD_TARGET). Humans and bots take the lowest free seat index; seat indexes never compact.
 //   * ▸ Being in a LOBBY room and sending room.create / room.join implicitly leaves it. While your room is
 //     in a match, create/join of another room fails with ROOM_STARTED (send g.leave or room.leave first).
-//   * Host-only: room.setDifficulty, room.setAiPicksLast, room.addBot, room.removeBot, room.kick, room.start.
-//     ▸ Changing the difficulty or the AI-picks-last option (co-op only) un-readies the other humans.
+//   * Host-only: room.setDifficulty, room.setCapacity, room.setAiPicksLast, room.addBot, room.removeBot, room.kick, room.start.
+//     ▸ Changing the difficulty, the seat capacity or the AI-picks-last option (co-op only) un-readies the other humans.
 //     ▸ room.start requires every other human to be connected and ready; the host's start counts as the host's
 //     ready (the host may still toggle room.ready for display).
 //   * room.kick {seat, playerId} (community report #17, owner approved): before the match only, the host removes another
@@ -150,7 +152,7 @@
 //     ends with summary.reason 'plugin-crash' | 'plugin-hang' | 'plugin-start' and the room is back in its lobby.
 //   * Spectator seats (community report #26, owner's decision 2026-10-04 — a remake feature, the official room has none):
 //     room.spectate { code } takes one of a co-op room's MAX_SPECTATORS (2) spectator seats, in its lobby or while its
-//     match runs (▸ solo rooms: ROOM_FULL). A spectator is not a player: never in `seats`, never counted for the 1–4 players
+//     match runs (▸ solo rooms: ROOM_FULL). A spectator is not a player: never in `seats`, never counted for the 1–8 players
 //     or the start gate, never host, never keeps a room alive (a room whose last human leaves closes with room.closed
 //     {empty} for its spectators). It receives room.state (`spectators: [{ playerId, name, connected }]`) and every match
 //     broadcast (m.public, m.ticker, m.emote, b.pool — public data); the match registers it (opts.spectators /
@@ -162,7 +164,7 @@
 //     a player seat (the seat is kept and given back on resume).
 
 import { randomBytes, randomInt } from 'node:crypto';
-import { DIFFICULTIES, ERR, MAX_SEATS, MAX_SPECTATORS, ROOM_CODE_LEN, modeIdFor } from '../shared/constants.js';
+import { DIFFICULTIES, ERR, MAX_SEATS, MIN_SEATS, DEFAULT_SEATS, MAX_SPECTATORS, ROOM_CODE_LEN, modeIdFor } from '../shared/constants.js';
 import { checkLoadout, checkLoadoutOps, cultivationCharIds, checkNotOwned, checkDiyPicks, charPotentialChanges, checkSkinSelection, operatorCharIds } from '../shared/protocol.js';
 import { encode, isDroppable, isErrCode, isLoopbackIp, sendRaw, sendSession } from './net.js';
 import { getData as defaultGetData, lookup } from './data.js';
@@ -292,13 +294,19 @@ function freezeSkins(skins, hasOperator) {
   return Object.freeze({ ...res.skins });
 }
 
-/** One room: 4 seat slots, host, difficulty, optional running match. */
+/** One room: up to MAX_SEATS seat slots (DEFAULT_SEATS unless the host chose a capacity), host, difficulty, optional running match. */
 export class Room {
-  /** @param {string} code @param {'solo'|'coop'} mode @param {string} difficulty @param {number} now */
-  constructor(code, mode, difficulty, now) {
+  /** @param {string} code @param {'solo'|'coop'} mode @param {string} difficulty @param {number} now @param {number} [capacity] */
+  constructor(code, mode, difficulty, now, capacity = DEFAULT_SEATS) {
     this.code = code;
     this.mode = mode;
     this.difficulty = difficulty;
+    /**
+     * Player-seat cap of the room (co-op; 1 in a solo room): `room.create { capacity }` / `room.setCapacity`, default
+     * DEFAULT_SEATS (4) so a host who never chooses keeps the official 4-player room. It is the length of `seats`;
+     * shrinking it below a seated player is refused (server/lobby.js setCapacity). Shown in room.state.
+     */
+    this.capacity = mode === 'solo' ? 1 : Math.max(MIN_SEATS, Math.min(MAX_SEATS, Math.floor(Number(capacity) || DEFAULT_SEATS)));
     /**
      * 「AI 队友最后选择」 (room.setAiPicksLast, GitHub #338; co-op only, off by default): the match's strategy and 机变 drafts
      * put every human seat before every AI seat (Match opts.aiPicksLast). Kept across the room's matches.
@@ -307,7 +315,7 @@ export class Room {
     /** @type {string | null} */
     this.hostId = null;
     /** @type {(Seat | null)[]} */
-    this.seats = new Array(MAX_SEATS).fill(null);
+    this.seats = new Array(this.capacity).fill(null);
     /** @type {{ playerId: string, name: string, connected: boolean }[]} spectator seats, ≤ MAX_SPECTATORS (header) */
     this.spectators = [];
     /** @type {any} running Match instance */
@@ -372,6 +380,9 @@ export class Room {
       hostId: this.hostId,
       mode: this.mode,
       difficulty: this.difficulty,
+      // the seat cap of the room (co-op: DEFAULT_SEATS 4 unless the host chose; solo: 1) — the room screen draws this
+      // many seat cards, so it must travel with every state (server/lobby.js capacity, room.setCapacity)
+      capacity: this.capacity,
       aiPicksLast: this.aiPicksLast,
       inMatch: !!this.match,
       seats: this.seats.map((s) => (s
@@ -674,6 +685,7 @@ export class Lobby {
       case 'room.leave': return this.leave(session);
       case 'room.ready': return this.ready(session, msg);
       case 'room.setDifficulty': return this.setDifficulty(session, msg);
+      case 'room.setCapacity': return this.setCapacity(session, msg);
       case 'room.setAiPicksLast': return this.setAiPicksLast(session, msg);
       case 'room.addBot': return this.addBot(session);
       case 'room.removeBot': return this.removeBot(session, msg);
@@ -759,9 +771,15 @@ export class Lobby {
   // room.* handlers
   // ---------------------------------------------------------------------------------------------------
 
-  create(session, { mode, difficulty, test } = {}) {
+  create(session, { mode, difficulty, test, capacity } = {}) {
     // A test room exists only when the process switch allowed it. The check runs before the room is built.
     if (test === true && this.testEnabled !== true) return fail(ERR.TEST_DISABLED);
+    // The host's seat cap: co-op only, a whole number inside MIN_SEATS…MAX_SEATS; a solo room is always 1 seat. The
+    // protocol validates the wire value too, but the lobby is also called directly (tests, match hosts): check here.
+    if (mode === 'solo' ? capacity != null && capacity !== 1 : !Number.isInteger(capacity ?? DEFAULT_SEATS)
+      || (capacity ?? DEFAULT_SEATS) < MIN_SEATS || (capacity ?? DEFAULT_SEATS) > MAX_SEATS) {
+      return fail(ERR.BAD_MSG, 'invalid capacity');
+    }
     const cur = this.roomOf(session);
     if (cur && cur.match) return fail(ERR.ROOM_STARTED, 'leave your running match first');
     if (this.rooms.size >= this.opts.maxRooms) return fail(ERR.INTERNAL, 'too many rooms');
@@ -777,7 +795,7 @@ export class Lobby {
     const code = this.genCode();
     if (!code) return fail(ERR.INTERNAL, 'no room code available');
     if (cur) this.removeMember(cur, session.playerId);
-    const room = new Room(code, mode, difficulty, this.now());
+    const room = new Room(code, mode, difficulty, this.now(), mode === 'solo' ? 1 : capacity ?? DEFAULT_SEATS);
     room.test = test === true;
     room.content = this.vanilla;
     // the server owner's default plugins (plugins/config.json `default`; header "Gameplay plugins"): none — the original game
@@ -904,6 +922,34 @@ export class Lobby {
       for (const s of room.seats) if (s && !s.isBot && s.playerId !== room.hostId) s.ready = false;
       this.broadcastState(room);
     }
+    return OK;
+  }
+
+  /**
+   * room.setCapacity (host, before the match, co-op only): the room's seat cap, from MIN_SEATS to MAX_SEATS. It may not
+   * drop a seated player (`BAD_TARGET` below the number of occupied seats or below the highest occupied seat: indexes
+   * never compact). Growth adds empty seats at the end; like a difficulty change it un-readies the other humans. The host
+   * picked the value at room.create; this lets a lobby fill up without recreating the room (and is the only way a
+   * non-host could try, which is refused NOT_HOST).
+   */
+  setCapacity(session, { capacity }) {
+    const room = this.roomOf(session);
+    if (!room) return fail(ERR.NOT_IN_ROOM);
+    if (room.hostId !== session.playerId) return fail(ERR.NOT_HOST);
+    if (room.match) return fail(ERR.ROOM_STARTED);
+    if (room.mode === 'solo') return fail(ERR.BAD_TARGET, 'solo rooms have one seat');
+    if (!Number.isInteger(capacity) || capacity < MIN_SEATS || capacity > MAX_SEATS) return fail(ERR.BAD_MSG, 'invalid capacity');
+    // seats never compact: a cap must cover every occupied index, not only the count
+    const highest = room.seats.reduce((m, s, i) => (s ? i + 1 : m), 0);
+    if (capacity < highest) return fail(ERR.BAD_TARGET, 'capacity below the seated players');
+    if (room.capacity === capacity) return OK;
+    this.dropReplay(room, session.playerId);
+    const seats = new Array(capacity).fill(null);
+    for (let i = 0; i < Math.min(capacity, room.seats.length); i++) seats[i] = room.seats[i];
+    room.capacity = capacity;
+    room.seats = seats;
+    for (const s of room.seats) if (s && !s.isBot && s.playerId !== room.hostId) s.ready = false;
+    this.broadcastState(room);
     return OK;
   }
 

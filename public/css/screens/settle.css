@@ -284,7 +284,11 @@ span.settle__nexticon .icon { width: .3rem; height: .3rem; }
 .steam__bg .sprite { position: absolute; left: 50%; top: 50%; width: 11.48rem; height: 10.8rem; transform: translate(-50%, -50%); }
 .steam .slogo { left: .45rem; top: .2rem; }
 .steam .slogo__img { height: .56rem; }
-.steam__cards { position: absolute; left: 0; right: 0; top: .66rem; display: flex; justify-content: center; gap: .95rem; }
+/* --k-cards: 1 for the official 1–4 players; scaled down by screens/settle.js for a room that seated 5–8, so their
+   cards stay in one row inside the stage. */
+.steam__cards { position: absolute; left: 0; right: 0; top: .66rem; display: flex; justify-content: center; gap: .95rem;
+  transform: scale(var(--k-cards, 1)); transform-origin: top center; }
+.steam__cards.is-many { gap: .4rem; }
 .tcard { position: relative; isolation: isolate; width: 3.47rem; flex: none; display: flex; flex-direction: column; animation: tcard-in 560ms var(--ease-out) calc(150ms + var(--i) * 120ms) both; }
 @keyframes tcard-in { 0% { opacity: 0; transform: translateY(-.3rem); filter: brightness(2.4) saturate(0); } 50% { opacity: 1; } }
 .tcard::before { content: ''; position: absolute; left: -.06rem; right: -.06rem; top: .36rem; bottom: .7rem; background: rgba(22, 27, 26, .78); box-shadow: 0 0 0 1px rgba(180, 196, 192, .14); z-index: -1; }

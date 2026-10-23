@@ -1111,8 +1111,15 @@ describe('screen helpers', () => {
       ],
     };
     assert.equal(normalizeSeats(room).length, 4);
+    // a room whose host raised its capacity (room.state.capacity): that many seat cards, up to the hard cap 8
+    assert.equal(normalizeSeats({ ...room, capacity: 8 }).length, 8);
+    assert.equal(normalizeSeats({ ...room, capacity: 8 }).at(-1), null);
+    assert.equal(normalizeSeats({ ...room, capacity: 99 }).length, 8, 'never above MAX_SEATS');
+    assert.equal(normalizeSeats({ mode: 'solo', capacity: 8, seats: [room.seats[0]] }).length, 1);
     assert.equal(normalizeSeats({ mode: 'solo', seats: [room.seats[0], null, null, null] }).length, 1);
     assert.deepEqual(normalizeSeats({ mode: 'coop', seats: 'bad' }), [null, null, null, null]);
+    const many = roomFacts({ ...room, capacity: 8 }, 'h');
+    assert.deepEqual([many.capacity, many.emptySeats, many.minCapacity], [8, 5, 4], 'seats 0–3 keep the room at 4 at least');
     let f = roomFacts(room, 'h');
     assert.equal(f.isHost, true);
     assert.equal(f.canStart, false, 'guest not ready');

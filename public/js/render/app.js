@@ -38,6 +38,11 @@
 //                                               model to that clip set (render/units.js FORMS)
 //   view.setLocalFeed({ on, speed })            frames come from the local sim every frame (client-side combat):
 //                                               ~2-frame buffer at the battle's game speed
+//   view.holdBattleEnd()                        the battle on screen ended (the local runner's result / the field's
+//                                               m.public `live: false`; screens/game.js): open the presentation
+//                                               finishing window (render/finishWindow.js) — the effect layers keep playing
+//                                               for FINISH_HOLD_MS while the render clock holds its last snapshot, then
+//                                               the SETTLE UI takes over. Idempotent; no sim state or result is touched
 //   view.highlightTiles(tiles, style)           [[r,c]] | [{row,col}]; style 'legal'|'illegal'|'range'|'rangeStand'|
 //                                               'hover'|'target'|{color,fill,line,group}; highlightTiles(null) clears all
 //   view.on(name, fn) → unsubscribe ; view.off(name, fn)
@@ -141,6 +146,7 @@ import { GEO, ANIM } from '../../../shared/constants.js';
 import { fxForm } from '../../../shared/protocol.js';
 import { Camera, presetCamera, lerpCamera, easeInOutCubic, pickTile, normRect } from './projection.js';
 import { SnapshotBuffer, frameTime } from './interp.js';
+import { FinishWindow } from './finishWindow.js';
 import { TileField } from './tiles.js';
 import { UnitView, ItemView, DeviceView, FORMS, syncView } from './units.js';
 import { FxSystem, ensureDamageFonts, projSpeed } from './fx.js';
@@ -224,9 +230,21 @@ export async function createFieldView(host, options = {}) {
   // Construction is synchronous until the complete view can own cancellation. If setup throws,
   // dispose only the resources acquired by this attempt, never another view's host contents.
   const setupCleanup = [];
+  // A picture that failed every retry (assets.js IMAGE_RETRY_MS): the field still draws its placeholder (a unit's avatar
+  // diamond while no model shows, a board material left out), and the player is told once that some art is missing — a
+  // weak link used to look like broken / black art with nothing said. A cosmetic plugin's own file is told by content.js
+  // already (`wasPlugin`).
+  let imageFailureTold = false;
+  let offImageFailures = null;
   let destroyed = false;
   let view = null;
   let onAbort;
+  offImageFailures = typeof assets.onImageFailure === 'function' ? assets.onImageFailure((_url, wasPlugin) => {
+    if (wasPlugin || imageFailureTold || destroyed) return;
+    imageFailureTold = true;
+    import('../ui/toasts.js').then((m) => m.toast(t('部分素材加载失败，已用占位图'), 'warn', { ttl: 6000 })).catch(() => {});
+  }) : null;
+  setupCleanup.push(() => offImageFailures?.());
   try {
   // a vertex buffer of its own for every batch flush of a frame (PIXI's own setting on iOS) instead of uploading the one
   // shared buffer again: the impostor atlas flushes once per redrawn slot (render/impostor.js: each slot is clipped by its
@@ -330,6 +348,9 @@ export async function createFieldView(host, options = {}) {
   const gone = new Set();
   const woundUp = new WeakSet(); // atk event tuples whose attack wind-up already started
   const interp = new SnapshotBuffer({ delay: 0.1, rate: 2 });
+  // after the battle on screen ended (view.holdBattleEnd): the effect layers keep playing on this real-time window while
+  // the render clock is frozen at its last snapshot (see finishWindow.js; presentation only — no sim state is touched)
+  const finishWin = new FinishWindow();
   const sample = new Map();
   const meleePending = new Map(); // target id → { src, t }
   const consumedIds = new Set();  // battle ids used up by their own effect (fx `consumed`): no death particles
@@ -1511,6 +1532,7 @@ export async function createFieldView(host, options = {}) {
     infos.clear();
     gone.clear();
     interp.reset();
+    finishWin.reset();
     fx.clear();
     ofx.clear(); wiring.clear(); pluginFx.clear(); ofxPrevT = null;
     meleePending.clear();
@@ -2030,9 +2052,12 @@ export async function createFieldView(host, options = {}) {
           syncBattle(renderT);
           windUpAttacks(renderT);
           // the official effects run on the battle clock (render time of the snapshots: 1× / 2×, still while paused); the
-          // skill effects' per-frame part reads the views' fresh sample (render/vfx/skillfx.js sync)
-          const gdt = ofxPrevT == null ? 0 : Math.min(opts.playbackTime ? Infinity : 0.25, Math.max(0, renderT - ofxPrevT));
-          ofxPrevT = renderT;
+          // skill effects' per-frame part reads the views' fresh sample (render/vfx/skillfx.js sync). After the battle on
+          // screen ended the finishing window carries this clock past the frozen render clock, so the projectiles / hit
+          // effects in flight play out instead of freezing on the last snapshot (finishWindow.js; render only)
+          const fxT = finishWin.effectClock(now, renderT, interp.rate);
+          const gdt = ofxPrevT == null ? 0 : Math.min(opts.playbackTime ? Infinity : 0.25, Math.max(0, fxT - ofxPrevT));
+          ofxPrevT = fxT;
           pluginFx.update(gdt);
           pluginFx.sync(views.values());
           wiring.sync(views.values());
@@ -2153,12 +2178,24 @@ export async function createFieldView(host, options = {}) {
     /** Enemy preview pen: a list in m.private.nextEnemies shape, or null to empty it (setPrep does this itself). */
     setPen(list) { if (destroyed) return false; setPenList(Array.isArray(list) ? list : null); return true; },
     enterBattle,
+    /**
+     * The battle on screen has ended (its result / m.public field `live: false`; screens/game.js): open the presentation
+     * finishing window so the official effects and projectiles already in flight keep playing for up to
+     * FINISH_HOLD_MS (render/finishWindow.js) instead of freezing on the last snapshot. Idempotent: the later SETTLE
+     * signal does not extend it. Presentation only — no sim result, snapshot or server message changes.
+     */
+    holdBattleEnd() {
+      if (destroyed || mode !== 'battle') return false;
+      return finishWin.arm(performance.now());
+    },
     pushSnapshot,
     pushEvents,
     /**
      * Client-side combat glue (DESIGN §14): battle frames come from the local simulation (public/js/battle/runner.js)
      * every animation frame instead of the network, so the render clock trails them by ~2 frames (not the 100 ms
-     * jitter buffer) and runs at the battle's game speed. `{ on: false }` restores the network settings.
+     * jitter buffer) and runs at the battle's game speed. A watched teammate's field is such a feed too (the runner
+     * rebuilds it from the b.start spec): its catch-up frames must not be read as a higher game speed, so the clock's
+     * rate is locked to the battle's (`interp.setFixedRate`). `{ on: false }` restores the network settings.
      */
     setLocalFeed(o) {
       const on = !!(o && o.on);
@@ -2166,6 +2203,7 @@ export async function createFieldView(host, options = {}) {
       interp.delay = on ? 0.034 : 0.1;
       interp.defaultRate = on ? Math.min(20, speed) : 2;
       interp.maxRate = on ? Math.max(8, speed * 1.5) : 8;
+      interp.setFixedRate(on ? speed : null);
       return true;
     },
     highlightTiles(tilesList, style) {

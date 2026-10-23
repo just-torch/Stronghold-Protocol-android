@@ -21,6 +21,13 @@
 //     game s behind) are dropped by the caller's choice (`isCosmeticEvent`); state events — an enemy's form fx
 //     included — are always delivered, and a full queue sheds only cosmetic ones.
 //
+// The clock never moves backwards (a watched field's twitch, 2026-10: the rate estimate read the local replica's
+// catch-up frames as 8–16× speed, the clock raced ahead, and the next correction stepped it back — every unit with it).
+// When renderT is ahead of the target it slows down (or holds) until the stream catches up; a length-limited step never
+// passes the extrapolation guard, so a stalled frame cannot jump the clock (and the due events) a second ahead. A local
+// feed's speed is known (`setFixedRate`, view.setLocalFeed) and the arrival times are not used to estimate it; for the
+// network stream the rate is the median of the recent arrival intervals, so one burst does not change it.
+//
 // Snapshot tuple layout (DESIGN §8.2): [id, x, y, hp, maxHp, sp, spMax, flags, anim]. Optional lists ride along
 // (server/sim/battle/events.js snapshot; the first two from user playtest #4 items 8 / 9, `stand` / `standCut` from PR #381):
 //   * `elem` [[id, element, fill, cooldownEnd, cooldown]] — the element gauge a unit shows: appended to that unit's
@@ -67,6 +74,54 @@ const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 function movementStart(a, b, id) {
   const until = a.stand?.get(id), cutAt = b.standCut?.get(id);
   return until > a.t && until <= b.t && !(cutAt >= a.t && cutAt <= b.t) ? until : a.t;
+}
+
+/**
+ * Position of one unit between two snapshots at game time `t` — the pure lerp `sample()` uses. `prev` / `next` are that
+ * unit's position records `{ t, x, y }` (the caller adapts a snapshot tuple), or null when the unit is missing on that
+ * side. Out-of-order records are ordered by `t`; equal times hold the older position until `t` reaches them (a duplicate
+ * snapshot never moves the unit); a `t` outside the interval clamps to an end and says so (`extrapolated`). `opts.start`
+ * is the game time movement begins inside the interval (an enemy's attack recovery, `movementStart`); `opts.teleport` is
+ * a distance (tiles) above which the newer position is taken at once instead of slid (a push); `opts.redeploy` forces
+ * that (a unit redeployed between the two snapshots lands on its tile, it never slides over).
+ *
+ * This is presentation only: no sim state, no clocks of its own. A missing side (a unit that only exists in one of the
+ * two snapshots) holds that snapshot's position — the caller decides when it appears / disappears.
+ * @param {{ t: number, x: number, y: number }|null|undefined} prev
+ * @param {{ t: number, x: number, y: number }|null|undefined} next
+ * @param {number} t
+ * @param {{ start?: number, teleport?: number, redeploy?: boolean }} [opts]
+ * @returns {{ x: number, y: number, vx: number, vy: number, alpha: number, extrapolated: boolean }|null}
+ */
+export function interpolatePosition(prev, next, t, opts) {
+  const num = (v) => typeof v === 'number' && Number.isFinite(v);
+  const has = (r) => !!(r && num(r.t) && num(r.x) && num(r.y));
+  let a = has(prev) ? prev : null;
+  let b = has(next) ? next : null;
+  if (a && b && b.t < a.t) { const swap = a; a = b; b = swap; }
+  const time = num(t) ? t : (a ? a.t : b ? b.t : 0);
+  if (!a && !b) return null;
+  if (!a) return { x: b.x, y: b.y, vx: 0, vy: 0, alpha: 1, extrapolated: time > b.t };
+  if (!b) return { x: a.x, y: a.y, vx: 0, vy: 0, alpha: 0, extrapolated: false };
+  const interval = b.t - a.t;
+  if (!(interval > 0)) {
+    const newer = time >= b.t;
+    return { x: newer ? b.x : a.x, y: newer ? b.y : a.y, vx: 0, vy: 0, alpha: newer ? 1 : 0, extrapolated: time > b.t };
+  }
+  const start = num(opts && opts.start) && opts.start > a.t && opts.start <= b.t ? opts.start : a.t;
+  const moveSpan = b.t - start;
+  const moveAlpha = moveSpan > 0 ? clamp((time - start) / moveSpan, 0, 1) : (time >= b.t ? 1 : 0);
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const limit = num(opts && opts.teleport) ? opts.teleport : Infinity;
+  const tele = (opts && opts.redeploy === true) || dx * dx + dy * dy > limit * limit;
+  return {
+    x: tele ? (time < b.t ? a.x : b.x) : a.x + dx * moveAlpha,
+    y: tele ? (time < b.t ? a.y : b.y) : a.y + dy * moveAlpha,
+    vx: !tele && moveSpan > 0 && time >= start ? dx / moveSpan : 0,
+    vy: !tele && moveSpan > 0 && time >= start ? dy / moveSpan : 0,
+    alpha: clamp((time - a.t) / interval, 0, 1),
+    extrapolated: time > b.t,
+  };
 }
 
 /** Cosmetic event kinds that may be dropped when far behind (never state-changing). */
@@ -192,6 +247,8 @@ export class SnapshotBuffer {
     this.keep = Math.max(0.5, finite(opts.keep, 2.5));
     this.teleport = Math.max(0.5, finite(opts.teleport, 2.5));
     this.snapAfter = Math.max(0.2, finite(opts.snapAfter, 0.75));
+    /** A locally simulated feed's known game speed (`setFixedRate`), else null: the arrival times estimate the rate. */
+    this.fixedRate = null;
     this.reset();
   }
 
@@ -200,7 +257,7 @@ export class SnapshotBuffer {
     this.snaps = [];
     /** @type {{t:number, at:number}[]} arrival log for rate estimation */
     this.arrivals = [];
-    this.rate = this.defaultRate;
+    this.rate = this.fixedRate ?? this.defaultRate;
     this.renderT = NaN;
     this.lastNow = NaN;
     this.interval = 0.1 * this.defaultRate / 2; // game s between snapshots (estimated)
@@ -236,13 +293,29 @@ export class SnapshotBuffer {
     }
     this.snaps.push(s);
     this.meta = s.raw;
-    // rate estimate over a ~1.5 s window of arrivals
-    this.arrivals.push({ t: s.t, at: now });
-    while (this.arrivals.length > 2 && now - this.arrivals[0].at > 1.5) this.arrivals.shift();
-    if (this.arrivals.length >= 4) {
-      const a = this.arrivals[0], b = this.arrivals[this.arrivals.length - 1];
-      const dReal = b.at - a.at, dGame = b.t - a.t;
-      if (dReal > 0.2 && dGame > 0) this.rate = clamp(this.rate * 0.7 + (dGame / dReal) * 0.3, this.minRate, this.maxRate);
+    if (this.fixedRate != null) {
+      // a locally simulated feed: the battle speed is known, and its arrival times never say otherwise (the runner emits
+      // one snapshot per animation frame, so a catch-up frame looks like 8–16× — reading that as the game speed made the
+      // render clock race and then rubber-band back, the reported 抽搐 while watching another player's field)
+      this.rate = this.fixedRate;
+    } else {
+      // rate estimate over a ~1.5 s window of arrivals: the median of neighbouring intervals, so one burst (a stalled
+      // frame followed by a batch, two snapshots arriving together) does not read as a different game speed
+      this.arrivals.push({ t: s.t, at: now });
+      while (this.arrivals.length > 2 && now - this.arrivals[0].at > 1.5) this.arrivals.shift();
+      if (this.arrivals.length >= 4) {
+        const ratios = [];
+        for (let i = 1; i < this.arrivals.length; i++) {
+          const dReal = this.arrivals[i].at - this.arrivals[i - 1].at;
+          const dGame = this.arrivals[i].t - this.arrivals[i - 1].t;
+          if (dReal > 0.005 && dGame > 0) ratios.push(dGame / dReal);
+        }
+        if (ratios.length >= 3) {
+          ratios.sort((x, y) => x - y);
+          const median = ratios[ratios.length >> 1];
+          this.rate = clamp(this.rate * 0.7 + median * 0.3, this.minRate, this.maxRate);
+        }
+      }
     }
     // trim old snapshots (keep at least 2). Trimming never waits for the render clock: while the page is hidden
     // (no animation frames) snapshots keep arriving and must not pile up; a clock left behind is clamped.
@@ -298,15 +371,43 @@ export class SnapshotBuffer {
     this.lastNow = now;
     const newest = this.newestT;
     const target = newest - this.delay * this.rate;
-    if (!Number.isFinite(this.renderT)) this.renderT = target;
-    this.renderT += dt * this.rate;
-    const err = target - this.renderT;
-    if (Math.abs(err) > this.snapAfter * this.rate) this.renderT = target;
-    else this.renderT += err * Math.min(1, dt * 3);
+    // never further than the extrapolation guard past the newest snapshot: one long frame used to advance the clock by
+    // up to a second (and its due events with it) and the correction then snapped the clock back
     const cap = newest + this.maxExtrapolate * this.rate;
-    if (this.renderT > cap) this.renderT = cap;
+    if (!Number.isFinite(this.renderT)) this.renderT = clamp(target, this.snaps[0].t, cap);
+    const prev = this.renderT;
+    const step = dt * this.rate;
+    let t = Math.min(prev + step, cap);
+    if (!(t >= prev)) t = prev; // a shrinking cap (a new rate) never rewinds the clock
+    const err = target - t;
+    if (err > this.snapAfter * this.rate) t = target;           // far behind (a stall, a hidden tab): catch up now
+    else if (err > 0) t += err * Math.min(1, dt * 3);           // gently speed up
+    else if (t > newest) {
+      // past the newest snapshot (a burst drove this frame on, or the stream itself is late): ease towards the
+      // extrapolation guard instead of running on — and never step back (the correction used to rewind the clock, which
+      // is what dragged watched units backwards on every jitter burst)
+      const guard = this.maxExtrapolate * this.rate;
+      t = prev + step * (guard > 1e-6 ? clamp(1 - (t - newest) / guard, 0, 1) : 1);
+      if (t > cap) t = Math.max(prev, cap);
+    }
+    this.renderT = Math.max(prev, t);
     if (this.renderT < this.snaps[0].t) this.renderT = this.snaps[0].t;
     return this.renderT;
+  }
+
+  /**
+   * Lock the clock to a locally simulated feed's known game speed (client-side combat, a watched display replica:
+   * battle/runner.js emits one snapshot per animation frame, view.setLocalFeed). The arrivals are then not used to
+   * estimate the rate — a catch-up frame arrives as a burst (8–16× the battle speed) and used to be read as one.
+   * `null` unlocks: the server stream's estimate starts again from `defaultRate`.
+   * @param {number|null} rate game seconds per real second
+   * @returns {number} the rate in use
+   */
+  setFixedRate(rate) {
+    this.fixedRate = Number.isFinite(rate) && rate > 0 ? clamp(rate, 0.05, 20) : null;
+    this.arrivals.length = 0;
+    this.rate = this.fixedRate ?? this.defaultRate;
+    return this.rate;
   }
 
   /** Jump the render clock to the newest snapshot (scrubbing / first frame after a reset). */
@@ -370,16 +471,17 @@ export class SnapshotBuffer {
       if (!o) { o = { id, x: 0, y: 0, hp: 0, maxHp: 0, sp: 0, spMax: 0, flags: 0, anim: 0, vx: 0, vy: 0, seen: 0, el: null, elFill: 0, elUntil: 0, elDur: 0, ammo: null, wolves: null, neg: 0 }; out.set(id, o); }
       const b = B ? B.units.get(id) : null;
       if (b) {
-        const dx = b[1] - a[1], dy = b[2] - a[2];
-        // (a deployment in between — the newer snapshot starts its deploy animation — lands on its tile, no slide)
-        const tele = dx * dx + dy * dy > this.teleport * this.teleport || redeployed(a, b);
-        const start = movementStart(A, B, id);
-        const moveSpan = B.t - start;
-        const moveAlpha = moveSpan > 0 ? clamp((time - start) / moveSpan, 0, 1) : 0;
-        o.x = tele ? (alpha < 1 ? a[1] : b[1]) : a[1] + dx * moveAlpha;
-        o.y = tele ? (alpha < 1 ? a[2] : b[2]) : a[2] + dy * moveAlpha;
-        o.vx = !tele && moveSpan > 0 && (start === A.t || time >= start) ? dx / moveSpan : 0;
-        o.vy = !tele && moveSpan > 0 && (start === A.t || time >= start) ? dy / moveSpan : 0;
+        // position: the pure interval lerp (interpolatePosition), with the stand / teleport / redeploy rules of the header
+        const pos = interpolatePosition(
+          { t: A.t, x: a[1], y: a[2] },
+          { t: B.t, x: b[1], y: b[2] },
+          time,
+          { start: movementStart(A, B, id), teleport: this.teleport, redeploy: redeployed(a, b) },
+        );
+        o.x = pos.x;
+        o.y = pos.y;
+        o.vx = pos.vx;
+        o.vy = pos.vy;
         o.hp = a[3] + (b[3] - a[3]) * alpha;
         o.maxHp = b[4] || a[4];
         o.sp = a[5] + (b[5] - a[5]) * alpha;

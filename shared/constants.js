@@ -18,7 +18,16 @@ export const DEV_BUILD = /-dev$/.test(APP_VERSION);
  */
 export const PLUGIN_API = Object.freeze({ current: 2, min: 1 });
 
-export const MAX_SEATS = 4;
+/** Hard seat cap of a co-op room (`room.create { capacity }` / `room.setCapacity`, server/lobby.js). */
+export const MAX_SEATS = 8;
+/**
+ * Seats a co-op room starts with when the host names no capacity: the official 1–4-player room (DESIGN §2). A host may
+ * raise (or lower) it up to MAX_SEATS / down to MIN_SEATS with `room.create.capacity` / `room.setCapacity`; the default
+ * itself never changes, so a room whose host does not choose keeps today's 4-seat behaviour (room.state.capacity).
+ */
+export const DEFAULT_SEATS = 4;
+/** Smallest capacity a co-op room may be set to (solo rooms are always 1 seat). */
+export const MIN_SEATS = 2;
 /**
  * Spectator seats of a co-op room (community report #26, owner's decision 2026-10-04) — a remake feature: the official
  * room has 1–4 players and no spectator seat (there only eliminated players and 联防 bystanders watch, research 09 §3.1).

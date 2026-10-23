@@ -8,10 +8,10 @@ numbers.
 
 Upstream's section numbers are global and never change; code, tests and the other documents cite them as "DESIGN §N".
 The fork's sections keep chapter 21, sit immediately after upstream's own §21.30 (干员战斗语音, which is upstream's and
-not ours) and run **§21.31–§21.57**, so every "DESIGN §21.34" in a comment, a test name or another document still
+not ours) and run **§21.31–§21.60**, so every "DESIGN §21.34" in a comment, a test name or another document still
 resolves. §21.30 is reproduced below only as the anchor the fork's numbering hangs off.
 
-**What these sections are.** Each §21.31–§21.57 entry is something this fork did on top of the upstream release named
+**What these sections are.** Each §21.31–§21.60 entry is something this fork did on top of the upstream release named
 in its title: a player report fixed here, an owner decision, or a deliberate deviation from the official game. Several
 of them are **Android / packaging / phone-layout work** (`android/`, `docs/DEPLOY.md`, the phone HUD) and one is the
 maintainer's own test tool (the debug console); those have no upstream counterpart at all and must never be dropped
@@ -641,6 +641,24 @@ User: 「给每个卫戍干员都加语音」, then, after the first build, 「�
   `test/match/history-api.test.js` — the list, `?limit`, one record, the 404s and a server without a store;
   `test/ui/history-client.test.js` — the page's reading of the wire (404 = off, a body without battles refused, the list
   cached for 5 s, a failed fetch retried, a record fetched once).
+
+---
+
+### 21.59 联机人数上限可提到 8 人 (the owner's request, 2026-10-23) — `shared/constants.js` (`MAX_SEATS` 8 / `DEFAULT_SEATS` 4 / `MIN_SEATS` 2), `shared/protocol.js` (`room.create.capacity` / `room.setCapacity`), `server/lobby.js` (`Room.capacity`, `setCapacity`), `server/match/gamedata.js` (`bossPoolShareOf`), `public/js/screens/lobby.js` (create-capacity picker), `public/js/screens/room.js` (seat cards), `public/js/screens/settle.js` (card strip), `public/css/screens/{lobby,room,settle}.css`, `docs/META.md` (§1)
+
+- **Requested**: 「增加房主可选项，让联机人数上限可提高到 8」.
+- **Default stays official**: a co-op room is still 4 seats unless its host explicitly chooses another capacity — `DEFAULT_SEATS` (4) is what a room without `capacity` gets, so the official 1–4-player room is unchanged for every host who does not touch it. The floor is `MIN_SEATS` = 2 (a 2-seat room trims nothing from the official room), the cap `MAX_SEATS` = 8; a solo room is always 1 seat and refuses a capacity (`BAD_MSG`; `room.setCapacity` there is `BAD_TARGET`).
+- **Server** (`server/lobby.js`): `Room.capacity` is the length of `seats` (never compacted) and rides `room.state.capacity`; `room.create { capacity }` and the host-only `room.setCapacity { capacity }` (before the match; like a difficulty change it un-readies the other humans) validate 2–8 and refuse to drop a seated player (`BAD_TARGET` — the highest occupied seat index counts, since indexes never compact). The match needs no further protocol change: the round loop, 联防's ≤ 2 helpers and the boss pairing's `ceil(alive / 2)` groups all follow the alive list (docs/META.md §1).
+- **Client**: the room screen draws `capacity` seat cards (5–8 wrap to two rows), the create screen offers the 2–8 picker only in co-op mode, and the settlement's card strip scales for 5–8 (the team panel scrolls past the viewport).
+- Tests: `test/lobby.test.js` (create/set-capacity bounds, a drop below a seated player, host-only, un-ready) and the room/settlement UI tests.
+
+### 21.60 休整期观战看队友的商店 (the owner's request, 2026-10-23) — `server/match/player/views.js` (`scoutShopView`), `server/match/match/views.js` (`prepFieldMeta` `shop`), `server/match/match/watch.js` (`_sendField` / `_notifyPrepScouts`), `public/js/screens/game.js` (`scoutShop` / `ShopBar` locked), `public/css/screens/game-shop.css` (`.gm__scoutshop-tag`), `docs/META.md` §5
+
+- **Requested**: 「休整期查看其他人时增加对方的商店 UI」.
+- **Wire**: the scouted player's read-only shop travels **inside the existing prep-scout `m.field`** (`g.watch 'n:<pid>'`, re-sent when that player's `markPrivate` changes the view) — `{ level, maxLevel, upgradePrice, refreshPrice, freeRefreshes, frozen, slots:[{kind,id,price,basePrice,sold,frozen}|null], funds, deployCap, deployCount, ready, loadout }`; absent outside PREP, never in `m.public` / `m.private`, never the reward offer.
+- **Who may see it**: only a player scouting a teammate. A **spectator seat** still gets the board-only meta (`prepFieldMeta(ps, { shop })` is opt-in and watch.js passes it per recipient), so the seat's "never a private view" invariant (test/match/spectator.test.js) holds.
+- **Client**: the normal `ShopBar` renders it with `editable: false` under a 「正在查看 {name} 的调度中心（只读）」 badge; cards open their detail but no purchase, refresh, level-up or freeze is ever sent (the state is not in `m.private`, so a locked bar is the only possible rendering).
+- Tests: `test/match/spectator.test.js` (the seat still gets nothing private), the room/prep watch tests and the UI suite.
 
 ---
 

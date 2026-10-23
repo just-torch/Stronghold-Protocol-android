@@ -249,3 +249,15 @@
 }
 .create-box .btn--xl { height: .92rem; font-size: calc(.32 * var(--t)); letter-spacing: .3em; }
 .create-box__hint { display: flex; align-items: center; justify-content: center; min-height: .3rem; font-size: calc(.14 * var(--t)); color: var(--text-lo); }
+/* 人数上限 (room.create.capacity, co-op): the seat cap the host starts the room with — 2–8, default 4 */
+.create-cap { display: flex; flex-wrap: wrap; align-items: center; gap: .06rem .12rem; font-size: calc(.15 * var(--t)); }
+.create-cap__label { color: var(--text-lo); letter-spacing: .08em; }
+.create-cap__opts { display: flex; border: 1px solid var(--line-2); background: rgba(0, 0, 0, .3); }
+.create-cap__opt { width: .46rem; height: .4rem; border: 0; border-right: 1px solid var(--line-2); background: transparent; color: var(--text-lo); font-size: calc(.2 * var(--t)); cursor: pointer; }
+.create-cap__opt:last-child { border-right: 0; }
+.create-cap__opt:hover { color: var(--text-hi); background: rgba(255, 255, 255, .03); }
+.create-cap__opt.is-active { color: var(--mint-400); background: rgba(78, 216, 175, .14); background: color-mix(in srgb, var(--mint-400) 17%, transparent); box-shadow: inset 0 -3px 0 var(--mint-400); }
+.create-cap__hint { flex-basis: 100%; font-size: calc(.13 * var(--t)); }
+@media (max-width: 720px) {
+  .create-cap__opt { width: 40px; height: 36px; font-size: 16px; }
+}

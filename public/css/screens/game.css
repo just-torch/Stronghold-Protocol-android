@@ -487,7 +487,11 @@
 }
 
 /* ---- team panel ------------------------------------------------------------------------------------------- */
-.team { position: absolute; left: .22rem; top: 2.36rem; display: flex; flex-direction: column; gap: .14rem; pointer-events: none; }
+/* A room may seat up to 8 (room.state.capacity): more rows than a short viewport holds scroll instead of running off
+   the bottom (the row buttons keep their own pointer events; the list itself takes the wheel for this). */
+.team { position: absolute; left: .22rem; top: 2.36rem; display: flex; flex-direction: column; gap: .14rem; pointer-events: auto;
+  max-height: calc(100vh - 5.2rem); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.team::-webkit-scrollbar { display: none; }
 .team__row { position: relative; display: flex; align-items: center; gap: .1rem; pointer-events: auto; }
 .team__btn {
   position: relative; padding: 0; background: none; border: 0;

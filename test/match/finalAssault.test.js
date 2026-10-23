@@ -13,7 +13,7 @@ const bossFields = () => FakeBattle.instances.filter((b) => b.kind === 'boss' ||
 test('pairing is seeded, independent of input order, includes everyone once and can draw every partner', () => {
   const p = (seat) => ({ seat, playerId: `s${seat}` });
   const partners = new Set(), lone = new Set();
-  for (let seed = 1; seed <= 64; seed++) for (const n of [1, 2, 3, 4]) {
+  for (let seed = 1; seed <= 64; seed++) for (const n of [1, 2, 3, 4, 5, 6, 7, 8]) {
     const alive = Array.from({ length: n }, (_, i) => p(i));
     const groups = pairPlayers(alive, createRng(seed));
     assert.deepEqual(groups, pairPlayers([...alive].reverse(), createRng(seed)));
@@ -56,6 +56,23 @@ test('boss preview, actual fields and Hidden Core retain one per-match draw', ()
   } finally { h.m.dispose(); }
 });
 
+test('an 8-seat room (room capacity) pairs into four boss fields b1–b4', () => {
+  const h = makeMatch({ humans: 8, difficulty: 'HARD', fake: true, instant: false }).start();
+  h.toPrep(1);
+  const m = h.m;
+  m.round = 14;
+  m.teamLp = 50;
+  m.bossId = 'boss_1';
+  m.hiddenBossId = 'boss_9';
+  m._planBossWaves();
+  assert.equal(m.bossPairs.length, 4);
+  assert.deepEqual(m.bossPairs.flat().sort(), m.alivePlayers().map((p) => p.playerId).sort());
+  m.startFinalAssault(false);
+  assert.deepEqual(m.fields.map((f) => f.fieldId), ['b1', 'b2', 'b3', 'b4']);
+  assert.ok(m.fields.every((f) => f.players.length === 2));
+  m.dispose();
+});
+
 test('boss pool = bloodPoint[difficulty] × the players alive at the fight\'s start (solo × 1) × tuning; config restores the fixed pool; shared and never negative', () => {
   // DESIGN §25.13.4: the owner's decision of 2026-10-06 adopts PR #209 by @qingjingshenghuo (bloodPoint is one player's
   // share) and replaces the fixed pool of 「保持固定血量」 — config bossHpScale (perPlayer false, solo 0.25) restores it.
@@ -64,7 +81,7 @@ test('boss pool = bloodPoint[difficulty] × the players alive at the fight\'s st
   const gd = new GameData(RAW, 'mode_multi_hard');
   for (const n of [1, 2, 3, 4]) assert.equal(bossPoolHp(gd, 'boss_1', n), 1800000 * n, `${n} alive`);
   assert.equal(bossPoolHp(gd, 'boss_1'), 1800000 * 4, 'no count given: a full team');
-  assert.equal(bossPoolHp(gd, 'boss_1', 9), 1800000 * 4, 'at most aliveFull (4) players');
+  assert.equal(bossPoolHp(gd, 'boss_1', 9), 1800000 * 8, 'one share per player up to the room hard cap (8)');
   assert.equal(gd.bossPoolHp('boss_1', 2), bossPoolHp(gd, 'boss_1', 2), 'GameData agrees');
   assert.equal(bossPoolHp(new GameData(RAW, 'mode_single_abyss'), 'boss_5', 1), 3000000, 'solo: the table value');
   assert.equal(bossPoolHp(new GameData(RAW, 'mode_single_funny'), 'boss_2', 1), 225000);

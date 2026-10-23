@@ -7,6 +7,13 @@
 // failure is never kept as an empty manifest (the next `ready()` and a bounded background backoff fetch again), and
 // `onChange` listeners hear when it arrives late (render/app.js re-resolves its views' models then).
 //
+// Pictures (weak-network report: art drawn broken / black while playing through a server): `image()` tries a failed URL
+// IMAGE_RETRY_MS.length more times with that backoff, and `loadImageElement` accepts a picture only once the browser has
+// decoded it (`img.decode()`). A URL that fails every attempt resolves to null — the caller's placeholder (a unit's
+// avatar diamond, a skipped board material) — is reported once to `onImageFailure` (render/app.js shows one toast) and is
+// not retried again until a caller asks explicitly (`image(url, { retry: true })`). `preload()` never rejects for one
+// picture (`Promise.allSettled`, at most PRELOAD_CONCURRENCY at a time).
+//
 // Spine memory policy (phones have little memory; a parsed skeleton holds ~0.1–12 MB, `spineDataWeight`):
 //   * a skeleton a view references is never evicted;
 //   * idle (unreferenced) skeletons are kept up to SPINE_IDLE_BYTES while a scene is on screen, each safe for
@@ -297,6 +304,34 @@ export function validSpine(sp) {
 /** Best 2D picture for a unit asset id (operator avatar, token avatar, enemy icon, item icon); `opts` reaches avatarUrl. */
 export function unitPictureUrl(m, id, opts) {
   return avatarUrl(m, id, opts) || tokenAvatarUrl(m, id) || enemyIconUrl(m, id) || itemIconUrl(m, id) || null;
+}
+
+/**
+ * The art a battle draws that is known before its units are: the field's own sprites (backdrop mountains, the shadow
+ * under units, the empty skill icon), every profession icon and the bond / band discs of the strip. Small files, so a
+ * room can warm them in the background (`warmBattleArt`, ui/warmArt.js) and a weak link has them before the board needs
+ * them. The operators', enemies' and items' pictures follow the round's own data and load on demand (render/units.js);
+ * the official effects' atlas pages are far too heavy to warm (render/vfx/library.js loads the ones a battle uses).
+ * Unknown entries are skipped; duplicates are removed.
+ * @param {any} m asset manifest (data/assets.json, docs/ASSETS.md)
+ * @returns {string[]}
+ */
+export function battleArtUrls(m) {
+  const out = [];
+  const add = (u) => { const s = str(u); if (s) out.push(s); };
+  for (const key of ['battle/sprite_shadow', 'entry/bg_mountains_tiled', 'skillIcon/empty']) add(uiUrl(m, key));
+  const prof = get(m, 'prof');
+  for (const kind of ['icon', 'battlecard']) {
+    const rec = get(prof, kind);
+    if (isObj(rec)) for (const u of Object.values(rec)) add(u);
+  }
+  const sub = get(prof, 'sub');
+  if (isObj(sub)) for (const u of Object.values(sub)) add(u);
+  for (const group of ['bonds', 'bands']) {
+    const rec = get(m, group);
+    if (isObj(rec)) for (const u of Object.values(rec)) add(u);
+  }
+  return [...new Set(out)];
 }
 
 // ---- audio ---------------------------------------------------------------------------------------------------
@@ -637,15 +672,27 @@ export function localAssetUrl(m, group, name) {
   return isObj(e) ? str(e.path) : null;
 }
 
-/** Default browser image loader. */
+/**
+ * Default browser image loader. `onload` only says the bytes arrived; the store also asks `img.decode()` (when the
+ * browser has it) and requires a non-empty bitmap, so a half-decoded / undrawable image is a failure the caller can
+ * retry rather than a black or blank texture (weak-network report: a broken picture drawn as a black block).
+ */
 export function loadImageElement(url) {
   return new Promise((resolve, reject) => {
     if (typeof Image === 'undefined') { reject(new Error('no Image in this environment')); return; }
     const img = new Image();
     img.decoding = 'async';
     img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(`image failed: ${url}`));
+    let settled = false;
+    const ok = () => { if (!settled) { settled = true; resolve(img); } };
+    const fail = (why) => { if (!settled) { settled = true; reject(new Error(`image failed: ${url}${why ? ` (${why})` : ''}`)); } };
+    img.onload = () => {
+      if (typeof img.naturalWidth === 'number' && !(img.naturalWidth > 0)) { fail('empty bitmap'); return; }
+      if (typeof img.decode === 'function') {
+        Promise.resolve().then(() => img.decode()).then(ok, (err) => fail(String(err && err.message ? err.message : err || 'decode failed')));
+      } else ok();
+    };
+    img.onerror = () => fail('load error');
     img.src = url;
   });
 }
@@ -785,6 +832,15 @@ export const SPINE_QUIET_DELAY_MS = 3000;
 export const MANIFEST_RETRY_MS = Object.freeze([600, 2000]);
 /** Waits (ms) before the store tries again by itself after a `ready()` whose fetches all failed transiently. */
 export const MANIFEST_BACKOFF_MS = Object.freeze([5000, 15000, 30000, 60000]);
+/**
+ * Waits (ms) before an image that failed to load is tried again (`image`): weak network, a phone waking up or a server
+ * restarting under a request all fail a picture transiently. A failure after the last wait is final for that URL until an
+ * explicit `image(url, { retry: true })` — the picture is then replaced by the caller's placeholder (a unit's avatar
+ * diamond, a skipped board material) and the failure is told once (`onImageFailure`).
+ */
+export const IMAGE_RETRY_MS = Object.freeze([400, 1200]);
+/** Images `preload()` fetches at once (a weak link must not get 150 requests from one warm-up). */
+export const PRELOAD_CONCURRENCY = 6;
 
 /** A fetch failure worth retrying (data.js): network error, HTTP 5xx / 408 / 429 — not a 404 or a body that is no JSON. */
 const transientFetch = (err) => {
@@ -809,7 +865,8 @@ const transientFetch = (err) => {
  * helper reads the manifest with the layers laid over it, `manifest` is that one, and a layer change is told as
  * 'manifest' (the views re-resolve what they draw next).
  * @param {{ url?: string, fetch?: typeof fetch, manifest?: object, localManifest?: object, loadImage?: (url) => Promise<any>,
- *           loadSpine?: (entry) => Promise<any>, unloadSpine?: (entry, value, keepPages:Set<string>) => (Promise<void>|void),
+ *           imageRetryDelays?: number[], loadSpine?: (entry) => Promise<any>,
+ *           unloadSpine?: (entry, value, keepPages:Set<string>) => (Promise<void>|void),
  *           spineMax?: number, spineTimeout?: number, spineWeigh?: (key, spineData) => number, spineIdleBytes?: number,
  *           spineQuietBytes?: number, spineIdleGrace?: number, spineEvictDelay?: number, spineQuietDelay?: number,
  *           spineTimers?: { set, clear }, spineNow?: () => number, retryDelays?: number[], backoff?: number[],
@@ -830,6 +887,7 @@ export function createAssets(options) {
   const images = new Map(); // url → { promise, value }
   const retryDelays = Array.isArray(opts.retryDelays) ? opts.retryDelays : MANIFEST_RETRY_MS;
   const backoff = Array.isArray(opts.backoff) ? opts.backoff : MANIFEST_BACKOFF_MS;
+  const imageRetryDelays = Array.isArray(opts.imageRetryDelays) ? opts.imageRetryDelays : IMAGE_RETRY_MS;
   const wait = opts.wait || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   const timers = opts.timers && typeof opts.timers.set === 'function' ? opts.timers : {
     set: (fn, ms) => { const t = setTimeout(fn, ms); t?.unref?.(); return t; },
@@ -843,6 +901,22 @@ export function createAssets(options) {
   const notify = (what) => {
     for (const fn of [...listeners]) { try { fn(what); } catch (err) { console.warn('[assets] change listener failed', err); } }
   };
+  // pictures that failed every attempt (a visible notice once each, render/app.js): a cosmetic plugin's own failure is
+  // already told by content.js, so `wasPlugin` lets the caller skip it
+  const failureListeners = new Set();
+  const reportedFailures = new Set();
+  /** Failures that happened while nobody listened (a room warm-up, before the field is mounted): told on the next subscribe. */
+  const pendingFailures = new Map();
+  function reportImageFailure(u, wasPlugin) {
+    if (reportedFailures.has(u)) return;
+    if (!failureListeners.size) {
+      if (pendingFailures.size >= 50) pendingFailures.delete(pendingFailures.keys().next().value);
+      pendingFailures.set(u, wasPlugin);
+      return;
+    }
+    reportedFailures.add(u);
+    for (const fn of [...failureListeners]) { try { fn(u, wasPlugin); } catch (err) { console.warn('[assets] image-failure listener failed', err); } }
+  }
 
   /** Adopt a manifest (fetched or seeded): resolves `ready()`, stops the background tries, tells the listeners. */
   function adopt(m) {
@@ -941,7 +1015,13 @@ export function createAssets(options) {
    */
   const failed = (u) => { try { return !!layers?.fail?.(u); } catch { return false; } };
 
-  /** Image element (cached; failures resolve to null — a cosmetic plugin's image that failed falls back: `failed`). */
+  /**
+   * Image element (cached). Every attempt is retried `imageRetryDelays` times with that backoff — a weak link fails a
+   * picture transiently all the time — and only then is the URL remembered as failed: the promise resolves to null,
+   * the caller draws its placeholder, the cosmetic layer (if the URL is a plugin's) falls back (`failed`) and the
+   * failure is told once (`onImageFailure`). `retry: true` drops a remembered failure and loads again (a board view
+   * retrying a picture, render/board3d/load.js).
+   */
   function image(u, { retry = false } = {}) {
     const s = str(u);
     if (!s) return Promise.resolve(null);
@@ -949,10 +1029,20 @@ export function createAssets(options) {
     if (retry && e?.done && !e.value) { images.delete(s); e = null; }
     if (!e) {
       e = { value: null, done: false, promise: null };
-      e.promise = Promise.resolve().then(() => loadImage(s)).then(
-        (img) => { e.value = img; e.done = true; if (!img) failed(s); return img; },
-        () => { e.done = true; failed(s); return null; },
-      );
+      e.promise = (async () => {
+        for (let attempt = 0; attempt <= imageRetryDelays.length; attempt++) {
+          if (attempt > 0) await wait(imageRetryDelays[attempt - 1]);
+          let img;
+          try { img = await loadImage(s); } catch { continue; /* transient: retried, then given up */ }
+          if (!img) break; // a loader that answers null means "no such picture", not a transient failure
+          e.value = img; e.done = true;
+          return img;
+        }
+        e.done = true;
+        const wasPlugin = failed(s);
+        reportImageFailure(s, wasPlugin);
+        return null;
+      })();
       images.set(s, e);
     }
     return e.promise;
@@ -999,6 +1089,25 @@ export function createAssets(options) {
       listeners.add(fn);
       return () => listeners.delete(fn);
     },
+    /**
+     * `fn(url, wasPlugin)` once per picture that failed every attempt (`image`, see IMAGE_RETRY_MS): the caller draws
+     * its placeholder and may tell the player. A cosmetic plugin's file (`wasPlugin`) is already told by content.js.
+     * Returns the unsubscribe.
+     */
+    onImageFailure(fn) {
+      if (typeof fn !== 'function') return () => {};
+      failureListeners.add(fn);
+      // failures from before this view existed (the room's warm-up, a first match): told now, still once per URL
+      if (pendingFailures.size) {
+        const pending = [...pendingFailures];
+        pendingFailures.clear();
+        for (const [u, wasPlugin] of pending) {
+          reportedFailures.add(u);
+          try { fn(u, wasPlugin); } catch (err) { console.warn('[assets] image-failure listener failed', err); }
+        }
+      }
+      return () => failureListeners.delete(fn);
+    },
     localUrl: (group, name) => localAssetUrl(localManifest, group, name),
     /** The manifest the helpers read (the cosmetic layers over the loaded one), null until one is loaded. */
     get manifest() { return manifest ? m() : null; },
@@ -1034,16 +1143,27 @@ export function createAssets(options) {
     /** Already-loaded image element or null (sync). */
     imageNow(u) { const e = images.get(str(u) || ''); return e && e.done ? e.value : null; },
     /**
-     * Preload URLs; `onProgress(done, total, url)` after each. Resolves to { ok, failed } counts (never rejects).
+     * Preload URLs, at most `opts.concurrency` (default PRELOAD_CONCURRENCY) at a time; `onProgress(done, total, url)`
+     * after each. One picture's failure never rejects the batch (`Promise.allSettled`: a null / rejected entry is a
+     * failed picture, the rest still load). Resolves to { ok, failed, total } (never rejects).
      */
-    async preload(urls, onProgress) {
+    async preload(urls, onProgress, opts) {
       const list = [...new Set((Array.isArray(urls) ? urls : []).map(str).filter(Boolean))];
-      let done = 0, ok = 0;
-      await Promise.all(list.map((u) => image(u).then((img) => {
-        done++;
-        if (img) ok++;
-        try { onProgress?.(done, list.length, u); } catch { /* ignore */ }
-      })));
+      const asked = opts && Number.isInteger(opts.concurrency) && opts.concurrency > 0 ? opts.concurrency : PRELOAD_CONCURRENCY;
+      const limit = Math.max(1, Math.min(list.length || 1, asked));
+      let done = 0;
+      let ok = 0;
+      for (let i = 0; i < list.length; i += limit) {
+        const chunk = list.slice(i, i + limit);
+        const settled = await Promise.allSettled(chunk.map((u) => Promise.resolve().then(() => image(u))));
+        for (let k = 0; k < chunk.length; k++) {
+          const r = settled[k];
+          const img = r.status === 'fulfilled' ? r.value : null;
+          if (img) ok++;
+          done++;
+          try { onProgress?.(done, list.length, chunk[k]); } catch { /* ignore */ }
+        }
+      }
       return { ok, failed: list.length - ok, total: list.length };
     },
     /**

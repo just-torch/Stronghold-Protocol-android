@@ -1,7 +1,7 @@
 // Normative message catalogue (DESIGN §8). Used by server (validation) and client (building requests).
 // Every client→server message is `{ t, rid?, ...fields }`. Unknown `t` or invalid fields ⇒ ERR.BAD_MSG.
 
-import { DIFFICULTIES, NAME_MAX_LEN, ROOM_CODE_LEN, MAX_SEATS, EMOTES, GEO, CONSOLE_LIMITS } from './constants.js';
+import { DIFFICULTIES, NAME_MAX_LEN, ROOM_CODE_LEN, MAX_SEATS, MIN_SEATS, EMOTES, GEO, CONSOLE_LIMITS } from './constants.js';
 import { isDroppableChess } from './standIn.js';
 import { diySlotIds, validateDiyPicks } from './diy.js';
 import { cultivatedStats, isPotential, isCultivate, POTENTIAL_DEFAULT, CULTIVATE_DEFAULT, hasPotentialData } from './potential.js';
@@ -498,7 +498,13 @@ export const C2S = {
   ping: { c: (v) => typeof v === 'number' && Number.isFinite(v) },
   // test: only the literal true (DESIGN §34.8). Omit it for a normal room — `false` is a bad field, so a
   // string cannot sneak in as "not a test". The server still refuses it unless SP_TEST_MODE is on.
-  'room.create': { mode: (v) => v === 'solo' || v === 'coop', difficulty: (v) => DIFFICULTIES.includes(v), test: (v) => v === true, $optional: ['test'] },
+  // capacity: the co-op room's seat cap (server/lobby.js; default DEFAULT_SEATS 4, hard cap MAX_SEATS 8). Solo rooms are
+  // always 1 and the server refuses a capacity there (BAD_MSG).
+  'room.create': { mode: (v) => v === 'solo' || v === 'coop', difficulty: (v) => DIFFICULTIES.includes(v), test: (v) => v === true,
+    capacity: (v) => isInt(v, MIN_SEATS, MAX_SEATS), $optional: ['test', 'capacity'] },
+  // the host changes a co-op room's seat cap before the match (room.setCapacity, server/lobby.js): at least the players
+  // already seated (`BAD_TARGET` below that), never above MAX_SEATS; a change un-readies the other humans
+  'room.setCapacity': { capacity: (v) => isInt(v, MIN_SEATS, MAX_SEATS) },
   'room.join': { $optional: ['testAck'], testAck: (v) => v === true, code: (v) => isStr(v, ROOM_CODE_LEN + 2) && /^[A-Za-z0-9]+$/.test(v) },
   'room.leave': {},
   'room.ready': { ready: isBool },

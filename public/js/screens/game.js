@@ -242,6 +242,10 @@ function MatchScreen() {
   // deals duplicates) carry the same chess id and no piece, and each must say its 选中干员 (detailPanel selectVoiceKey)
   const cardTap = useRef(0);
   const [collapsed, setCollapsed] = useState(false);
+  // scouting a teammate's prep board: their read-only shop bar (task B) — its own fold state so returning to the own
+  // board does not leave the own bar collapsed
+  const [scoutBarCollapsed, setScoutBarCollapsed] = useState(false);
+  useEffect(() => { setScoutBarCollapsed(false); }, [watching]);
   // GitHub #501: a g.refresh is still waiting for its reply — the shop's 刷新 button dims while it is (gameActions.js
   // single-flights the intent; the R hotkey is dropped by the same guard)
   const [refreshBusy, setRefreshBusy] = useState(false);
@@ -316,6 +320,18 @@ function MatchScreen() {
   const hasOffers = !!pub?.offers?.length;
   const editable = !offerBlocksPrep(pub?.offers) && phase === PHASE.PREP && !!priv && alive && !priv.ready && !watchingOther && !hasPersonalChoice;
   const showShop = !!priv && alive && (phase === PHASE.PREP || phase === PHASE.SP_DRAFT || phase === PHASE.ROUND_START) && !watchingOther;
+  // the scouted teammate's shop (m.field `shop`, only during PREP and only in the prep-scout view): drawn with the
+  // normal ShopBar, locked (editable false) — every card / tool is disabled and a tap opens the card's detail
+  const scoutShop = phase === PHASE.PREP && scoutPid && field?.shop && typeof field.shop === 'object' ? field.shop : null;
+  const scoutPriv = scoutShop ? {
+    alive: true,
+    ready: !!scoutShop.ready,
+    funds: Number(scoutShop.funds) || 0,
+    deployCap: Number.isInteger(scoutShop.deployCap) ? scoutShop.deployCap : 8,
+    deployCount: Number.isInteger(scoutShop.deployCount) ? scoutShop.deployCount : 0,
+    loadout: scoutShop.loadout || null,
+    shop: scoutShop,
+  } : null;
   const layersDisabled = phase === PHASE.UNITE || isBossPhase(phase);
   const sp = phase === PHASE.SP_DRAFT ? normalizeSp(pub?.sp, players) : null;
   const total = phaseTotalSeconds(pub, gd.config, myId);
@@ -699,6 +715,9 @@ function MatchScreen() {
     const onResult = (msg) => {
       try {
         if (!msg || !msg.result) return;
+        // the battle on screen just ended: let its effects / projectiles play out (no freeze on the last snapshot) —
+        // server-run fields have no local result; their m.public field going !live covers them (the effect below)
+        if (msg.fieldId && msg.fieldId === lastFieldRef.current) view?.holdBattleEnd?.();
         const st = store.get();
         const pid = st.me?.playerId;
         const mine = (pid && msg.result.perPlayer && msg.result.perPlayer[pid]) || null;
@@ -731,6 +750,19 @@ function MatchScreen() {
     }
     return () => { for (const off of offs) { try { off(); } catch { /* ignore */ } } clearTimeout(pending); };
   }, [view]);
+
+  // the battle on screen ended (server-run combat has no local runner `result`): m.public.fields[].live goes false when
+  // its field finishes — the server then keeps a COMBAT_END pause (~1.5 s) before SETTLE. Open the renderer's
+  // presentation finishing window then, so its official effects / projectiles keep playing instead of freezing on the
+  // last snapshot (render/finishWindow.js; the local runner's result does the same earlier). Purely a render clock: the
+  // battle's result, its snapshot and the settlement numbers are untouched.
+  useEffect(() => {
+    if (!view || showPrep || (!isCombatPhase(phase) && phase !== PHASE.SETTLE)) return;
+    const id = lastFieldRef.current;
+    if (!id) return;
+    const f = (Array.isArray(pub?.fields) ? pub.fields : []).find((x) => x && x.fieldId === id);
+    if (f && f.live === false) view.holdBattleEnd?.();
+  }, [view, pub?.fields, phase, showPrep]);
 
   // the prep board moves while prep is shown (a boss round's prep begins, or a teammate left and the pairs changed):
   // the next camera of the own board (the direction wheel sits on a board tile — it closes first)
@@ -859,6 +891,8 @@ function MatchScreen() {
     else if (phase === PHASE.HIDDEN_CORE) audio.sfx('bossRoundSecret');
     else if (phase === PHASE.SP_DRAFT) audio.sfx('draft');
     else if (phase === PHASE.SETTLE) {
+      // last-resort finishing window (a reload into the pause): the result/field signals above normally opened it already
+      if (lastFieldRef.current && enteredFieldRef.current === lastFieldRef.current) view?.holdBattleEnd?.();
       // the official 战斗结束 sound and result box (GitHub #235, PR #112 by @Convey123; ui/gameLogic/phases.js): the LP this
       // round cost ME — after a 联防 the authority's own charge (m.public.uniteResult.losses: a leaker pays for the
       // survivors, not for its own battle's leaks), else the own battle's as kept while it ran (roundLossRef)
@@ -1804,6 +1838,13 @@ function MatchScreen() {
         onRefuse=${(reason) => { toast(reason, 'warn'); audio.sfx('error', { volume: 0.5 }); }}
         reward=${phase === PHASE.PREP && !rewardMin ? priv?.shop?.rewardOffer || null : null}
         onReward=${(i) => actions.reward(i)} onRewardLater=${() => setRewardMin(true)} onArm=${setArmedCard} />` : null}
+
+      ${scoutShop ? html`<${ShopBar} priv=${scoutPriv} editable=${false} collapsed=${scoutBarCollapsed} refreshBusy=${false}
+        onCollapse=${setScoutBarCollapsed} offBonds=${offBonds}
+        onBuy=${() => {}} onLevel=${() => {}} onRefresh=${() => {}} onFreeze=${() => {}}
+        onDetail=${(id, kind, hint) => setDetail({ kind: kind === 'item' ? 'item' : 'chess', id, hint: hint || null, tap: ++cardTap.current })}
+        onDetailClose=${() => setDetail((d) => (d?.kind === 'chess' || d?.kind === 'item' ? null : d))} />` : null}
+      ${scoutShop ? html`<div class=${`gm__scoutshop-tag${scoutBarCollapsed ? ' is-collapsed' : ''}`} role="status"><${GIcon} name="eye" /><span>${t('正在查看 {name} 的调度中心（只读）', { name: watchedName || t('队友') })}</span></div>` : null}
 
       ${phase === PHASE.PREP && priv?.shop?.rewardOffer ? html`<${RewardOverlay} priv=${priv} minimized=${rewardMin || barCollapsed}
         onMinimize=${(m) => { setRewardMin(m); if (!m) setCollapsed(false); }} />` : null}

@@ -357,7 +357,7 @@ export class MatchViews {
 
   /** UnitInfo list of a player's board and hand (prep scouting): board pieces on their tiles, held pieces on the
    *   hand row (row 7) — the scout renders like the own prep bench. */
-  prepFieldMeta(ps) {
+  prepFieldMeta(ps, { shop = false } = {}) {
     const units = this._prepBoardUnits(ps);
     const gd = ps.gd || this.gd;
     // the hand (整备区) and the 临时整备区 scout exactly like the own prep bench renders them: pieces as units on
@@ -407,6 +407,12 @@ export class MatchViews {
     // the scouted player's effects column (策略 / 机变 / 悬赏 …), display-ready (user playtest #2: while scouting, the
     // right column shows the watched player's effects, not one's own)
     const meta = { t: 'm.field', fieldId: `n:${ps.playerId}`, kind: 'normal', rect: { ...GEO.NORMAL_RECT }, stageId: this.stageId, units, effects: ps.effectsView(), prep: true, nextEnemies };
+    // The scouted player's shop, read-only (task B): sent only inside this prep-scout m.field — on request (g.watch
+    // `n:<pid>`) and again when the player's state changes (markPrivate) — never broadcast, and only during PREP (the
+    // slots/funds are cleared at its end). The client draws it with the normal ShopBar, locked (screens/game.js).
+    // `shop` is opt-in: only a player scouting a teammate asks for it (watch.js `_sendField` / `_notifyPrepScouts`);
+    // a spectator seat's copy stays byte-equal to a teammate's board-only one (test/match/spectator.test.js).
+    if (shop && this.phase === PHASE.PREP) meta.shop = ps.scoutShopView();
     // 最终攻势 / 隐秘核心 prep: the pieces stand on the player's half of the boss field — the scout shows them there (rows
     // − 7, the right half mirrored with RIGHT ↔ LEFT: finalAssault.js bossFieldPlacement, as the own prep view), with the
     // round's leader at its spawn tile (nextEnemies `start`), framed by the boss-field prep camera of the player's side

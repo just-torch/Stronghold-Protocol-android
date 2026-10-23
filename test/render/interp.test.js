@@ -3,7 +3,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { SnapshotBuffer, normalizeSnapshot, isCosmeticEvent, frameTime } from '../../public/js/render/interp.js';
+import { SnapshotBuffer, normalizeSnapshot, isCosmeticEvent, frameTime, interpolatePosition } from '../../public/js/render/interp.js';
 
 const fxFormOf = (e) => (e && e[0] === 'fx' && e[4] && Object.hasOwn(e[4], 'form') ? e[4].form : undefined);
 const near = (a, b, eps = 1e-6) => Math.abs(a - b) <= eps;
@@ -235,5 +235,136 @@ describe('SnapshotBuffer', () => {
       b.sample(undefined, out);
       for (const s of out.values()) for (const k of ['x', 'y', 'hp', 'sp', 'vx', 'vy']) assert.ok(Number.isFinite(s[k]), k);
     }
+  });
+});
+
+// A watched teammate's field in client-side combat is a locally simulated display replica (battle/runner.js watch +
+// render/app.js setLocalFeed): one snapshot per animation frame, and a replica that fell behind steps up to 8–16× the
+// game speed in one frame. The clock used to estimate the rate from those arrival times, race ahead and then be corrected
+// backwards — every enemy on the watched board twitched with it. These are the pure pieces that keep that out.
+describe('interpolatePosition (pure interval lerp)', () => {
+  const P = (t, x, y) => ({ t, x, y });
+
+  test('lerps x / y between the two game times; clamps outside the interval', () => {
+    const mid = interpolatePosition(P(1, 0, 10), P(1.1, 1, 11), 1.05);
+    assert.ok(near(mid.x, 0.5) && near(mid.y, 10.5));
+    assert.ok(near(mid.vx, 10) && near(mid.vy, 10));
+    assert.ok(near(mid.alpha, 0.5) && mid.extrapolated === false);
+    const before = interpolatePosition(P(1, 0, 10), P(1.1, 1, 11), 0.25);
+    assert.deepEqual([before.x, before.y, before.alpha, before.extrapolated], [0, 10, 0, false]);
+    const after = interpolatePosition(P(1, 0, 10), P(1.1, 1, 11), 1.4);
+    assert.deepEqual([after.x, after.y, after.alpha, after.extrapolated], [1, 11, 1, true]);
+  });
+
+  test('a missing side holds that snapshot; no side → null; junk values are ignored', () => {
+    const onlyNext = interpolatePosition(null, P(2, 3, 4), 1.5);
+    assert.deepEqual([onlyNext.x, onlyNext.y, onlyNext.alpha], [3, 4, 1]);
+    const onlyPrev = interpolatePosition(P(1, 5, 6), null, 9);
+    assert.deepEqual([onlyPrev.x, onlyPrev.y, onlyPrev.alpha, onlyPrev.extrapolated], [5, 6, 0, false]);
+    assert.equal(interpolatePosition(null, null, 0), null);
+    assert.equal(interpolatePosition({ t: NaN, x: 1, y: 1 }, null, 0), null);
+    assert.equal(interpolatePosition(P(1, 1, 1), { t: 2, x: 'x', y: 0 }, 1.5).x, 1, 'bad next = no next');
+  });
+
+  test('duplicate and out-of-order times: the older position holds, reversed records are ordered', () => {
+    const dup = (t) => interpolatePosition(P(1, 0, 0), P(1, 9, 9), t);
+    assert.equal(dup(0.9).x, 0, 'a duplicate timestamp cannot move the unit before it is reached');
+    assert.equal(dup(1).x, 9);
+    // next is older than prev (a replayed / re-sent snapshot): ordered by t, not by argument order
+    const reversed = interpolatePosition(P(2, 10, 0), P(1, 0, 0), 1.5);
+    assert.ok(near(reversed.x, 5));
+  });
+
+  test('a stand holds the position until movement starts; a teleport / redeploy snaps instead of sliding', () => {
+    const hold = interpolatePosition(P(1, 0, 0), P(1.2, 2, 0), 1.09, { start: 1.1 });
+    assert.equal(hold.x, 0);
+    assert.equal(hold.vx, 0);
+    assert.ok(near(interpolatePosition(P(1, 0, 0), P(1.2, 2, 0), 1.15, { start: 1.1 }).x, 1));
+    assert.equal(interpolatePosition(P(1, 0, 0), P(1.1, 8, 0), 1.05, { teleport: 2 }).x, 0);
+    assert.equal(interpolatePosition(P(1, 0, 0), P(1.1, 8, 0), 1.1, { teleport: 2 }).x, 8);
+    assert.equal(interpolatePosition(P(1, 0, 0), P(1.1, 1, 0), 1.05, { redeploy: true }).x, 0, 'redeploy snaps at the newer snapshot');
+  });
+});
+
+describe('the render clock under a jittery / locally simulated stream', () => {
+  test('a lost snapshot: the interval across the gap still interpolates, no NaN', () => {
+    const b = new SnapshotBuffer({ delay: 0.1, rate: 2 });
+    b.push(snap(0, [U(1, 0, 0)]), 0);
+    b.push(snap(0.1, [U(1, 1, 0)]), 0.05);
+    // 0.2 never arrives (one snapshot lost) — the 0.1 → 0.3 interval is used as it is
+    b.push(snap(0.3, [U(1, 3, 0)]), 0.15);
+    for (const t of [0.15, 0.2, 0.25, 0.3]) assert.ok(Number.isFinite(b.sample(t).get(1).x));
+    assert.ok(near(b.sample(0.2).get(1).x, 2));
+  });
+
+  test('a long frame with no new snapshot never rewinds the clock (the old correction did)', () => {
+    const b = new SnapshotBuffer({ delay: 0.1, rate: 2 });
+    for (let i = 0; i <= 10; i++) b.push(snap(i * 0.1, [U(1, i * 0.1, 0)]), i * 0.05);
+    b.update(0.5);
+    let last = b.renderT;
+    for (let i = 1; i <= 4; i++) { b.update(0.5 + i * 0.033); last = b.renderT; }
+    const before = last;
+    const after = b.update(2.0); // the page stalls for 1.5 s, no snapshot arrives meanwhile
+    assert.ok(after >= before - 1e-9, `renderT moved backwards: ${before} → ${after}`);
+    assert.ok(after <= b.newestT + b.maxExtrapolate * b.rate + 1e-9, 'never past the extrapolation guard');
+    // …and the stalled frame did not make the queued events due a second early
+    b.pushEvents([['die', 9]], 2.0, 5);
+    assert.equal(b.takeEvents(after).length, 0);
+  });
+
+  test('the clock never moves backwards through a burst of catch-up snapshots', () => {
+    const b = new SnapshotBuffer({ delay: 0.1, rate: 2 });
+    let now = 0, t = 0;
+    b.push(snap(t, [U(1, 0, 0)]), now);
+    let last = b.update(now);
+    for (let i = 0; i < 40; i++) {
+      now += 0.05; t += 0.1;
+      b.push(snap(t, [U(1, t, 0)]), now);
+      for (let f = 0; f < 3; f++) {
+        const r = b.update(now + f * 0.0166);
+        assert.ok(r >= last - 1e-9, `backwards at frame ${i}/${f}: ${last} → ${r}`);
+        last = r;
+      }
+    }
+    // three snapshots of a catch-up frame arrive together (game time jumps 0.3 in one real frame)
+    now += 0.02;
+    for (let k = 1; k <= 3; k++) b.push(snap(t + k * 0.1, [U(1, t + k * 0.1, 0)]), now);
+    for (let f = 0; f < 60; f++) {
+      const r = b.update(now + f * 0.0166);
+      assert.ok(r >= last - 1e-9, `backwards after the burst: ${last} → ${r}`);
+      last = r;
+    }
+  });
+
+  test('a local feed is rate-locked: its catch-up frames do not read as a faster game speed', () => {
+    const b = new SnapshotBuffer({ delay: 0.034, rate: 2 });
+    b.setFixedRate(2);
+    let now = 0, t = 0;
+    for (let i = 0; i < 20; i++) { now += 0.05; t += 0.1; b.push(snap(t, [U(1, t, 0)]), now); b.update(now); }
+    assert.equal(b.rate, 2, 'the known battle speed');
+    // the replica's catch-up frame: 8 ticks in one frame (0.267 game s), then one normal frame
+    now += 0.016; t += 0.267;
+    b.push(snap(t, [U(1, t, 0)]), now);
+    const at = b.update(now);
+    assert.equal(b.rate, 2, 'a burst never changes the known game speed');
+    const before = at;
+    now += 0.016;
+    b.update(now);
+    assert.ok(b.renderT - before < 0.06, `one frame advanced ${b.renderT - before} game s (the burst did not drag the clock)`);
+    // the network feed unlocks it again
+    b.setFixedRate(null);
+    assert.equal(b.rate, b.defaultRate);
+  });
+
+  test('duplicate / out-of-order snapshots stay out of the clock and the interpolation', () => {
+    const b = new SnapshotBuffer({ delay: 0.1, rate: 2 });
+    b.push(snap(1, [U(1, 0, 0)]), 0);
+    b.update(0.01);
+    const r = b.renderT;
+    assert.equal(b.push(snap(1, [U(1, 9, 9)]), 0.02), false, 'duplicate');
+    assert.equal(b.push(snap(0.9, [U(1, 9, 9)]), 0.03), false, 'out of order');
+    b.update(0.04);
+    assert.ok(b.renderT >= r);
+    assert.equal(b.sample(1).get(1).x, 0);
   });
 });

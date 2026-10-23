@@ -400,3 +400,51 @@
 ### 11.4 复核用的一次性脚本（未随仓库发布）
 
 `.scratch/probe-victoria.mjs`、`.scratch/probe-victoria-audit.mjs`（本机脚本，跑真实 `Match` + `FakeBattle`，覆盖 11.1 的 7 个场景）。规则本身仍只有一套实现（`bonds/core.js`），前端只读 `data/bonds.json` 的 `layerMilestones`。
+
+## 12. 玩家报告四项 + 两项新功能（2026-10-23）
+
+维护者转来的四条现象与两条需求，都在本树复核并处理；两条需求按 fork 惯例记在 `FORK-DEVIATIONS.md`（§21.59 人数上限、§21.60 观战商店）。
+
+### 12.1 银灰三技能「真银斩」不能攻击空中敌人 —— **不是 bug**
+
+- 全仓唯一的对空过滤是 `server/sim/ai.js:412`（`!prof.canHitFly && e.isFlying && !prof.splashHitsFly`）；银灰 `chess_char_4_22_a` 是领主，`canHitFly: true`（`server/sim/professions.js`），S3 的 `targeting` 只改 `rangeGrid` / `maxTargets`，不碰它。
+- 实测（`test/content/svrash-s3-air.test.js`）：S3 激活后对 `motion:'FLY'` 目标每跳 **1429.11**（= `u.s.atk`，即 `dmgMul 1`、无远程 ×0.8）、`isSkill=true`、击杀记在银灰；一次挥击按 `attack@max_target 4` 打 4 个空中目标；`近地悬浮(float)` / `浮空(levitate)` 按 `docs/SIM.md` 算空中单位、S3 同样命中，`缚地` 恢复地面。
+- 客户端**本来就有**可见反馈：S3 的 `projectile:'none'` 走 `atk 'none'` 路径，在受击者身上画 slash + 火花 + 伤害数字，锚点 `_chest = z + hover + 0.45·head`（`FLY_HOVER = 1.3`）就在飞行身体上；`test/render/fly-hit-anchor.test.js` 锁定这条路径。
+- 第一次复现曾误判：原场景（`enemy_1005_yokai`，route 2）在 S3 充能前（`spCost 90 / initSp 55`）就被**普通攻击**两下 490 打死，战斗 9.967 s 结束、`S3 activations 0`——那次击杀不是 S3 打的。换成高 HP 的合成 FLY 目标才是真验证。
+- 遗留（未修，见 12.5）：`server/sim/snapshot.js` 的 `UF.FLYING` 只跟 `motion==='FLY'`，所以近地悬浮 / 浮空在服务端算空中、客户端却画在地面。
+
+### 12.2 战斗结束攻击与特效直接暂停 —— 已修（纯表现层）
+
+- 根因：最后一帧快照后 `SnapshotBuffer.update` 把 `renderT` 钳在 `newest + maxExtrapolate×rate`（约 +0.24 游戏秒），`ofx.update(gdt)` 的 `gdt` 归零，官方特效 / 弹道 / 命中动画定格；服务器 `DELAYS.COMBAT_END = 1500 ms` 后才进 SETTLE，正好暴露成「直接停了」。
+- 修法：新增 `public/js/render/finishWindow.js`（1.5 s 真实时间、幂等，`effectClock()` 从冻结的 `renderT` 起按 `interp.rate` 继续走），`render/app.js` 只把 `fxT` 喂给 `ofx.update` / `pluginFx.update` 的 gdt，新增 `view.holdBattleEnd()`（`ui/fieldHost.js` OPTIONAL），`screens/game.js` 在本地 runner `result`、`m.public.fields[].live === false`、SETTLE 三处触发。
+- 不动 `renderT`、快照、事件、伤害、`battle.result`，也不发网络消息，服务器结算时间线原样。
+- 测试：`test/render/finish-window.test.js`（7 条，含「快照停止 → renderT 冻结 → 窗口内 effect clock 继续 → 窗口结束归零」的真实 `SnapshotBuffer` 复现）。
+
+### 12.3 弱网下服务器游玩素材渲染失效 —— 已修
+
+- `public/js/assets.js`：图片失败按 `IMAGE_RETRY_MS = [400, 1200]` 重试，`img.decode()` + `naturalWidth` 双重确认（半解码的黑图算失败而不是画成黑块）；全部失败才落到调用方的占位（干员头像菱形 / 跳过板材质），并且**只提示一次**（`onImageFailure` → `render/app.js` 一条 toast「部分素材加载失败，已用占位图」）；`preload()` 用 `Promise.allSettled` 语义 + `PRELOAD_CONCURRENCY = 6`，单张失败不拖垮整批。
+- 新增 `public/js/ui/warmArt.js`（`battleArtUrls` + 房间内后台预热战斗固定要用的图：场地 sprite、职业图标、盟约/乐队圆盘），`main.js` 进房间时调用。
+- 服务端静态资源 ETag / 304（`test/static-cache.test.js`），弱网重复访问不再整包重下。
+- 测试：`test/render/assets.test.js`、`test/render/warm-art.test.js`、`test/static-cache.test.js`。
+
+### 12.4 观战他人场地时敌人渲染抽搐 —— 已修
+
+- 根因：速率估计把本地副本的追赶帧读成 8–16× 速度，时钟冲到前面后又被下一次校正**往回拨**，所有单位一起跳。
+- 修法（`public/js/render/interp.js`）：时钟**永不后退**（超前时减速或保持，等流追上）；限长步进不越过外推保护；本地 feed 用已知速率（`setFixedRate`）而不是到达时间估计；网络流用最近到达间隔的**中位数**，一次突发不改速率。位置插值抽成纯函数 `interpolatePosition(prev, next, t, opts)`（乱序、重复快照、传送/再部署都按规则处理）。
+- 测试：`test/render/interp.test.js`。
+
+### 12.5 遗留（未修，需要维护者决定）
+
+- `server/sim/snapshot.js` `flagsOf` 的 `UF.FLYING` 只跟 `motion==='FLY'`：近地悬浮 / 浮空的敌人在服务端是 `isFlying`（S3 能打、测试已覆盖），客户端却画在地面、命中数字锚在脚下。正确修法是 `if (u.isFlying) bits |= UF.FLYING;`，但它改变快照内容，会让 golden 的 `.snaps` 漂移（实测 roster-001 漂移，改回即 match），按「golden 不得漂移」的硬规则本轮没有动。要修就在同一个提交里跑 `npm run golden:update` 并点名移动的场景。
+
+### 12.6 两项新功能
+
+- **房主可设 8 人上限**：`FORK-DEVIATIONS.md` §21.59。默认仍是官方 4 人，房主显式选择才 2–8；`room.create { capacity }` / `room.setCapacity`，服务端校验（不超 8、不低于 2、不能挤掉已在座的人），`room.state.capacity` 随每次状态下发。
+- **休整期观战看队友商店**：`FORK-DEVIATIONS.md` §21.60。只读商店搭在现有的 prep-scout `m.field` 里，只有「玩家看队友」能拿到，观战席仍然拿不到（`test/match/spectator.test.js` 的「never a private view」照旧成立）。
+
+### 12.7 本轮验证
+
+- `node --test`（分区跑）：`test/ui/**` 935 通过 0 失败、`test/match/**` 947/0、`test/render/**` 936/0、`test/sim/**` 928/0、`test/content/**` 2360/0；`test/*.test.js` 1347 通过 / 6 失败——6 条全是本机素材环境问题（`public/assets/audio/sfx/player/…` 缺 4 个 mp3、`.cache/gamedata` 未提取导致 manifest 重新生成与「docs 指向 release tag」等用例不成立），与本次改动无关，换一台有完整素材的机器即恢复。
+- `npm run golden`：roster 49 / bonds 46 / fields 22 / matches 21 / standins 10 / diy 140 全部 match，**0 漂移**。
+- `node tools/i18n.mjs check --all --strict`：四包各 2294 msgid，100 %。
+- `npm run lint` 0 error、`npm run typecheck` 0、`node tools/check-imports.mjs` 只有 4 条既有 baseline note。

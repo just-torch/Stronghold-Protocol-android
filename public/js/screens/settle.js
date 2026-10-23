@@ -526,6 +526,10 @@ function TeamPage({ r, res, gd, myId, at: when, content, backLabel, onBack, onDe
   const rawOf = (pid) => (Array.isArray(res?.players) ? res.players.find((x) => x && x.playerId === pid) : null) || null;
   const self = r.players.find((p) => p.playerId === myId) || null;
   const bg = self?.left ? 'quit' : r.victory ? 'success' : 'fail';
+  // Room capacity may exceed the official four: more than four cards keep one row inside the 19.2rem stage by scaling
+  // the whole strip down (the same stage the settlement already scales with --k), so 5–8 players stay in frame.
+  const many = r.players.length > 4;
+  const cardScale = many ? Math.min(1, 4.2 / r.players.length) : 1;
   useEffect(() => {
     audio.sfx('settlementTeam');
     const id = setTimeout(() => backRef.current?.focus({ preventScroll: true }), 900);
@@ -535,7 +539,7 @@ function TeamPage({ r, res, gd, myId, at: when, content, backLabel, onBack, onDe
     <div class="steam__bg" aria-hidden="true"><${Sprite} k=${`settle/settlemen_teamshow_${bg}`} /></div>
     <div class="settle__stage">
       <${Logo} />
-      <div class="steam__cards" style=${`--n:${r.players.length}`}>
+      <div class=${cx('steam__cards', many && 'is-many')} style=${`--n:${r.players.length};--k-cards:${cardScale}`}>
         ${r.players.length ? r.players.map((p, i) => html`<${TeamCard} key=${p.playerId} p=${p} i=${i} gd=${gd} self=${p.playerId === myId} victory=${r.victory} raw=${rawOf(p.playerId)} />`)
           : html`<p class="steam__none">${t('暂无结算数据')}</p>`}
       </div>

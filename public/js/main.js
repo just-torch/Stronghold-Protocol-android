@@ -62,6 +62,7 @@ import { initLang, useLang, tickerText } from './ui/lang.js';
 import { t, N_, translateWire } from '../../shared/i18n.js';
 import { recordError, installTrafficMeter } from './diag.js';
 import { installContent, installContentSet } from './content.js';
+import { warmBattleArt } from './ui/warmArt.js';
 import { cosmetics } from './cosmetics.js';
 
 const RESTORE_GRACE_MS = 1500;
@@ -303,7 +304,13 @@ function wireNet() {
  */
 function warmGameData() {
   // a room with gameplay plugins: content.js downloads its content set's files instead (DESIGN §32.6)
-  const go = () => { if (store.get().room?.content?.vanilla === false) return; data.loadAll(GAME_FILES).catch(() => {}); };
+  const go = async () => {
+    if (store.get().room?.content?.vanilla === false) return;
+    try { await data.loadAll(GAME_FILES); } catch { /* the match screen retries the failed file / degrades */ }
+    // …then the battle's own art (field sprites, profession icons, bond / band discs — ui/warmArt.js): after the data so
+    // it never competes with the files a screen waits for, and never awaited by the first render
+    warmBattleArt().catch(() => {});
+  };
   if (typeof globalThis.requestIdleCallback === 'function') globalThis.requestIdleCallback(go, { timeout: 2500 });
   else setTimeout(go, 600);
 }

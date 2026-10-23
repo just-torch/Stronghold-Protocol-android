@@ -1,5 +1,5 @@
-// Room screen (同盟等待室): 4 seat cards (avatar frame, name, ready state, AI badge, host crown),
-// host controls (difficulty picker, add/remove AI and the 「AI 队友最后选择」 switch in co-op, start), invite code with
+// Room screen (同盟等待室): one seat card per capacity slot (4 by default, up to 8; room.state.capacity),
+// host controls (difficulty picker, seat cap, add/remove AI and the 「AI 队友最后选择」 switch in co-op, start), invite code with
 // copy code / copy link, ready toggle and leave.
 //
 // Start rule (server/lobby.js): room.start needs every *other* human connected and ready; the
@@ -17,7 +17,7 @@
 // Texts go through t() (docs/I18N.md).
 
 import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
-import { DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, MAX_SEATS, MAX_SPECTATORS } from '../../../shared/constants.js';
+import { DIFFICULTIES, DIFFICULTY_NAMES, DIFFICULTY_COLORS, MAX_SEATS, MIN_SEATS, DEFAULT_SEATS, MAX_SPECTATORS } from '../../../shared/constants.js';
 import {
   html, Button, Icon, MicroLabel, PingPill, AvatarFrame, DifficultyTag, DifficultyIcon, Tooltip, confirmDialog, doctorNo, Modal,
 } from '../ui/components.js';
@@ -36,12 +36,14 @@ import { difficultyInfo } from './lobby.js';
 import { t, tc } from '../../../shared/i18n.js';
 
 /**
- * Seats padded to the room's capacity (co-op 4, solo 1), each null or a seat record.
+ * Seats padded to the room's capacity (co-op: room.state.capacity, DEFAULT_SEATS 4 if an older server sends none; solo 1),
+ * each null or a seat record.
  * @param {any} room room.state payload
  * @returns {(null | {seat:number, playerId:any, name:string, isBot:boolean, ready:boolean, connected:boolean})[]}
  */
 export function normalizeSeats(room) {
-  const cap = room?.mode === 'solo' ? 1 : MAX_SEATS;
+  const raw = Number.isInteger(room?.capacity) ? room.capacity : DEFAULT_SEATS;
+  const cap = room?.mode === 'solo' ? 1 : Math.max(MIN_SEATS, Math.min(MAX_SEATS, raw));
   const src = Array.isArray(room?.seats) ? room.seats : [];
   const out = [];
   for (let i = 0; i < cap; i++) {
@@ -73,6 +75,10 @@ export function roomFacts(room, myId) {
   const contentReady = !modded || humans.every((s) => s.content === 'ready');
   return {
     seats, occupied, humans, mine, isHost, readyHumans, isReady,
+    // the room's seat cap (server: room.state.capacity; a change is room.setCapacity) and the smallest it may become
+    // without dropping a seated player — seat indexes never compact, so the highest occupied index counts
+    capacity: seats.length,
+    minCapacity: Math.max(MIN_SEATS, occupied.reduce((m, s) => Math.max(m, (s.seat ?? 0) + 1), 0)),
     emptySeats: seats.filter((s) => !s).length,
     canStart: isHost && othersReady && !!mine && contentReady && (!room?.content?.trusted || humans.every(s => room.content.trusted.consent[s.seat])),
     othersReady,
@@ -238,6 +244,31 @@ function AiLastToggle({ option, busy, onToggle }) {
   </div>`;
 }
 
+/**
+ * The room's seat cap (room.create.capacity / room.setCapacity): the host raises or lowers it before the match, everybody
+ * else reads it. A co-op room only; the lower bound keeps every seated player (and seat indexes never compact).
+ */
+function CapacityControl({ room, facts, busy, onSet }) {
+  if (room.mode === 'solo') return null;
+  const editable = facts.isHost && !room.inMatch;
+  const cap = facts.capacity;
+  const set = (n) => n >= MIN_SEATS && n <= MAX_SEATS && n !== cap && onSet(n);
+  return html`<div class="capctl">
+    <${Tooltip} text=${editable
+      ? t('同盟人数上限：{MIN}–{MAX} 人，默认 {DEFAULT} 人；开始模拟前可调整', { MIN: MIN_SEATS, MAX: MAX_SEATS, DEFAULT: DEFAULT_SEATS })
+      : t('人数上限由创建者设置')}>
+      <div class="capctl__box" role="group" aria-label=${t('人数上限')}>
+        <span class="capctl__label">${t('人数上限')}</span>
+        ${editable ? html`<${Button} variant="ghost" size="sm" square=${true} icon="minus" loading=${busy === 'cap'}
+          disabled=${cap <= facts.minCapacity} aria-label=${t('减少人数上限')} title=${t('减少人数上限')} onClick=${() => set(cap - 1)} />` : null}
+        <b class="capctl__num num" aria-live="polite">${cap}</b>
+        ${editable ? html`<${Button} variant="ghost" size="sm" square=${true} icon="plus" loading=${busy === 'cap'}
+          disabled=${cap >= MAX_SEATS} aria-label=${t('增加人数上限')} title=${t('增加人数上限')} onClick=${() => set(cap + 1)} />` : null}
+      </div>
+    <//>
+  </div>`;
+}
+
 /** Room screen component. */
 export function RoomScreen() {
   const room = useStore((s) => s.room);
@@ -278,6 +309,8 @@ export function RoomScreen() {
     if (ok) run(`kick${seat}`, () => net.request('room.kick', { seat, playerId }));
   };
   const setDifficulty = (difficulty) => run('diff', () => net.request('room.setDifficulty', { difficulty }));
+  // the host's seat cap (co-op): server-side MIN_SEATS…MAX_SEATS, never below a seated player (BAD_TARGET)
+  const setCapacity = (capacity) => run('cap', () => net.request('room.setCapacity', { capacity }));
   const setAiLast = (on) => run('ailast', () => net.request('room.setAiPicksLast', { on }));
   // spectator seats: the host frees one; a spectator takes a free player seat with room.join of this room
   const removeSpectator = (playerId) => run(`rs${playerId}`, () => net.request('room.removeSpectator', { playerId }));
@@ -344,7 +377,7 @@ export function RoomScreen() {
       </div>
     </header>
 
-    <main class=${`seats${coop ? '' : ' seats--solo'}`}>
+    <main class=${`seats${coop ? '' : ' seats--solo'}${coop && facts.seats.length > 4 ? ' seats--many' : ''}`}>
       ${facts.seats.map((s, i) => html`<${SeatCard} key=${s ? `p${s.playerId}` : `e${i}`} seat=${s} index=${i} room=${room} facts=${facts}
         myId=${me.playerId} busy=${busy} onAddBot=${addBot} onRemoveBot=${removeBot} onKick=${kick} />`)}
       ${coop ? null : html`<aside class="solo-brief brackets">
@@ -365,6 +398,7 @@ export function RoomScreen() {
         <span class="room-bar__label">${t('模拟难度')}<${MicroLabel}>DIFFICULTY<//></span>
         <div class="room-bar__opts">
           <${DifficultyPicker} room=${room} isHost=${facts.isHost} busy=${busy} onPick=${setDifficulty} />
+          <${CapacityControl} room=${room} facts=${facts} busy=${busy} onSet=${setCapacity} />
           <${AiLastToggle} option=${aiLastOption(room, me.playerId)} busy=${busy} onToggle=${setAiLast} />
         </div>
       </div>

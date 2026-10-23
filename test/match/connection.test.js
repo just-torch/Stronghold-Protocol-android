@@ -333,6 +333,32 @@ test('emotes: relayed as m.emote with a 1 s cooldown; g.watch during prep scouts
   m.dispose();
 });
 
+test('prep scouting carries the scouted player\'s read-only shop and follows its changes', () => {
+  const h = makeMatch({ mode: 'coop', humans: 2, seed: 69, fake: true }).start();
+  h.toPrep(1);
+  const m = h.m;
+  const target = h.ps('p_1');
+  target.addFunds(10, 'test');
+  assert.deepEqual(m.handle('p_0', { t: 'g.watch', fieldId: 'n:p_1' }), { ok: true });
+  const f0 = h.lastTo('p_0', 'm.field');
+  assert.ok(f0.shop, 'the prep scout carries a shop');
+  assert.equal(f0.shop.level, target.shop.level);
+  assert.equal(f0.shop.funds, target.funds);
+  assert.equal(f0.shop.slots.length, target.shop.slots.length);
+  assert.equal(f0.shop.rewardOffer, undefined, 'no reward offer — the minimal read-only view');
+  assert.ok(f0.shop.slots.every((s) => s === null || (typeof s.id === 'string' && Number.isInteger(s.price) && typeof s.sold === 'boolean')));
+  // a purchase on the scouted seat reaches the viewer as a sold slot and a lower funds count
+  assert.deepEqual(m.handle('p_1', { t: 'g.buy', slot: 0 }), { ok: true });
+  h.flushAll();
+  const f1 = h.lastTo('p_0', 'm.field');
+  assert.equal(f1.shop.slots[0].sold, true);
+  assert.equal(f1.shop.funds, target.funds);
+  assert.ok(f1.shop.funds < f0.shop.funds);
+  // never in a public frame (privacy: the shop travels only with the on-demand prep scout)
+  assert.ok(!JSON.stringify(h.lastBc('m.public')).includes('"shop"'));
+  m.dispose();
+});
+
 test('unknown / wrong-phase intents are rejected without throwing', () => {
   const h = makeMatch({ mode: 'coop', humans: 1, bots: 1, seed: 68 }).start();
   const m = h.m;

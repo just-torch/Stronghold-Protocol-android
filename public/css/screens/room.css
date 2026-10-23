@@ -49,6 +49,19 @@
   padding: .3rem .6rem .24rem;
 }
 .seats--solo { grid-template-columns: 3.8rem minmax(0, 6.4rem); }
+/* More than the official four seats (room.state.capacity up to 8, server/lobby.js): two rows of four at a shorter card
+   height, so the extra seats stay on screen instead of running off the bottom. */
+.seats--many {
+  grid-template-columns: repeat(4, minmax(0, 3.8rem));
+  grid-template-rows: none;
+  grid-auto-rows: minmax(0, 4.6rem);
+  gap: .18rem .3rem;
+  padding-top: .18rem;
+  padding-bottom: .18rem;
+}
+/* the shorter row: tighter card padding and a smaller avatar keep every seat's name / state readable */
+.seats--many .seat { padding: .1rem .14rem .08rem; gap: .04rem; }
+.seats--many .seat .avatar--xl { --av: 1.3rem; }
 
 .seat {
   --bk-c: var(--line-3);
@@ -308,6 +321,12 @@
 .ailast__opt:last-child { border-right: 1px solid var(--line-2); }
 .ailast__opt .icon { opacity: .25; }
 .ailast__opt .icon.is-on { opacity: 1; }
+/* 人数上限 (room.setCapacity): the host's 2–8 stepper beside the difficulty picker; the others read the number */
+.capctl { display: flex; align-items: center; font-size: calc(.14 * var(--t)); }
+.capctl__box { display: flex; align-items: center; gap: .04rem; padding: .02rem .06rem; border: 1px solid var(--line-2); background: rgba(0, 0, 0, .3); }
+.capctl__label { padding: 0 .1rem 0 .04rem; color: var(--text-lo); letter-spacing: .06em; }
+.capctl__num { min-width: .48rem; text-align: center; font-size: calc(.26 * var(--t)); color: var(--mint-400); }
+.capctl .btn--square { width: .36rem; height: .36rem; }
 
 .ready-count[hidden] { display: none; }
 .ready-count { display: flex; align-items: baseline; gap: .06rem; font-size: calc(.16 * var(--t)); }

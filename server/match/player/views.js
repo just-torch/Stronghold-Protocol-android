@@ -54,6 +54,29 @@ export class PlayerViews {
     return out;
   }
 
+  /**
+   * The read-only shop a teammate sees while scouting this player's prep board (Match.prepFieldMeta `shop`; task B).
+   * Minimal on purpose — the slots (id / price / sold / frozen), the funds and the deploy counters the bar's header
+   * shows — and no reward offer: it travels only in the prep-scout m.field, which is sent on request (g.watch `n:<pid>`)
+   * and again when this player's state changes, never in a broadcast. `loadout` keeps the operator cards' skill honest.
+   */
+  scoutShopView() {
+    return {
+      level: this.shop.level,
+      maxLevel: this.gd.maxShopLevel,
+      upgradePrice: this.shop.level >= this.gd.maxShopLevel ? 0 : this.shop.upgradePrice,
+      refreshPrice: this.shop.freeRefreshes > 0 ? 0 : this.gd.refreshPrice,
+      freeRefreshes: this.shop.freeRefreshes,
+      frozen: this.shop.frozen,
+      slots: this.shop.slots.map((s) => (s ? { kind: s.kind, id: s.id, price: this.priceOf(s), basePrice: s.basePrice, sold: !!s.sold, frozen: !!s.frozen } : null)),
+      funds: this.funds,
+      deployCap: this.deployCap,
+      deployCount: this.deployCount,
+      ready: this.ready,
+      loadout: this.loadout,
+    };
+  }
+
   privateView() {
     const slots = this.shop.slots.map((s) => (s ? { kind: s.kind, id: s.id, price: this.priceOf(s), basePrice: s.basePrice, sold: !!s.sold, frozen: !!s.frozen } : null));
     const offer = this.offers[0] || null;
