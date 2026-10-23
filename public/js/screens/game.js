@@ -1842,9 +1842,9 @@ function MatchScreen() {
       ${scoutShop ? html`<${ShopBar} priv=${scoutPriv} editable=${false} collapsed=${scoutBarCollapsed} refreshBusy=${false}
         onCollapse=${setScoutBarCollapsed} offBonds=${offBonds}
         onBuy=${() => {}} onLevel=${() => {}} onRefresh=${() => {}} onFreeze=${() => {}}
+        badge=${html`<${GIcon} name="eye" /><span>${t('正在查看 {name} 的调度中心（只读）', { name: watchedName || t('队友') })}</span>`}
         onDetail=${(id, kind, hint) => setDetail({ kind: kind === 'item' ? 'item' : 'chess', id, hint: hint || null, tap: ++cardTap.current })}
         onDetailClose=${() => setDetail((d) => (d?.kind === 'chess' || d?.kind === 'item' ? null : d))} />` : null}
-      ${scoutShop ? html`<div class=${`gm__scoutshop-tag${scoutBarCollapsed ? ' is-collapsed' : ''}`} role="status"><${GIcon} name="eye" /><span>${t('正在查看 {name} 的调度中心（只读）', { name: watchedName || t('队友') })}</span></div>` : null}
 
       ${phase === PHASE.PREP && priv?.shop?.rewardOffer ? html`<${RewardOverlay} priv=${priv} minimized=${rewardMin || barCollapsed}
         onMinimize=${(m) => { setRewardMin(m); if (!m) setCollapsed(false); }} />` : null}

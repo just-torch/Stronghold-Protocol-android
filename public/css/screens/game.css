@@ -488,9 +488,14 @@
 
 /* ---- team panel ------------------------------------------------------------------------------------------- */
 /* A room may seat up to 8 (room.state.capacity): more rows than a short viewport holds scroll instead of running off
-   the bottom (the row buttons keep their own pointer events; the list itself takes the wheel for this). */
-.team { position: absolute; left: .22rem; top: 2.36rem; display: flex; flex-direction: column; gap: .14rem; pointer-events: auto;
-  max-height: calc(100vh - 5.2rem); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+   the bottom (the row buttons keep their own pointer events; the list itself takes the wheel for this).
+   The .08rem padding is what keeps the players' avatar rings whole: `.pavatar` draws 「你」 / the watched player with a
+   2 px box-shadow ring plus its glow, and with a scroll container the ring of the first column and first row was
+   clipped at the panel's edge (report 2026-10-23: "左边玩家头像边框不完整"). left/top drop by the same .08rem so the
+   rows stay where they were, and overflow-x clips instead of turning the column into a horizontal scroller. */
+.team { position: absolute; left: .14rem; top: 2.28rem; display: flex; flex-direction: column; gap: .14rem; pointer-events: auto;
+  padding: .08rem; max-height: calc(100vh - 5.2rem); overflow-x: auto; overflow-x: clip; overflow-y: auto;
+  overscroll-behavior: contain; scrollbar-width: none; }
 .team::-webkit-scrollbar { display: none; }
 .team__row { position: relative; display: flex; align-items: center; gap: .1rem; pointer-events: auto; }
 .team__btn {

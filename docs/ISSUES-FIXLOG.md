@@ -445,12 +445,18 @@
 - 修法（`public/css/screens/lobby.css`、`public/css/devices.css`）：人数上限改成一行（标签 + 2–8 分段 + 内联说明），窄屏 / 矮屏隐藏说明；`max-height: 460px` 下难度卡去掉描述行；`max-height: 400px` 下再收掉分节标题、间距与按钮高度。
 - 实测（headless Edge，Emulation 设视口）：1920×1080 / 1280×720 / 1024×768 / 960×540 / 844×390 / 640×360 六档下 `创建同盟` 底边都在屏幕内（640×360 恰好 360）；8 人等待室同六档下座位卡、人数上限与「准备就绪」都不越界。568×320 与更矮的极端视口仍需要滚动（`.lobby-body` 本身是 `overflow:auto`），属可接受退化。
 
-### 12.7 两项新功能
+### 12.7 观战商店徽标与队伍头像边框（2026-10-23 玩家截图反馈）
+
+- **「正在查看 X 的调度中心（只读）」压住右侧提示**：徽标原来是 `.gm__scoutshop-tag`，作为商店栏的兄弟挂在 HUD 上，用固定 `bottom: 3.16rem` 定位；手机上商店栏的工具行把「剩余可放置角色」叠在「冻结 / 刷新」上面，栏变高，徽标就落进了栏里，同时盖住计数与两个按钮。现在徽标由 `ShopBar` 自己渲染（`badge` prop），绝对定位在 `.shopbar` 内部、`bottom: calc(100% + .08rem)`——永远在栏顶之上，与栏高无关；折叠状态由 `.shopbar-tab` 里的副本承担（`.shopbar__badge.is-tab`）。
+- **左侧玩家头像边框不完整**：8 人房间给 `.team` 加了滚动容器（`overflow-y: auto`），而「你」/被观战玩家的头像框是 `.pavatar` 的 2px `box-shadow` 环，环在第一列/第一行被滚动容器的边缘裁掉。现在 `.team` 留 `.08rem` 内边距（左上位置同步减 `.08rem` 保持视觉位置不变），水平方向用 `overflow-x: clip`（`auto` 作为旧浏览器回退）而不是变成横向滚动条。
+- 回归测试：`test/ui/scout-shop-badge.test.js`（徽标在 `.shopbar` 内、用 `bottom: 100%` 锚定、`.team` 有内边距与 `overflow-x: clip`）。
+
+### 12.8 两项新功能
 
 - **房主可设 8 人上限**：`FORK-DEVIATIONS.md` §21.59。默认仍是官方 4 人，房主显式选择才 2–8；`room.create { capacity }` / `room.setCapacity`，服务端校验（不超 8、不低于 2、不能挤掉已在座的人），`room.state.capacity` 随每次状态下发。
 - **休整期观战看队友商店**：`FORK-DEVIATIONS.md` §21.60。只读商店搭在现有的 prep-scout `m.field` 里，只有「玩家看队友」能拿到，观战席仍然拿不到（`test/match/spectator.test.js` 的「never a private view」照旧成立）。
 
-### 12.8 本轮验证
+### 12.9 本轮验证
 
 - `node --test`（分区跑）：`test/ui/**` 935 通过 0 失败、`test/match/**` 947/0、`test/render/**` 936/0、`test/sim/**` 928/0、`test/content/**` 2360/0；`test/*.test.js` 1347 通过 / 6 失败——6 条全是本机素材环境问题（`public/assets/audio/sfx/player/…` 缺 4 个 mp3、`.cache/gamedata` 未提取导致 manifest 重新生成与「docs 指向 release tag」等用例不成立），与本次改动无关，换一台有完整素材的机器即恢复。`test/plugins/**`（253/39）与 `test/studio/**`（82/16）同样在本机沙箱下失败：这些用例要起子进程 / 沙箱探针 / 工作台子进程（`SIGTERM` 探针、Forge 导入、文件夹监视），失败信息里没有一条指向本轮改动的文件；`test/e2e/**` 8/0。
 - `npm run golden`：roster 49 / bonds 46 / fields 22 / matches 21 / standins 10 / diy 140 全部 match，**0 漂移**。
