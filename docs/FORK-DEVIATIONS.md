@@ -8,10 +8,10 @@ numbers.
 
 Upstream's section numbers are global and never change; code, tests and the other documents cite them as "DESIGN §N".
 The fork's sections keep chapter 21, sit immediately after upstream's own §21.30 (干员战斗语音, which is upstream's and
-not ours) and run **§21.31–§21.60**, so every "DESIGN §21.34" in a comment, a test name or another document still
+not ours) and run **§21.31–§21.61**, so every "DESIGN §21.34" in a comment, a test name or another document still
 resolves. §21.30 is reproduced below only as the anchor the fork's numbering hangs off.
 
-**What these sections are.** Each §21.31–§21.60 entry is something this fork did on top of the upstream release named
+**What these sections are.** Each §21.31–§21.61 entry is something this fork did on top of the upstream release named
 in its title: a player report fixed here, an owner decision, or a deliberate deviation from the official game. Several
 of them are **Android / packaging / phone-layout work** (`android/`, `docs/DEPLOY.md`, the phone HUD) and one is the
 maintainer's own test tool (the debug console); those have no upstream counterpart at all and must never be dropped
@@ -659,6 +659,14 @@ User: 「给每个卫戍干员都加语音」, then, after the first build, 「�
 - **Who may see it**: only a player scouting a teammate. A **spectator seat** still gets the board-only meta (`prepFieldMeta(ps, { shop })` is opt-in and watch.js passes it per recipient), so the seat's "never a private view" invariant (test/match/spectator.test.js) holds.
 - **Client**: the normal `ShopBar` renders it with `editable: false` under a 「正在查看 {name} 的调度中心（只读）」 badge; cards open their detail but no purchase, refresh, level-up or freeze is ever sent (the state is not in `m.private`, so a locked bar is the only possible rendering).
 - Tests: `test/match/spectator.test.js` (the seat still gets nothing private), the room/prep watch tests and the UI suite.
+
+### 21.61 大厅顶栏显示服务器在线人数 (the owner's request, 2026-10-25) — `server/lobby.js` (`onlineCount` / `presenceFrame` / `broadcastPresence`, `welcomeInfo().presence`), `shared/protocol.js` (S2C `presence`), `public/js/main.js`, `public/js/store.js` (`presence` slice), `public/js/ui/components.js` (`PresencePill`), `public/js/screens/lobby.js`, `public/css/components.css` (`.presence`), `docs/design/network.md` (§8), `docs/ARCHITECTURE.md`
+
+- **Requested**: 「添加一个能实时查看服务器在线人数的功能」.
+- **What counts**: `onlineCount()` is the sessions in the registry with a live socket (`session.connected`) — a page that is seated, spectating or still in the lobby. A session that keeps its seat through the reconnect window is not online; a bot seat is not a human; a socket replaced by the same token in another tab is the same human.
+- **Push, not polling**: `broadcastPresence()` computes the count and sends only when it changed — after a socket attaches (`onHello`: a new or resumed session) and after one closes (`onDisconnect`; `net.js` clears `connected` first). The frame is encoded once and written to every connected session: `{ t: 'presence', online }`. Every `welcome` also carries `presence: { online }` (`welcomeInfo`), so a joining page has the number before the next change.
+- **Client**: the store slice `presence { online }` is fed by `main.js` (`net.on('presence')` and `welcome.presence`); the lobby header renders `ui/components.js PresencePill` right after the ping pill — person glyph + number, tooltip 「服务器当前在线人数」, nothing while the count is unknown. The number is server-wide and includes this page; no other screen shows it.
+- Tests: `test/presence.test.js` (welcome carries the count; connect/disconnect pushes; a resumed session counts again; a repeat hello and a replaced socket send nothing), `test/ui/presence-pill.test.js` (the server methods and their call sites, the store wiring, the lobby placement, the styles, the two msgids in all four packs).
 
 ---
 

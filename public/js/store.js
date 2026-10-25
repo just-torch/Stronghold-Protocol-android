@@ -6,6 +6,7 @@
 //   content     – `welcome.content`: the server's content identity { vanilla: <cs> } (DESIGN §32), or null
 //   session     – { entered } (the player pressed 开始 on the title screen in this tab)
 //   room        – last `room.state` payload (without `t`) or null
+//   presence    – { online } — S2C `presence` / `welcome.presence`: humans connected right now (null before)
 //   match       – { public, private, field, result } from the `m.*` pushes; `battle` = the local battle runner's
 //                 state (client-side combat, public/js/battle/runner.js): { battleId, fieldId, kind, authoritative,
 //                 watch, done, own, members, loading, speed, paused, leaks } | null — `paused`: the solo pause holds
@@ -85,6 +86,9 @@ export const initialState = Object.freeze({
   installedNotices: false,
   session: { entered: false },
   room: null,
+  // S2C `presence`: how many humans are connected right now (`online`; null before the first welcome / push). The
+  // lobby header shows it live (ui/components.js PresencePill, server/lobby.js broadcastPresence).
+  presence: { online: null },
   // welcome.testMode (DESIGN §34.8). The server omits the key when the switch is off; the client cannot set it.
   testMode: false,
   match: emptyMatch(),

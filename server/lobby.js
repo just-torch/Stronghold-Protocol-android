@@ -467,6 +467,8 @@ export class Lobby {
     this.limitLog = { at: -Infinity, suppressed: 0 };
     /** log lines said once (warnOnce) */
     this.told = new Set();
+    /** the online count of the last `presence` broadcast (server/lobby.js broadcastPresence); null before the first */
+    this.lastPresence = null;
     /** a held visual set whose plugins changed on disk: its rooms' hosts are told (header "The room's plugins") */
     this.offStale = typeof plugins?.onStale === 'function' ? plugins.onStale((vs, ids) => this.pluginsChanged(vs, ids)) : null;
     /**
@@ -578,6 +580,8 @@ export class Lobby {
    * @param {{ resumed: boolean, repeat: boolean }} info
    */
   onHello(session, { resumed, repeat }) {
+    // its socket just attached (a new or a resumed session): the online count changed
+    this.broadcastPresence();
     if (!resumed && !repeat) return;
     const room = this.roomOf(session);
     if (!room) {
@@ -712,6 +716,7 @@ export class Lobby {
   /** The session's socket closed. @param {import('./net.js').Session} session */
   onDisconnect(session) {
     this.clearResync(session.playerId); // the next resume resyncs immediately
+    this.broadcastPresence(); // its socket closed: it is not online any more (net.js cleared `connected` first)
     const room = this.roomOf(session);
     // a solo run may be resumed within singleReconnectTime (24 h); everything else keeps the registry's window
     session.resumeWindowMs = room && room.match && room.mode === 'solo' ? this.soloResumeWindowMs() : null;
@@ -1408,8 +1413,9 @@ export class Lobby {
   }
 
   /**
-   * Extra fields of every `welcome` (net.js): the operators a 自选 slot may field (shared/diy.js `kitted`) and the
-   * server's content identity (header "Content identity").
+   * Extra fields of every `welcome` (net.js): the operators a 自选 slot may field (shared/diy.js `kitted`), the
+   * server's content identity (header "Content identity") and how many humans are online right now (`presence`), so
+   * the lobby's counter is right from the first frame instead of waiting for somebody else to connect.
    */
   welcomeInfo() {
     let info;
@@ -1421,6 +1427,7 @@ export class Lobby {
       // Catalogue metadata, never part of a room or match; omitted when no loaded plugin publishes a notice.
       if (this.plugins?.hasNotices?.()) info.content.notices = true;
     }
+    info.presence = { online: this.onlineCount() };
     // Omitted when the switch is off, so a welcome from a normal server stays identical.
     if (this.testEnabled === true) info.testMode = true;
     return info;
@@ -1920,6 +1927,40 @@ export class Lobby {
   // ---------------------------------------------------------------------------------------------------
   // Sending
   // ---------------------------------------------------------------------------------------------------
+
+  /**
+   * Humans connected right now: a session with a live socket — seated, spectating or still in the lobby. A session
+   * that keeps its seat through the reconnect window is not online (its human is not here).
+   * @returns {number}
+   */
+  onlineCount() {
+    let n = 0;
+    for (const s of this.registry.all()) if (s.connected) n++;
+    return n;
+  }
+
+  /**
+   * The S2C `presence` frame: the server-wide online count. It travels in every `welcome` (`welcomeInfo`) and is
+   * pushed to every connected session when the count changes, so the lobby's counter is live without polling.
+   * @returns {{ t: 'presence', online: number }}
+   */
+  presenceFrame() {
+    return { t: 'presence', online: this.onlineCount() };
+  }
+
+  /**
+   * Send `presence` when the online count changed — somebody attached a socket (new or resumed session) or lost it.
+   * Sessions that are already disconnected do not count, so a replaced socket (`session replaced`) sends nothing.
+   * The frame is encoded once and written to every connected session.
+   */
+  broadcastPresence() {
+    const online = this.onlineCount();
+    if (online === this.lastPresence) return;
+    this.lastPresence = online;
+    const data = encode({ t: 'presence', online });
+    if (data == null) return;
+    for (const s of this.registry.all()) if (s.connected && s.ws) sendRaw(s.ws, data);
+  }
 
   /** Connected, non-departed human sessions of a room — its spectators included (room.state, match broadcasts). */
   *memberSessions(room) {

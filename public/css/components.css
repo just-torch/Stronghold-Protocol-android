@@ -875,6 +875,26 @@
 .ping--high { --pc: var(--red-premium); }
 .ping--off { --pc: var(--text-dim); }
 
+/* ---- online count pill (lobby header: S2C presence, components.js PresencePill) --------------------- */
+.presence {
+  --pc: var(--mint-500);
+  display: inline-flex;
+  align-items: center;
+  gap: .04rem;
+  height: .32rem;
+  padding: 0 .14rem 0 .11rem;
+  border-radius: 99px;
+  background: rgba(0, 0, 0, .5);
+  border: 1px solid var(--line);
+  color: var(--pc);
+  font-family: var(--font-num);
+  font-size: calc(.18 * var(--t));
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.presence__icon { width: .15rem; height: .15rem; margin-right: .03rem; }
+
 /* ---- difficulty tag ---------------------------------------------------------------------------------- */
 .dtag { --d-color: var(--amber); display: inline-flex; align-items: center; gap: .06rem; color: var(--d-color); font-weight: 700; font-size: calc(.18 * var(--t)); letter-spacing: .04em; white-space: nowrap; }
 .dtag__icon { width: 1.15em; height: 1.15em; filter: drop-shadow(0 0 4px var(--d-color)); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--d-color) 65%, transparent)); }

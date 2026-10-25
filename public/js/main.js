@@ -173,6 +173,8 @@ function onWelcome(msg) {
     installedNotices: msg.content?.notices === true,
     testMode: msg.testMode === true,
   });
+  // the online count at hello time (server/lobby.js welcomeInfo) — the lobby header has it before the next push
+  if (Number.isInteger(msg.presence?.online)) store.patch('presence', { online: msg.presence.online });
   welcomeAt = Date.now();
 
   if (prevId != null && prevId !== msg.playerId) {
@@ -243,6 +245,10 @@ function wireNet() {
   net.on('replaced', () => toast(t('该身份已在其他页面登录，本页已断开'), 'warn', { ttl: 6000 }));
   net.on('unhandledError', (err) => toastError(err));
   net.on('room.state', onRoomState);
+  // the server-wide online count (server/lobby.js broadcastPresence): the lobby header's live counter
+  net.on('presence', (msg) => {
+    if (Number.isInteger(msg.online)) store.patch('presence', { online: msg.online });
+  });
   net.on('room.closed', (msg) => {
     backToLobby();
     const known = Object.hasOwn(CLOSE_REASON, String(msg.reason)) ? CLOSE_REASON[msg.reason] : null;

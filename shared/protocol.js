@@ -647,6 +647,9 @@ export const C2S = {
 export const S2C = [
   'welcome', 'ok', 'error', 'pong',
   'room.state', 'room.closed',
+  // presence { online } — how many humans are connected right now (server/lobby.js broadcastPresence): pushed to every
+  // connected session whenever the count changes, and carried by every welcome as welcome.presence { online }
+  'presence',
   'm.public', 'm.private', 'm.field', 'm.toast', 'm.ticker', 'm.emote', 'm.result',
   // m.layer { playerId, bondId, add } — own live prep layer gain; ephemeral, never replayed on resync.
   'm.layer',

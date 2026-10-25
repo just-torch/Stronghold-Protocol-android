@@ -463,3 +463,16 @@
 - `node tools/i18n.mjs check --all --strict`：四包各 2294 msgid，100 %。
 - `npm run lint` 0 error、`npm run typecheck` 0、`node tools/check-imports.mjs` 只有 4 条既有 baseline note。
 - 线上冒烟（部署后的本机服务器 `build 8d81b4de17e3`）：WebSocket 依次跑 `room.create{capacity:8}` → `room.state.capacity = 8 / seats 8`、`room.setCapacity{3}` → 3、`{1}` 与 `{9}` 都被拒（`BAD_MSG`）、`{8}` 生效；公网 `https://frp-arm.com:16019/healthz` 同一 build。
+
+### 12.10 大厅顶栏的实时在线人数（0.3.1-fork.6，2026-10-25）
+
+- **功能**：`FORK-DEVIATIONS.md` §21.61。服务端 `onlineCount()` 数「有活连接的会话」，`broadcastPresence()` 只在人数变化时给所有在线会话推一帧 `{ t: 'presence', online }`（新连接 / 重连 / 断开各一次，被同 token 的另一标签页顶替不算变化），`welcome.presence` 让新页面一进来就有数；客户端把值放进 store 的 `presence` 切片，大厅顶栏在延迟胶囊旁渲染 `PresencePill`。不做轮询。
+- **顺手修掉上一轮遗留的过期断言**：`test/client-static.test.js` 还在检查 `roomFacts().minCapacity`，而人数上限移进设置时该字段已从 `room.js` 删除——改成检查 `capacity` / `emptySeats`。
+
+### 12.11 本轮验证
+
+- `node --test`（分区跑）：`test/*.test.js` 1371 通过 1351 / 6 失败——6 条全是本机素材环境问题（`data/assets.json` 生成与 manifest 校验需要 `public/assets` / `.cache/gamedata`、packaged docs 的 release 链接等），与本次改动无关；`test/ui/**` 958 通过 945 / 0 失败（13 条 e2e 跳过）；`test/match/**` 949 通过 944 / 3 失败——都是 `test/match/plugin-host.test.js` 的子进程 / watchdog 用例在整包并行下超时，单独跑该文件 3/3 通过；`test/lobby.test.js` 75 通过 0 失败，新增的 `test/presence.test.js` 4/0 与 `test/ui/presence-pill.test.js` 4/0。
+- `npm run golden`：roster 49 / bonds 46 / fields 22 / matches 21 / standins 10 / diy 140 全部 match，**0 漂移**（未触及 `server/sim/`）。
+- `node tools/i18n.mjs check --all --strict`：四包各 2293 msgid，100 %，0 错误。
+- `npm run lint` 0 error（161 条既有 warning）、`npm run typecheck` 0、`node tools/check-imports.mjs` 仅 4 条既有 baseline note。
+- 线上冒烟：部署后的本机服务器 `build f5eac5534017`；无头 Edge（1280×720 与 640×360 各一次）打开大厅，顶栏胶囊显示 `1`，第二个标签页进入后第一个页面**不刷新**变成 `2`，关掉第二个标签页又回到 `1`；两次都没有控制台错误，640×360 下 `scrollWidth = innerWidth = 640`、顶栏不溢出，胶囊紧挨延迟胶囊（截图存在 `reports/presence-pill/`）；公网 `https://frp-arm.com:16019/` 同一 build。

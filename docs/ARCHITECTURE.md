@@ -61,7 +61,7 @@ Every frame is JSON text, `{ t, rid?, …fields }`.
 | | `g.*`: match intents — buy, refresh, freeze, level up, sell, move, equip, Arts, rewards, 机变 choices, ready, emotes, watching, pause … | `server/match/match/intents.js` → `server/match/player/` |
 | | `b.progress`, `b.result`: the battle reports of the authoritative browser | `server/match/match/reports.js` |
 | | `b.rehearsalResult`: the host's choice of AI layout (only with `SP_BOT_REHEARSAL=host`) | `server/match/match/rehearsal.js` |
-| server → client | `room.state`, `room.closed` | `server/lobby.js` |
+| server → client | `room.state`, `room.closed`, `presence` (the server-wide online count; every `welcome` carries it too) | `server/lobby.js` |
 | | `m.public` (what every player sees), `m.private` (one player's shop, hand, funds …), `m.field`, `m.toast`, `m.ticker`, `m.emote`, `m.unitStats`, `m.result` | `server/match/match/views.js`, `server/match/player/views.js` |
 | | `b.start` (a BattleSpec), `b.pool` (the shared leader HP), `b.end`; `b.snap` / `b.ev` only in the server-run mode | `server/match/match/clientCombat.js` |
 | | `b.rehearsal`, `b.rehearsalCancel`: ask the host to test AI layouts or stop that task | `server/match/match/rehearsal.js` |

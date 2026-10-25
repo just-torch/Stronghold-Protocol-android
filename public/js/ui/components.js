@@ -849,6 +849,22 @@ export function PingPill({ ms, online = true, class: cls }) {
 }
 
 /**
+ * Online-count pill: a person glyph and how many humans the server has connected right now (S2C `presence`, fed by
+ * server/lobby.js broadcastPresence). The count includes this page. Rendered by the lobby header; nothing while the
+ * count is unknown (before the first welcome, or offline).
+ * @param {{ online?: number|null, class?: string }} props
+ */
+export function PresencePill({ online, class: cls }) {
+  if (!Number.isInteger(online)) return null;
+  const n = Math.max(0, online);
+  return html`<span class=${cx('presence', cls)} title=${t('服务器当前在线人数')}
+    aria-label=${t('在线人数：{n}', { n })}>
+    <${Icon} name="users" class="presence__icon" />
+    <span class="presence__num">${n}</span>
+  </span>`;
+}
+
+/**
  * Official difficulty glyph (data/assets.json `ui['modeIcon/mode_<difficulty>_icon']`: rook, rook +
  * swords, castle + swords, castle + warning) — the SVG rook while assets are missing or fail to load.
  * Rendered with class "icon" so it sizes like an <Icon/>.
