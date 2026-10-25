@@ -1119,7 +1119,9 @@ describe('screen helpers', () => {
     assert.equal(normalizeSeats({ mode: 'solo', seats: [room.seats[0], null, null, null] }).length, 1);
     assert.deepEqual(normalizeSeats({ mode: 'coop', seats: 'bad' }), [null, null, null, null]);
     const many = roomFacts({ ...room, capacity: 8 }, 'h');
-    assert.deepEqual([many.capacity, many.emptySeats, many.minCapacity], [8, 5, 4], 'seats 0–3 keep the room at 4 at least');
+    // the seat cap is changed in 设置 now (ui/settings.js RoomSeats → room.setCapacity); the minimum is enforced
+    // server-side against the seated players, so roomFacts only reports the cap and what is free under it
+    assert.deepEqual([many.capacity, many.emptySeats], [8, 5], 'a raised cap shows 8 seat cards');
     let f = roomFacts(room, 'h');
     assert.equal(f.isHost, true);
     assert.equal(f.canStart, false, 'guest not ready');
