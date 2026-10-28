@@ -300,6 +300,10 @@ none. The merge was resolved against the **v0.3.1 tag's source** (base) with the
   art makes it smaller than the 31 021 / 1 124 MB of v0.3.0).
 * **Android**: the wrapper (`android/**`, 140 fork-only files) is untouched; `android/scripts/assemble-nodejs.mjs`
   rebuilds its staged `web/nodejs` from this tree.
+* **Forge import on Windows**: `server/plugins/forgeImport.js` builds its validation view with a directory symlink,
+  which needs `SeCreateSymbolicLinkPrivilege` (Developer Mode or an elevated shell) there; on `win32` a failed
+  `symlinkSync` with `EPERM` now retries as a **junction**, which the registry reads as the folder itself. Upstream's
+  code path is kept on every other platform, and the symlink-refusing tests still skip where symlinks are refused.
 
 ---
 
