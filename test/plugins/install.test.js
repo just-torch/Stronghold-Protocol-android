@@ -189,18 +189,25 @@ test('https install: hash required before fetch, redirect manual, http and a bad
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
 
-test('a symlink id is not followed: status has no version, and --force renames the link', () => {
+test('a symlink id is not followed: status has no version, and --force renames the link', (t) => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-install-link-'));
   const plugins = path.join(tmp, 'plugins');
   const real = path.join(tmp, 'real');
   fs.mkdirSync(plugins);
   fs.mkdirSync(path.join(real, 'elsewhere'), { recursive: true });
   fs.writeFileSync(path.join(real, 'elsewhere', 'plugin.json'), JSON.stringify({ version: '9.9.9' }));
-  fs.symlinkSync(path.join(real, 'elsewhere'), path.join(plugins, 'demo-skin'));
   const incoming = path.join(tmp, 'incoming-target');
   fs.mkdirSync(incoming);
-  fs.symlinkSync(incoming, path.join(plugins, '_incoming'));
   try {
+    try {
+      fs.symlinkSync(path.join(real, 'elsewhere'), path.join(plugins, 'demo-skin'));
+      fs.symlinkSync(incoming, path.join(plugins, '_incoming'));
+    } catch (e) {
+      // Windows without Developer Mode (or an elevated shell) cannot create a symlink: the environment cannot run
+      // this case at all, so it is skipped rather than reported as a product failure.
+      if (e.code === 'EPERM' || e.code === 'EACCES') { t.skip(`no symbolic links here (${e.code})`); return; }
+      throw e;
+    }
     assert.equal(installedPluginVersion(plugins, 'demo-skin'), null);
     assert.throws(() => installPluginBytes(pluginZip('demo-skin'), { pluginsDir: plugins }), (e) => e.code === 'PLUGIN_INSTALL_ZIP');
     assert.equal(fs.readdirSync(incoming).length, 0, 'a linked _incoming was not written through');

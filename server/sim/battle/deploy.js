@@ -214,7 +214,7 @@ export class BattleDeploy {
     if (occ && occ.alive && occ !== unit) return false;
     if (at && this.downOn(at[0], at[1], unit)) return false;
     const ps = this.getPlayer(unit.ownerId);
-    const cost = unit.base.cost;
+    const cost = unit.base.cost * unit.s.costMul;
     let paid = 0;
     if (!free) {
       if (!ps || ps.dp + 1e-9 < cost) return false;
@@ -239,7 +239,7 @@ export class BattleDeploy {
       if (this.time + 1e-9 < u.respawnAt) continue;
       // the DP first: an operator past its timer mostly waits for DP, and the tile checks scan every ally
       const ps = this.getPlayer(u.ownerId);
-      const cost = u.base.cost;
+      const cost = u.base.cost * u.s.costMul;
       // §21.48 / GitHub #108 (fork): `freeRedeploy` is the banked "next deployment costs and waits nothing" a refused
       // landing leaves behind — 不屈's roll must not be spent for nothing when the rest tile is taken (content/bonds/
       // addon/battle.js). Such a redeployment waits for the TILE, never for DP, and pays nothing; the flag is spent by

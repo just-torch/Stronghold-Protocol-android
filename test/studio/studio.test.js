@@ -240,7 +240,9 @@ describe('the studio over HTTP', () => {
 
   test('a new plugin from a template; files on a slot; a reference; a slot emptied; the preview; pack and zip; the list', async () => {
     const info = await call('GET', '/studio/api/info');
-    assert.deepEqual(info.body.templates.map((t) => t.id), ['art', 'spine', 'voice', 'audio', 'numbers', 'operator', 'dsl', 'meta', 'mode', 'ui', 'script']);
+    // The 0.3.x content templates (bond … skins) are offered beside the original cosmetic/data/script ones.
+    assert.deepEqual(info.body.templates.map((t) => t.id), ['art', 'spine', 'voice', 'audio', 'numbers', 'operator', 'dsl', 'meta', 'mode', 'ui', 'script',
+      'bond', 'item', 'trait', 'offers', 'rules', 'theme', 'notices', 'fx', 'skins']);
     const found = await call('GET', `/studio/api/targets?q=${encodeURIComponent('德克萨斯')}&kinds=operator`);
     assert.equal(found.body.targets[0].key, 'char_102_texas');
     const slots = await call('GET', '/studio/api/slots?template=art&target=operator:char_102_texas');
@@ -249,7 +251,9 @@ describe('the studio over HTTP', () => {
     assert.equal(r.status, 201);
     assert.deepEqual([r.body.loaded, r.body.check.ok, r.body.sections], [true, true, [{ template: 'art', target: 'operator:char_102_texas' }]]);
     const m0 = JSON.parse(fs.readFileSync(path.join(plugins, 'red-texas', 'plugin.json'), 'utf8'));
-    assert.deepEqual([m0.manifest, m0.class, m0.name, m0.license, m0.assets], [2, 'cosmetic', { zh: '红色德克萨斯' }, 'CC-BY-4.0', { chars: { char_102_texas: {} } }]);
+    // The art template seeds its first slot with an original CC0 sample (templates/index.js), so the avatar is set.
+    assert.deepEqual([m0.manifest, m0.class, m0.name, m0.license, m0.assets], [2, 'cosmetic', { zh: '红色德克萨斯' }, 'CC-BY-4.0',
+      { chars: { char_102_texas: { avatar: 'art/char_102_texas/avatar.png' } } }]);
     assert.equal((await call('POST', '/studio/api/plugins', { template: 'art', id: 'red-texas', name: 'x' })).body.error, 'PLUGIN_STUDIO_EXISTS');
     assert.equal((await call('POST', '/studio/api/plugins', { template: 'nope', id: 'zz-1' })).body.error, 'PLUGIN_STUDIO_TEMPLATE');
     assert.equal((await call('POST', '/studio/api/plugins', { template: 'voice', id: 'zz-2', target: 'music:lobby' })).body.error, 'PLUGIN_STUDIO_TARGET');
@@ -332,6 +336,10 @@ describe('the studio over HTTP', () => {
     assert.equal(r.status, 201);
     const at = ['audio', 'bgm', 'lobby'];
     const slot = (files) => call('POST', '/studio/api/plugins/music-x/slot', { at, files });
+    // The audio template seeds a new plugin's first slot with an original CC0 sample (templates/index.js), so the track
+    // has a loop from the start; empty it to exercise an intro that comes before any loop.
+    r = await call('POST', '/studio/api/plugins/music-x/clear', { at });
+    assert.equal(r.status, 200, JSON.stringify(r.body));
     r = await slot([{ name: 'i.mp3', data: b64('ID3a'), role: 'intro' }]);
     assert.deepEqual([r.status, r.body.error], [400, 'PLUGIN_STUDIO_REQUEST']);
     r = await slot([{ name: 'l.ogg', data: b64('OggS') }]);
@@ -363,6 +371,9 @@ describe('the studio over HTTP', () => {
     const victim = path.join(outside, 'victim.txt');
     fs.writeFileSync(victim, 'keep me');
     const leaks = (body) => /SECRET/.test(JSON.stringify(body));
+    // Make the shared folder before the first link: on a host without SeCreateSymbolicLinkPrivilege the symlink below
+    // raises EPERM, and the later file/key tests must still find their fixture instead of a second, unrelated failure.
+    assert.equal((await call('POST', '/studio/api/plugins', { template: 'art', id: 'lnk-files', name: 'x', target: 'operator:char_102_texas' })).status, 201);
     // plugin.json itself a link: its text is never sent; the check names the link; an edit is refused; the zip leaves it out
     fs.mkdirSync(path.join(plugins, 'lnk-manifest'));
     fs.symlinkSync(secret, path.join(plugins, 'lnk-manifest', 'plugin.json'));
@@ -377,8 +388,8 @@ describe('the studio over HTTP', () => {
     assert.deepEqual(unzipFiles(z.body).map((e) => e.name), []);
     assert.equal(fs.readFileSync(secret, 'utf8'), SECRET);
     // an overlay file that is a link: never read through — the state, the preview and a pack say nothing of the file outside
-    r = await call('POST', '/studio/api/plugins', { template: 'art', id: 'lnk-files', name: 'x', target: 'operator:char_102_texas' });
-    assert.equal(r.status, 201);
+    r = await call('GET', '/studio/api/plugins/lnk-files');
+    assert.equal(r.status, 200);
     const dir = path.join(plugins, 'lnk-files');
     fs.writeFileSync(path.join(dir, 'plugin.json'), JSON.stringify(cosmetic({ assets: 'overlay.json' })));
     fs.symlinkSync(secret, path.join(dir, 'overlay.json'));

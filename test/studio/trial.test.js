@@ -94,7 +94,11 @@ test('watchdog kills a real non-responsive child process and allows the next job
   const b = bench(f, { spawn: (_entry, args, options) => (child = fork(entry, args, options)), limits: { ...TRIAL_LIMITS, timeoutMs: 400 } });
   t.after(() => b.close());
   await assert.rejects(b.run({ id }), { code: 'PLUGIN_STUDIO_TRIAL_TIMEOUT' });
-  assert.equal(child.killed, true); assert.equal(b.active(), 0);
+  // On Windows the watchdog reaps the tree with `taskkill /T /F` before child.kill(); Node's `killed` flag then stays
+  // false even though the process is gone (POSIX sets it from the group kill). The point is that it is really dead.
+  assert.ok(child.killed || child.exitCode !== null, 'the child is gone');
+  assert.throws(() => process.kill(child.pid, 0), { code: 'ESRCH' });
+  assert.equal(b.active(), 0);
 });
 
 test('wizard API creates each class, saves with revision, validates DSL, and keeps executable files off studio GET', async t => {

@@ -53,7 +53,8 @@ describe('hudBands', () => {
   test('falls back to the rem constants when the HUD is not on the page', () => {
     // no elements at all: the first frame, and the Node tests that drive the camera directly
     const b = withDom({}, () => hudBands('prep', { width: 800, height: 340 }));
-    assert.equal(b.top, 40 * HUD_REM.bondStripBottom);
+    // #678's 44 px arrows out-rank the 2.16rem constant at a 40 px rem: 1.27rem + 44 px = 94.8 px
+    assert.equal(b.top, 40 * HUD_REM.bondStripTop + HUD_REM.bondArrowPx);
     assert.equal(b.bottom, 40 * HUD_REM.shopBarTop + HUD_REM.shopBarBorderPx);
   });
 

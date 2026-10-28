@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { PLUGIN_API } from '../../shared/constants.js';
 import { MANIFEST_FIELDS, PERMISSIONS, PLUGIN_CLASSES, UI_SLOT_IDS } from '../../shared/plugins/manifest.js';
 import { PATCH_OPS } from '../../shared/plugins/patch.js';
+import { RULE_NAMES } from '../../shared/plugins/rules.js';
 import { RECORD_SCHEMA } from '../../shared/plugins/recordsSchema.js';
 import { ASSET_CONTAINERS } from '../../shared/plugins/visual.js';
 import { UI_HOST_MESSAGES, UI_PLUGIN_MESSAGES } from '../../shared/plugins/ui.js';
@@ -22,9 +23,16 @@ import { SDK_ID, SDK_MEMBERS } from '../../shared/plugins/sdk.js';
 import * as sdk from '../../shared/plugins/sdk.js';
 import { SURFACE_MARKERS, SURFACE_SINCE, buildSurface, uncoveredSdkExports } from '../../shared/plugins/surface.js';
 import { STUDIO_ROUTES } from '../../server/studio/index.js';
+import { GAMEPLAY_RECORD_SURFACE } from '../../server/plugins/gameplayRecords.js';
+import { pluginFxSurface } from '../../public/js/render/vfx/pluginFormat.js';
+import { TRAIT_SURFACE } from '../../server/plugins/operatorTraits.js';
 import * as vocab from '../../server/sim/content/dsl/vocab.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+// The closed sets buildSurface() cannot enumerate itself (they live in server/browser modules): tools/plugin.mjs
+// appends the same three lists when it writes docs/PLUGIN-API.md, so the table, the rows and this test agree.
+const EXTRA_SURFACE = [...GAMEPLAY_RECORD_SURFACE, ...pluginFxSurface(), ...TRAIT_SURFACE];
 
 /** Overlay leaves, copied so a drift in surface.js is visible. A string kind is one leaf. */
 function overlayLeaves(containers) {
@@ -62,6 +70,7 @@ const DSL_GROUPS = [
 function expectedNames() {
   const names = [];
   for (const field of MANIFEST_FIELDS) names.push(`manifest.field.${field}`);
+  for (const name of RULE_NAMES) names.push(`rule.${name}`);
   for (const name of Object.keys(PERMISSIONS)) names.push(`permission.${name}`);
   for (const name of Object.keys(PLUGIN_CLASSES)) names.push(`class.${name}`);
   for (const op of PATCH_OPS) names.push(`patch.op.${op}`);
@@ -83,6 +92,7 @@ function expectedNames() {
   // from the real module, not from surface.js: every export but the id and the member list
   for (const name of Object.keys(sdk).filter((k) => k !== 'SDK_ID' && k !== 'SDK_MEMBERS').sort()) names.push(`sdk.export.${name}`);
   names.push('api.PLUGIN_API.min', 'api.PLUGIN_API.current');
+  for (const row of EXTRA_SURFACE) names.push(row.name);
   return names;
 }
 
@@ -98,13 +108,16 @@ function parseTable(md) {
   return rows;
 }
 
-const rows = buildSurface({ dsl: vocab, studioRoutes: STUDIO_ROUTES });
+const rows = [...buildSurface({ dsl: vocab, studioRoutes: STUDIO_ROUTES }), ...EXTRA_SURFACE];
 const doc = parseTable(fs.readFileSync(path.join(ROOT, 'docs/PLUGIN-API.md'), 'utf8'));
 
 test('the document table and buildSurface are the same rows', () => {
   assert.ok(rows.length > 50, `${rows.length} rows`);
   assert.deepEqual(doc, rows.map(({ name, stability, since, anchor }) => ({ name, stability, since, anchor })));
-  assert.ok(rows.every((r) => r.since === SURFACE_SINCE && r.since === '0.3.0'));
+  // 0.3.0 is the release the surface was frozen at; 0.3.1 added rows without moving it (surface.js `added031`), as
+  // docs/PLUGIN-API.md's `since` column records. No row may claim a release the table does not name.
+  assert.equal(SURFACE_SINCE, '0.3.0');
+  assert.deepEqual([...new Set(rows.map((r) => r.since))].sort(), ['0.3.0', '0.3.1']);
 });
 
 test('every closed-set member is a row, and the table has no extra name', () => {
@@ -238,7 +251,10 @@ test('STUDIO_ROUTES and the routes api() dispatches are the same set', () => {
   assert.deepEqual(discovered, [...STUDIO_ROUTES].sort());
   assert.ok(discovered.includes('POST /studio/api/catalog'));
   assert.ok(discovered.includes('POST /studio/api/catalog/install'));
-  assert.equal(PLUGIN_API.current, 1);
+  // 0.3.3 raises the supported plugin API level to 2 for the declarative `offers` part (PLUGIN_API's comment,
+  // docs/PLUGINS.md §10b); a level-1 plugin still loads (min stays 1).
+  assert.equal(PLUGIN_API.current, 2);
+  assert.equal(PLUGIN_API.min, 1);
   const disabled = src.replace("route === 'targets'", 'false');
   assert.equal(studioRoutesFromApi(disabled).includes('GET /studio/api/targets'), false);
   const method = src.replace("route === 'authors' && method === 'POST'", "route === 'authors' && method === 'GET'");

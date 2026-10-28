@@ -120,25 +120,29 @@ test('trial draft writer rejects traversal, absolute paths, hidden names and bac
   writeTrialDraftFile(root, 'data/operator.json', '{}'); assert.equal(fs.readFileSync(path.join(root, 'data/operator.json'), 'utf8'), '{}');
 });
 
-for (const ending of ['close', 'timeout', 'probe-timeout']) test(`a real pinned SIGTERM-ignoring probe leaves no grandson after trial ${ending}`, { timeout: 20000 }, async t => {
+for (const ending of ['close', 'timeout', 'probe-timeout']) test(`a real pinned SIGTERM-ignoring probe leaves no grandson after trial ${ending}`, { timeout: 60000 }, async t => {
   const f = scriptFixture(t), marker = path.join(f.root, 'probe.pid');
   f.put('loop', `export default () => { const p = global['pro' + 'cess'];
     p.getBuiltinModule('fs').writeFileSync(${JSON.stringify(marker)}, String(p.pid));
     p.on('SIGTERM', () => {}); while (true) {} }`);
   let leader;
   const bench = createTrialBench({ registry: f.registry, files: createPluginFiles(f.pluginsDir),
-    spawn: (entry, args, opts) => (leader = fork(entry, args, { ...opts, env: { ...process.env, SP_SCRIPT_PROBE_MS: ending === 'probe-timeout' ? '1000' : '60000' } })),
-    limits: { ...TRIAL_LIMITS, timeoutMs: ending === 'timeout' ? 6000 : 15000 } });
+    // 1 s assumed a fast host; here the engine child alone loads for longer, so the probe was killed before the hanging
+    // setup ran and the marker never appeared. 5 s still hangs and is still killed by the probe timeout.
+    spawn: (entry, args, opts) => (leader = fork(entry, args, { ...opts, env: { ...process.env, SP_SCRIPT_PROBE_MS: ending === 'probe-timeout' ? '5000' : '60000' } })),
+    // A 6 s trial timeout could fire while the child was still composing the content set (under a loaded machine the
+    // preflight never ran); 20 s leaves the hanging setup time to start and is still far below the probe's 60 s.
+    limits: { ...TRIAL_LIMITS, timeoutMs: ending === 'timeout' ? 20000 : 15000 } });
   t.after(() => bench.close());
   const pending = bench.run({ id: 'loop', seconds: 1 });
   const checked = ending === 'probe-timeout' ? pending : assert.rejects(pending, { code: ending === 'timeout' ? 'PLUGIN_STUDIO_TRIAL_TIMEOUT' : 'PLUGIN_STUDIO_TRIAL_FAILED' });
-  for (let n = 0; n < 400 && !fs.existsSync(marker); n++) await delay(20);
+  for (let n = 0; n < 800 && !fs.existsSync(marker); n++) await delay(20);
   assert.ok(fs.existsSync(marker), 'the actual contentSet preflight ran');
   const pid = Number(fs.readFileSync(marker, 'utf8'));
   t.after(() => { try { process.kill(pid, 'SIGKILL'); } catch { /* absent */ } });
   if (ending === 'close') bench.close();
   const result = await checked;
-  if (ending === 'probe-timeout') { assert.equal(result.ok, false); assert.equal(result.issues[0].code, 'PLUGIN_SCRIPT_CHECK'); assert.match(result.issues[0].text, /1000 ms.*SIGKILL/); }
+  if (ending === 'probe-timeout') { assert.equal(result.ok, false); assert.equal(result.issues[0].code, 'PLUGIN_SCRIPT_CHECK'); assert.match(result.issues[0].text, /5000 ms.*SIGKILL/); }
   for (let n = 0; n < 100; n++) { try { process.kill(pid, 0); await delay(20); } catch { break; } }
   assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
   assert.throws(() => process.kill(leader.pid, 0), { code: 'ESRCH' });
@@ -160,7 +164,11 @@ for (const mode of ['sandbox', 'trusted']) test(`trial uses the actual ${mode} e
       fs.appendFileSync(path.join(f.pluginsDir, 'demo/index.js'), '\n// changed after authorization');
       packPlugin(path.join(f.pluginsDir, 'demo'));
     }
-    return fork(...args);
+    // This test checks the executor and the pinned mode, not the probe's timing: its trial child gets a wider probe
+    // ceiling (as loopBench does), so a fully loaded runner's slow child start cannot fail it (GitHub #847, one Windows
+    // job in 66 hit the 5 s default). The lobby default and the shared SIGKILL deadline stay as they are.
+    const [entry, argv, opts] = args;
+    return fork(entry, argv, { ...opts, env: { ...process.env, SP_SCRIPT_PROBE_MS: '15000' } });
   } }); t.after(() => bench.close());
   const r = await bench.run({ id: 'demo', seconds: 2 });
   assert.equal(r.ok, true, JSON.stringify(r)); assert.deepEqual(r.plugin.errors, []); assert.ok(r.plugin.damage > r.vanilla.damage);

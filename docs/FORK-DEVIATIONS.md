@@ -257,6 +257,52 @@ theirs — 924 files identical, 372 upstream-only changes, 400 new upstream file
 
 ---
 
+## Merge notes (v0.3.2 + v0.3.3, this tree)
+
+v0.3.2 and v0.3.3 are two releases on top of the tree the v0.3.1 merge left ([history/0.3.2.md](history/0.3.2.md),
+[history/0.3.3.md](history/0.3.3.md)): 0.3.2 is the historical versions (第一期上/下半, 第二期上半), the staged
+settlement order (§35.32/§35.33), the attack-slot rules for boss and enemy skills (§35.19/§35.29/§35.52/§35.54/§35.55)
+and a long list of operator fixes; 0.3.3 is the shop's equipment slot (§36.1), the 第一期 bench/field swap (§36.2) and
+the equipment icon cache (§36.3). Nothing in the table below changes: upstream re-implemented no fork rule and dropped
+none. The merge was resolved against the **v0.3.1 tag's source** (base) with the **v0.3.3 tag's source** as theirs —
+1 271 paths identical, 377 upstream-only changes, 381 new upstream files, 107 fork-only changes, 140 fork-only files,
+66 upstream files the v0.3.1 merge had missed (restored), 1 upstream deletion (`server/sim/damage.js`, whose callers are
+`server/sim/attack/*` now) and 168 changed on both sides (86 merged clean, 82 needed a decision).
+
+* **What the fork's own features had to be re-attached to**:
+  * `server/lobby.js` — the room's capacity (2–8, §21.59) and the debug console's `console` option (§21.34) beside
+    upstream's version vote (`versionVoteMs` / `versionRetryMs` / `versionProposeGapMs`), the fixed `roomCode` and the
+    「不限时」 switch (`room.setSoloUnlimited`, `soloUnlimited`). `LOBBY_DEFAULTS` carries both sets of keys, `create()`
+    validates capacity and version, `welcomeInfo()` returns `presence` and `versions`.
+  * `server/lobby.js` / `shared/protocol.js` — the presence counter (§21.61): S2C `presence {online}`,
+    `welcome.presence`, and the `room.setCapacity` validator beside `room.create.capacity`.
+  * `server/index.js`, `server/http/{static,websocket}.js` — the fork's `assetsDir` mounts (§21.52) and the match
+    history (§21.58) beside upstream's version hosts and sim pool; the static handler keeps the fork's directory
+    fallback and applies upstream's `data/versions` gate to the resolved file.
+  * `public/js/ui/fieldHost.js`, `public/css/screens/game.css`, `public/css/devices.css` — the bond strip of
+    §21.36/§21.39: still `top: 1.27rem` (phones `1.30rem`) with the count badge above the disc, while upstream's
+    `bondStripTop` / `bondArrowPx` constants (the 44 px fold arrow, #678) stay in `HUD_REM`.
+  * `public/js/screens/{game,lobby,room,settle,stats}.js`, `public/js/ui/{settings,matchInfo,fieldHost}.js` — §21.54
+    (live combat ranking), §21.55 (本局地图), §21.56 (voice preview) and §21.60 (read-only teammate shop) re-applied on
+    top of upstream's lobby/room/briefing rewrite; the 人数上限 stepper stays in 设置.
+  * `public/i18n/*.json` — merged at key level: upstream's 2 375 keys (2 376 in English) in their order, then the
+    fork's 166 msgids (`node tools/i18n.mjs check --all --strict`: 2 487 used, four packs 100 %).
+* **Restored from upstream**: 66 files the v0.3.1 merge never took (its release package ships only a subset of `test/`),
+  e.g. `test/plugins/offers.test.js`, `test/match/rules.test.js`, `test/helpers/officialTables.js` and
+  `docs/examples/offers-demo/*`.
+* **Golden**: the 27 scenarios the fork's own rules still move (roster 6, bonds 7, fields 1, matches 1, diy 12) were
+  regenerated with `npm run golden:update`; the second run is clean (288 scenarios, 6 groups). They are the fork's
+  rules still in place — §21.31/§21.43 (变形同构体), §21.42 (突袭), §21.44 (缇缇), §21.45 (琳琅诗怀雅 S2), §21.46
+  (秘术师), §21.47 (引星棘刺 S1), §21.48 (不屈) and the `UF.FLYING` snapshot change of fork.3 — not upstream drift.
+* **Assets**: the release zip (`Stronghold-Protocol-v0.3.3.zip`, 861 MB) is a player package — its `MANIFEST.json` and
+  `test/` are not the source tree, so the code came from the tag and only `public/assets/**` from the zip: 587 new
+  files, 114 changed ones, 9 files that exist only here. `public/assets` is 31 608 files / 1 082 MB (WebP-compressed
+  art makes it smaller than the 31 021 / 1 124 MB of v0.3.0).
+* **Android**: the wrapper (`android/**`, 140 fork-only files) is untouched; `android/scripts/assemble-nodejs.mjs`
+  rebuilds its staged `web/nodejs` from this tree.
+
+---
+
 ## The fork's sections, verbatim (from the pre-merge `docs/DESIGN.md`)
 
 Section numbers unchanged. v0.2.0 status lines are annotations added by the merge; the section bodies are as the fork

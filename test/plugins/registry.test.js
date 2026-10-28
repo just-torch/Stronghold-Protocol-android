@@ -68,6 +68,9 @@ function exampleRoot() {
   put(dir, 'plugins/qab/data/economy.json', { patch: 1, ops: [] });
   put(dir, 'plugins/dup-lang/plugin.json', { manifest: 2, class: 'lang', lang: 'qaa', version: '1.0.0', files: { ui: 'ui.json' } });
   put(dir, 'plugins/dup-lang/ui.json', { 开始: 'x' });
+  // A second plugin folder for the same built-in language: only the first one overlays it.
+  put(dir, 'plugins/dup-lang-two/plugin.json', { manifest: 2, class: 'lang', lang: 'qaa', version: '1.0.0', files: { ui: 'ui.json' } });
+  put(dir, 'plugins/dup-lang-two/ui.json', { 开始: 'y' });
   put(dir, 'plugins/stray/plugin.json', content());
   put(dir, 'plugins/stray/data/economy.json', {});
   put(dir, 'plugins/stray/tools/run.exe', 'MZ');
@@ -80,8 +83,12 @@ test('one scan: the language packs, packs/ and plugins/ by class — lang and co
   const root = exampleRoot();
   try {
     const scan = scanPlugins(dirsOf(root), { app: '0.3.0' });
+    // 0.3.1: one installed lang plugin may overlay a built-in language; the first plugin folder in sorted order wins
+    // (docs/design/client.md "One installed lang plugin may overlay each built-in language"). dup-lang therefore
+    // loads as a language entry of its own, and dup-lang-two is the duplicate that is skipped.
     assert.deepEqual(scan.plugins.map((p) => [p.id, p.class, p.status, p.source]), [
       ['en', 'lang', 'loaded', 'i18n'], ['qaa', 'lang', 'loaded', 'i18n'], ['qab', 'lang', 'loaded', 'packs'],
+      ['dup-lang', 'lang', 'loaded', 'plugins'],
       ['kit', 'script', 'disabled', 'plugins'], ['marathon', 'content', 'loaded', 'plugins'], ['needs', 'content', 'loaded', 'plugins'],
       ['qac', 'lang', 'loaded', 'plugins'], ['skin', 'cosmetic', 'loaded', 'plugins'],
     ]);
@@ -95,7 +102,9 @@ test('one scan: the language packs, packs/ and plugins/ by class — lang and co
     assert.match(why['plugins/oldstyle/'], /pack\.json is the manifest 1 of a pack folder in packs\//);
     assert.match(why['plugins/broken/'], /plugin\.json: not valid JSON/);
     assert.match(why['plugins/qab/'], /the id "qab" is taken by packs\/qab\//);
-    assert.match(why['plugins/dup-lang/'], /the language qaa is already provided by public\/i18n\/qaa\.json/);
+    // The first folder in sorted order overlays qaa; the later one loses to that overlay, not to the built-in file.
+    assert.match(why['plugins/dup-lang-two/'], /the language qaa already has an overlay from dup-lang \(plugins\/dup-lang\/\); one overlay per language/);
+    assert.ok(!why['plugins/dup-lang/'], 'the first plugin folder for a built-in language is loaded, not skipped');
     assert.match(why['plugins/stray/'], /tools\/run\.exe: \.exe is not a file a content plugin may carry/);
     assert.match(why['plugins/missing/'], /"data": data\/none\.json is missing/);
     assert.ok(!Object.keys(why).some((w) => w.includes('_template') || w.includes('config') || w.includes('README')), 'templates and top-level files are never read');
@@ -119,14 +128,20 @@ test('the language-pack view is 0.2.0\'s: server/packs.js re-exports it, plugins
     assert.deepEqual(old.packs.map((p) => [p.id, p.type, p.layout, p.manifest.lang]), [['en', 'lang', 'file', 'en'], ['qaa', 'lang', 'file', 'qaa'], ['qab', 'lang', 'folder', 'qab']]);
     assert.ok(!old.skipped.some((s) => s.where.startsWith('plugins/')), 'no pluginsDir: plugins/ is not read');
     const withPlugins = scanPacks(dirsOf(root), { app: '0.2.0' });
-    assert.deepEqual(withPlugins.packs.map((p) => p.id), ['en', 'qaa', 'qab', 'qac'], 'a lang plugin is a language entry; other classes are not packs');
+    assert.deepEqual(withPlugins.packs.map((p) => p.id), ['en', 'qaa', 'qab', 'dup-lang', 'qac'], 'a lang plugin is a language entry; other classes are not packs');
     // the index of the packs alone is the one 0.2.0 wrote, field for field
     const index = packIndexOf(old.packs, { app: '0.2.0' });
     assert.deepEqual(index.packs.find((p) => p.id === 'qaa'), {
       id: 'qaa', type: 'lang', name: 'Qaa', englishName: 'qaa', compatible: true, lang: 'qaa', fallback: ['en'], strings: 1, files: { ui: '/i18n/qaa.json' },
     });
     const both = packIndexOf(withPlugins.packs, { app: '0.2.0' });
-    assert.deepEqual(both.packs.filter((p) => p.id !== 'qac'), index.packs);
+    // A lang plugin overlays the built-in language instead of becoming a language of its own: the qaa row keeps its
+    // built-in fields and gains the overlay file, and the 0.2.0 packs list is otherwise unchanged.
+    const overlayQaa = both.packs.find((p) => p.id === 'qaa');
+    assert.equal(overlayQaa.files.uiOverlay, '/packs/dup-lang/ui.json');
+    const { uiOverlay, ...qaaFiles } = overlayQaa.files;
+    assert.deepEqual({ ...overlayQaa, files: qaaFiles }, index.packs.find((p) => p.id === 'qaa'));
+    assert.deepEqual(both.packs.filter((p) => !['qac', 'qaa'].includes(p.id)), index.packs.filter((p) => p.id !== 'qaa'));
     assert.deepEqual(readPackIndex(both, 'lang').map((p) => p.id), ['en', 'qaa', 'qab', 'qac']);
     // an empty plugins/ changes nothing at all
     const plain = tmpdir('plain');
@@ -149,12 +164,12 @@ test('the registry: only a lang folder\'s named files are servable; the catalogu
     assert.equal(reg.pluginFile('skin', 'art/avatar.png')?.abs, path.join(root, 'plugins/skin/art/avatar.png'));
     assert.equal(reg.pluginFile('skin', 'plugin.json'), null);
     assert.equal(reg.pluginFile('marathon', 'data/economy.json'), null, 'content JSON is never served through /p/');
-    assert.deepEqual(reg.list().map((p) => p.id), ['en', 'qaa', 'qab', 'qac']);
+    assert.deepEqual(reg.list().map((p) => p.id), ['en', 'qaa', 'qab', 'dup-lang', 'qac']);
     assert.deepEqual(reg.plugins('content').map((p) => p.id), ['marathon', 'needs']);
     const body = reg.pluginIndex({ vanilla: 'cd'.repeat(32) });
     assert.deepEqual(body.content, { vanilla: 'cd'.repeat(32) });
     assert.deepEqual(body.plugins.map((e) => [e.id, e.class, e.status]), [
-      ['en', 'lang', 'loaded'], ['qaa', 'lang', 'loaded'], ['qab', 'lang', 'loaded'], ['qac', 'lang', 'loaded'],
+      ['dup-lang', 'lang', 'loaded'], ['en', 'lang', 'loaded'], ['qaa', 'lang', 'loaded'], ['qab', 'lang', 'loaded'], ['qac', 'lang', 'loaded'],
       ['skin', 'cosmetic', 'loaded'], ['marathon', 'content', 'loaded'], ['needs', 'content', 'loaded'], ['kit', 'script', 'disabled'],
     ]);
     assert.ok(body.plugins.filter((e) => e.class !== 'lang').every((e) => e.unofficial === true), 'every non-language plugin is marked unofficial');

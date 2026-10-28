@@ -53,9 +53,13 @@ function runComposition(dirs, ids) {
     import { buildContentSet } from ${JSON.stringify(new URL('../../server/plugins/contentSet.js',import.meta.url).href)};
     const registry = createPluginRegistry(${JSON.stringify(dirs)}, {scriptMode:'trusted',scriptHost:'127.0.0.1'});
     console.log(JSON.stringify(buildContentSet({registry,ids:${JSON.stringify(ids)}})));`;
-  // (the probe's ceiling at 1 s here, SP_SCRIPT_PROBE_MS: the hang case returns quickly; the default is 5 s)
-  const env = {...process.env, SP_SCRIPT_PROBE_MS: '1000'}; delete env.NODE_TEST_CONTEXT;
-  const child = spawn(process.execPath,['--input-type=module','-e',source],{env,stdio:['ignore','pipe','pipe'],timeout:8000,killSignal:'SIGKILL'});
+  // (the probe's ceiling at 4 s here, SP_SCRIPT_PROBE_MS: the setup's own child has to finish Node startup and
+  // write its pid before the ceiling fires — 1 s is too tight under a full parallel `node --test` run; the default
+  // is 5 s)
+  const env = {...process.env, SP_SCRIPT_PROBE_MS: '4000'}; delete env.NODE_TEST_CONTEXT;
+  // The outer watchdog only has to stop a truly hung spawn; under a full parallel `node --test` run the child's
+  // module imports alone can pass 8 s on a busy machine, so keep this generous (the probe's own ceiling is 4 s).
+  const child = spawn(process.execPath,['--input-type=module','-e',source],{env,stdio:['ignore','pipe','pipe'],timeout:30000,killSignal:'SIGKILL'});
   let stdout = '', stderr = '';
   child.stdout.on('data',b => {stdout+=b;}); child.stderr.on('data',b => {stderr+=b;});
   return new Promise((resolve,reject) => {
@@ -119,7 +123,7 @@ test('SIGTERM-catching setup hits the probe\'s SIGKILL ceiling, returns no set a
   f.put('loop',source);
   const result = await runComposition(f.registry.contentDirs,['loop']);
   assert.equal(result.cs,undefined);assert.equal(result.problems[0].code,'PLUGIN_SCRIPT_CHECK');
-  assert.match(result.problems[0].message,/1000 ms.*SIGKILL/);assertDead(file);
+  assert.match(result.problems[0].message,/4000 ms.*SIGKILL/);assertDead(file);
   assert.equal(SCRIPT_PROBE_TIMEOUT_MS,5000,'the default ceiling (no SP_SCRIPT_PROBE_MS in this process)');
 });
 

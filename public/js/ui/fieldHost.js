@@ -22,12 +22,15 @@ const LOAD_TIMEOUT_MS = 12000;
 // close enough to 12 s that a slower phone dropped to the simplified view for the whole match. 20 s only delays that
 // fallback; the player sees the mount spinner meanwhile (2026-10-22, the renderer report).
 const CREATE_TIMEOUT_MS = 20000;
+// [ASSUMED] Two automatic retries; keep the existing two event retries available for a later network/tab recovery.
+const RECOVERY_DELAYS_MS = [2000, 8000];
+const EVENT_RETRY_LIMIT = 2;
 const METHODS = ['setStage', 'setCamera', 'setPrep', 'enterBattle', 'pushSnapshot', 'pushEvents', 'highlightTiles', 'on', 'resize', 'destroy'];
 // direction-step hooks (ui/facingWheel.js): optional — the wheel falls back to the engine's dev hooks when absent;
 // setPen (enemy preview pen list), prepField ({ kind, side, mirror } of the Final Assault prep), stripesUnder (the view
 // stripes range previews under the units itself), replayDeploys (the round start's Start-clip replay, PR #416) —
 // render/app.js; the DOM fallback lacks them (→ null)
-const OPTIONAL = ['pieceScreenRect', 'pieceAtClientPoint', 'setSettings', 'setMe', 'setSkins', 'off', 'tileScreen', 'holdPiece', 'setPieceDir', 'setPen', 'prepField', 'stripesUnder', 'replayDeploys', 'holdBattleEnd'];
+const OPTIONAL = ['finishBattle', 'pieceScreenRect', 'pieceAtClientPoint', 'setSettings', 'setMe', 'setSkins', 'off', 'tileScreen', 'holdPiece', 'setPieceDir', 'setPen', 'prepField', 'stripesUnder', 'replayDeploys', 'holdBattleEnd'];
 
 /**
  * Camera padding (px) that keeps the field clear of the DOM HUD (top bar + bond strip, team panel, shop bar /
@@ -49,12 +52,11 @@ export function hudPadding(kind, size) {
 
 /**
  * HUD geometry (rem) the prep cameras keep clear (they mirror the CSS; test/ui/playtest5-ui.test.js checks the rules):
- * the bond strip's bottom edge (css/screens/game.css .gm__bonds top 1.27rem + a .bslot: disc .68rem + name
- * ≈ 2.14rem measured — the strip starts higher by exactly what the discs grew, §21.38, so the band is the one the
- * .52rem discs made) and the shop bar's top edge above the viewport's bottom (css/screens/game-shop.css .shopbar
- * bottom .2rem + .shopbar__row padding .1rem ×2 + its `--shopbar-row` content 2.24rem — the cards and the 晋升奖励
- * banner are that one box in every state the bar can show, §21.32 — plus its 2 px + 1 px borders). The shop bar sits on
- * the viewport's bottom edge even on a notched phone (css/devices.css, DESIGN §18.1).
+ * the bond scroller's bottom edge (css/screens/game.css .gm__bonds top 1.27rem + a .bslot's disc and name ≈
+ * .8rem, or its 44 px arrow height, whichever is taller; negative margins offset the clip padding — the discs grew with
+ * the section header, §21.38) and the shop bar's top edge above the viewport's bottom (css/screens/game-shop.css .shopbar
+ * bottom .2rem + .shopbar__row padding .1rem ×2 + card height 2.24rem, plus its 2 px + 1 px borders). The shop bar
+ * sits on the viewport's bottom edge even on a notched phone (css/devices.css, DESIGN §18.1).
  * The folded shop (public issue #5): the tab's top edge (.shopbar-tab bottom .2rem + padding .08rem ×2 + its .44rem
  * button, plus its 2 px + 1 px borders; it sits inside the HUD layer, above the bottom safe-area inset) and the corner
  * buttons' top edge (css/screens/game.css .gm__corner bottom .24rem + a .56rem row — the fallback when the corner
@@ -62,9 +64,12 @@ export function hudPadding(kind, size) {
  * css/devices.css).
  */
 export const HUD_REM = Object.freeze({
-  // the strip's own box is .865rem since §21.38 (was .78rem) and it starts .09rem higher, so the desktop band is the
-  // 2.14rem it was; the phone rule pays 2.09rem for the badges' room. 2.16rem covers both as the no-DOM fallback.
-  bondStripBottom: 2.16, shopBarTop: 2.64, shopBarBorderPx: 3, shopTabTop: 0.8, shopTabBorderPx: 3, cornerTop: 0.8,
+  // the strip's own box is .865rem since §21.38 (was .78rem) and it starts .09rem higher (css/screens/game.css
+  // .gm__bonds top 1.27rem; the phone rule in css/devices.css starts it at 1.30rem), so the desktop band is the
+  // 2.14rem it was; 2.16rem covers both, and bondStripTop + the 44 px arrows (#678) the scroller's taller case, as
+  // the no-DOM fallback. The fork keeps the strip at 1.27rem (FORK-DEVIATIONS §21.36/§21.39), not upstream's 1.36rem.
+  bondStripTop: 1.27, bondStripBottom: 2.16, bondArrowPx: 44,
+  shopBarTop: 2.64, shopBarBorderPx: 3, shopTabTop: 0.8, shopTabBorderPx: 3, cornerTop: 0.8,
 });
 
 /**
@@ -123,6 +128,7 @@ export function hudBands(kind, size, opts) {
   // would otherwise have to be mirrored here by hand, and a stale constant silently costs the board its height.
   let bondBottom = null;
   let barTop = null;
+  let bondsBottom = 0;
   try {
     rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 100;
     // 异形屏适配 (ui/screenFit.js): the board's host may not start at the viewport's top — the HUD rects are measured from it
@@ -132,6 +138,11 @@ export function hudBands(kind, size, opts) {
     const hudEl = document.querySelector('.gm__hud');
     const hud = hudEl?.getBoundingClientRect();
     safeTop = Math.max(0, (hud?.top || 0) - oy);
+    // #678 adds 44 px arrows; a native scrollbar can make the strip taller still.
+    // Keep the same minimum band before mount and while collapsed, so toggling cannot shrink it.
+    const bondsEl = document.querySelector('.gm__bonds');
+    const bondsRect = bondsEl?.getBoundingClientRect();
+    if (bondsRect?.height > 0) bondsBottom = Math.max(0, bondsRect.bottom - oy);
     if (folded) {
       if (hud && hud.bottom - oy > 0) safeBottom = Math.max(0, h - (hud.bottom - oy));
       corner = cornerBand(h, oy);
@@ -141,9 +152,8 @@ export function hudBands(kind, size, opts) {
     // i.e. they are translateY'd for their first ~250 ms, and a band read then is ~.3rem short — the board would be
     // framed too large, exactly when the fold's way back re-measures it (test/ui/mock.e2e.test.js). Offsets ignore
     // transforms, so every camera request sees the settled band.
-    const bonds = document.querySelector('.gm__bonds');
-    const bondsTop = bonds && bonds.offsetHeight > 0 ? offsetIn(bonds, hudEl) : null;
-    if (bondsTop != null && bondsTop >= 0) bondBottom = safeTop + bondsTop + bonds.offsetHeight;
+    const bondsTop = bondsEl && bondsEl.offsetHeight > 0 ? offsetIn(bondsEl, hudEl) : null;
+    if (bondsTop != null && bondsTop >= 0) bondBottom = safeTop + bondsTop + bondsEl.offsetHeight;
     // the card ROW, not .shopbar: the tool buttons (冻结 / 刷新 / 剩余可放置角色) sit above the row and inside the
     // reserved band, and HUD_REM.shopBarTop models the row's top edge — measuring the whole bar would reserve an
     // extra ~30 px of board for nothing. The row is one constant box in every state the bar can show (its
@@ -158,7 +168,11 @@ export function hudBands(kind, size, opts) {
     ? Math.max(barTop != null ? Math.max(0, h - barTop) : tabBand, corner || safeBottom + rem * HUD_REM.cornerTop)
     : (barTop != null ? Math.max(0, h - barTop) : rem * HUD_REM.shopBarTop + HUD_REM.shopBarBorderPx);
   return {
-    top: Math.min(h * 0.4, bondBottom != null ? Math.max(bondBottom, safeTop) : safeTop + rem * HUD_REM.bondStripBottom),
+    // the taller of the two measured forms (the scroller's own rect and its settled offset inside the HUD) over the
+    // constants — a phone rule in css/devices.css can make either larger
+    top: Math.min(h * 0.4, Math.max(bondsBottom,
+      bondBottom != null ? Math.max(bondBottom, safeTop) : safeTop + Math.max(rem * HUD_REM.bondStripBottom,
+        rem * HUD_REM.bondStripTop + HUD_REM.bondArrowPx))),
     bottom: Math.min(h * 0.4, bottom),
   };
 }
@@ -213,7 +227,7 @@ function withTimeout(p, ms, what, signal) {
     };
     const onAbort = () => finish(reject, abortError(signal));
     signal?.addEventListener('abort', onAbort, { once: true });
-    timer = setTimeout(() => finish(reject, new Error(`${what} timed out`)), ms);
+    timer = setTimeout(() => finish(reject, new DOMException(`${what} timed out`, 'TimeoutError')), ms);
     // Keep a rejection handler attached even when cancellation wins before this promise settles.
     Promise.resolve(p).then((value) => finish(resolve, value), (err) => finish(reject, err));
     if (signal?.aborted) onAbort();
@@ -278,6 +292,7 @@ export function seedAssets(store) {
 export async function mountFieldView(host, { signal } = {}) {
   checkActive(signal);
   const pref = renderPref();
+  let fallbackReason = 'explicit';
   const opts = { data, assets: data.get('assets'), audio, settings: settingsStore.get(), padding: hudPadding, hud: hudBands };
 
   /**
@@ -325,6 +340,7 @@ export async function mountFieldView(host, { signal } = {}) {
       clearRenderFailure();
       return guardView(view, 'engine');
     } catch (err) {
+      fallbackReason = err?.name === 'TimeoutError' ? 'timeout' : 'error';
       controller.abort();
       dispose(engineView);
       if (signal?.aborted) throw abortError(signal); // the caller cancelled: not a renderer failure
@@ -347,7 +363,7 @@ export async function mountFieldView(host, { signal } = {}) {
     if (engine) return engine;
   }
   checkActive(signal);
-  return guardView(createFallbackView(host, { ...opts, assets: data.get('assets') }), 'fallback');
+  return Object.assign(guardView(createFallbackView(host, { ...opts, assets: data.get('assets') }), 'fallback'), { fallbackReason });
 }
 
 /**
@@ -358,25 +374,39 @@ export function useFieldView(hostRef) {
   const [state, setState] = useState({ view: null, kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const retries = useRef(0);
+  const automaticRetries = useRef(0);
   const viewRef = useRef(null);
   useEffect(() => {
     let dead = false, retrying = false;
+    let retryTimer = null;
     const host = hostRef.current;
     if (!host) return undefined;
     setState({ view: null, kind: 'loading' });
     const controller = new AbortController();
-      mountFieldView(host, { signal: controller.signal }).then((view) => {
-        if (dead) { view.destroy(); return; }
-        viewRef.current = view;
-        if (view.kind === 'engine') retries.current = 0;
-        // 设置「显示其他玩家的皮肤」 (docs/SKINS.md) needs to know which pieces are this page's own: the identity is on the
-        // app store (`me.playerId`, set by welcome), so the view is told it rather than resolving it per frame. Told
-        // before the first board arrives — the mount waits for `enterBattle`/`setPrep`, which the game screen calls after.
-        view.setMe?.(store.get().me?.playerId || null);
-        view.setSkins?.(store.get().match?.public?.players);
-        globalThis.__SP_VIEW__ = view; // dev / E2E introspection (view.raw.stats?.())
-        setState({ view, kind: view.kind });
-      }, (err) => { if (!dead && !controller.signal.aborted) console.error('[field] mount failed', err); });
+    const retry = (automatic) => {
+      const budget = automatic ? automaticRetries : retries;
+      const limit = automatic ? RECOVERY_DELAYS_MS.length : EVENT_RETRY_LIMIT;
+      if (dead || retrying || viewRef.current?.kind !== 'fallback' || renderPref() === 'fallback'
+        || document.visibilityState !== 'visible' || globalThis.navigator?.onLine === false || budget.current >= limit) return;
+      retrying = true; budget.current++; setAttempt((n) => n + 1);
+    };
+    const onRetry = () => retry(false);
+    mountFieldView(host, { signal: controller.signal }).then((view) => {
+      if (dead) { view.destroy(); return; }
+      viewRef.current = view;
+      if (view.kind === 'engine') { retries.current = 0; automaticRetries.current = 0; }
+      // Preserve the upstream skin/identity initialization before the first board arrives.
+      view.setMe?.(store.get().me?.playerId || null);
+      view.setSkins?.(store.get().match?.public?.players);
+      globalThis.__SP_VIEW__ = view; // dev / E2E introspection (view.raw.stats?.())
+      setState({ view, kind: view.kind });
+      // A page reopened directly into a match has no pre-game time to warm its renderer. The shared imports/Pixi
+      // download can finish after the first 12 s timeout: recover without requiring a tab switch or window restore.
+      if (view.kind === 'fallback' && view.fallbackReason === 'timeout' && renderPref() !== 'fallback'
+        && automaticRetries.current < RECOVERY_DELAYS_MS.length) {
+        retryTimer = setTimeout(() => retry(true), RECOVERY_DELAYS_MS[automaticRetries.current]);
+      }
+    }, (err) => { if (!dead && !controller.signal.aborted) console.error('[field] mount failed', err); });
     const unsub = settingsStore.subscribe((s) => viewRef.current?.setSettings?.(s));
     // room.skins is accepted in every phase: update the current field without restarting its battle runner.
     const unsubSkins = store.subscribe((s, prev) => {
@@ -384,18 +414,14 @@ export function useFieldView(hostRef) {
       if (s.match?.public?.players !== prev.match?.public?.players) viewRef.current?.setSkins?.(s.match?.public?.players);
     });
     const onResize = () => viewRef.current?.resize();
-    // A temporary network/vendor failure must not pin this mounted match to fallback forever. Retry on a useful
-    // user event, at most twice in succession; the effect cleanup disposes the old view before creating its successor.
-    const onRetry = () => {
-      if (dead || retrying || viewRef.current?.kind !== 'fallback' || renderPref() === 'fallback'
-        || document.visibilityState !== 'visible' || globalThis.navigator?.onLine === false || retries.current >= 2) return;
-      retrying = true; retries.current++; setAttempt((n) => n + 1);
-    };
+    // Events can retry sooner than the timer, but never race it into duplicate mounts. Automatic failures must not
+    // consume the two existing user-event retries before a long outage ends or the player returns to the tab.
     window.addEventListener('resize', onResize);
     window.addEventListener('online', onRetry);
     document.addEventListener('visibilitychange', onRetry);
     return () => {
       dead = true;
+      if (retryTimer !== null) clearTimeout(retryTimer);
       controller.abort();
       unsub();
       unsubSkins();

@@ -13,8 +13,8 @@
 // bonds are off (gameLogic diyBannedPieces; 0.2.0). The blocks are hookless (unit-tested by calling them): the 核心盟约 /
 // 附加盟约 rows of bond discs —
 // greyed with the ✕, the red banned-member badge, the briefingBondTip tooltip — the legend and the 本局禁用干员 grid.
-// MatchInfoDialog shows the same blocks read-only in a components.js Modal (关闭, a tap outside or Esc close it) with a
-// status line from its caller (the draft's turn and countdown, so the running clock stays in view).
+// MatchInfoDialog shows the same blocks and the caller's enemy information read-only in a components.js Modal
+// (关闭, a tap outside or Esc close it) with a status line (the draft's turn and countdown stays in view).
 // Styles: css/screens/briefing.css (.brief-*), css/screens/draft.css (.minfo-dlg).
 
 import { html, Button, Icon, MicroLabel, BondDisc, Tooltip, Modal } from './components.js';
@@ -85,7 +85,7 @@ function BondBannedAside(bond, model, banned) {
       const c = data.lookup('chess', id);
       const bonds = (Array.isArray(c?.bonds) ? c.bonds : []).filter((b) => nameOf.has(b));
       return html`<div key=${id} class="brief-bantip__op" data-chess=${id}>
-        <${UnitThumb} kind="chess" id=${id} size="xs" showTier=${false} />
+        <${UnitThumb} kind="chess" ownerId=${null} id=${id} size="xs" showTier=${false} />
         <div class="brief-bantip__txt"><b>${c?.name || id}</b>
           <span>${bonds.map((b, i) => html`${i ? ' · ' : ''}<span class=${cx(b === bond.bondId && 'is-this')}>${nameOf.get(b)}</span>`)}</span></div>
       </div>`;
@@ -139,7 +139,7 @@ export function BannedOperators({ model }) {
   return html`<div class="brief-banned">
     <h3 class="brief-h"><span>${t('本局禁用干员')}</span><${MicroLabel}>BANNED OPERATORS</${MicroLabel}><b class="num brief-banned__n">${banned.length}</b></h3>
     ${banned.length ? html`<div class="brief-banned__grid">
-      ${banned.map((id) => html`<${UnitThumb} key=${id} kind="chess" id=${id} size="sm" dim=${true} />`)}
+      ${banned.map((id) => html`<${UnitThumb} key=${id} kind="chess" ownerId=${null} id=${id} size="sm" dim=${true} />`)}
     </div>` : html`<p class="t-dim">${t('本局没有禁用干员')}</p>`}
     <${DiyBannedLine} model=${model} />
   </div>`;
@@ -158,12 +158,13 @@ export function MatchInfo({ model }) {
 
 /**
  * The read-only match-info dialog (the strategy draft's 本局信息): MatchInfo in a Modal that 关闭, a tap outside or Esc
- * closes. `status` (the caller's line, e.g. the draft's turn and countdown) sits left of 关闭. `stage` (the match's
- * stages.json record, m.public.stageId) adds 本局地图 — the same read-only battlefield the briefing shows
- * (ui/stageMap.js, the owner's request of 2026-10-17), so the strategy can be planned against the map.
- * @param {{ open: boolean, onClose: Function, model: MatchInfoModel|null, status?: any, stage?: any }} props
+ * closes. `enemies` is the shared briefing enemy block (ui/matchEnemies.js); `status` (the caller's line, e.g. the draft's
+ * turn and countdown) sits left of 关闭. `stage` (the match's stages.json record, m.public.stageId) adds 本局地图 — the
+ * same read-only battlefield the briefing shows (ui/stageMap.js, the owner's request of 2026-10-17), so the strategy can
+ * be planned against the map.
+ * @param {{ open: boolean, onClose: Function, model: MatchInfoModel|null, enemies?: any, status?: any, stage?: any }} props
  */
-export function MatchInfoDialog({ open, onClose, model, status = null, stage = null }) {
+export function MatchInfoDialog({ open, onClose, model, enemies = null, status = null, stage = null }) {
   const map = open && stage ? stageMapModel(stage, { field: 'normal' }) : null;
   return html`<${Modal} open=${open && !!model} onClose=${onClose} title=${t('本局信息')} micro="MATCH INFO // MAP, BONDS & BANNED OPERATORS" class="minfo-dlg"
     actions=${html`${status ? html`<div class="minfo-dlg__status" data-testid="match-info-status">${status}</div>` : null}
@@ -173,6 +174,9 @@ export function MatchInfoDialog({ open, onClose, model, status = null, stage = n
       <div class="stagemap-dlg__canvas"><${StageMap} stage=${stage} field="normal" /></div>
       <${StageLegend} model=${map} />
     </div>` : null}
-    ${open && model ? html`<${MatchInfo} model=${model} />` : null}
+    ${open && model ? html`<div class=${cx('minfo-dlg__content', enemies && 'has-enemies')}>
+      ${enemies ? html`<section class="minfo-dlg__enemies">${enemies}</section>` : null}
+      <section class="minfo-dlg__bonds"><${MatchInfo} model=${model} /></section>
+    </div>` : null}
   <//>`;
 }

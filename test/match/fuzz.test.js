@@ -15,6 +15,9 @@ const BANDS = Object.keys(DATA.bands);
 const CHESS_IDS = Object.keys(DATA.chess);
 const ITEM_IDS = Object.keys(DATA.items);
 const BOND_IDS = Object.keys(DATA.bonds);
+const ONLY_SEED = process.env.MATCH_FUZZ_SEED === undefined ? null : Number(process.env.MATCH_FUZZ_SEED);
+assert.ok(ONLY_SEED === null || (Number.isInteger(ONLY_SEED) && ONLY_SEED >= 1 && ONLY_SEED <= 0xffffffff),
+  'MATCH_FUZZ_SEED must be an integer between 1 and 4294967295');
 
 function randomIntent(rng, m, ps) {
   const t = rng.pick(GAME);
@@ -57,13 +60,14 @@ function randomIntent(rng, m, ps) {
   }
 }
 
-function fuzzOne(seed, { fake }) {
+function fuzzOne(seed, { fake, rules }, context = {}) {
   const rng = createRng(seed * 7919);
   const mode = rng() < 0.3 ? 'solo' : 'coop';
   const difficulty = rng.pick(['FUNNY', 'NORMAL', 'HARD', 'ABYSS']);
   const humans = mode === 'solo' ? 1 : 1 + rng.int(3);
   const bots = mode === 'solo' ? 0 : rng.int(3);
-  const h = makeMatch({ mode, difficulty, humans, bots, seed, fake, captureFrames: false, checkFrames: true, script: () => ({ duration: 2 + rng.int(6), leaks: {} }) });
+  Object.assign(context, { mode, difficulty, humans, bots });
+  const h = makeMatch({ mode, difficulty, humans, bots, seed, fake, rules, captureFrames: false, checkFrames: true, script: () => ({ duration: 2 + rng.int(6), leaks: {} }) });
   const m = h.m;
   m.start();
   const humanIds = [...m.players.values()].filter((p) => !p.isBot).map((p) => p.playerId);
@@ -106,12 +110,46 @@ function fuzzOne(seed, { fake }) {
   return intents;
 }
 
-test('fuzz with FakeBattle: 60 matches of random intents / connection churn / time jumps', () => {
+function runFuzz(t, seed, fake, rules) {
+  const context = { seed, fake, ...(rules ? { rules } : {}) };
+  try {
+    return fuzzOne(seed, { fake, rules }, context);
+  } catch (error) {
+    t.diagnostic(`Fuzz failure: ${JSON.stringify(context)}`);
+    const pattern = rules
+      ? `^fuzz with all four rules enabled: ${fake ? 'FakeBattle' : 'real simulation'}$`
+      : `^fuzz with ${fake ? 'FakeBattle' : 'the real simulation'}:`;
+    t.diagnostic(`Reproduce: MATCH_FUZZ_SEED=${seed} node --test --test-name-pattern="${pattern}" test/match/fuzz.test.js`);
+    throw error;
+  }
+}
+
+test(`fuzz with FakeBattle: ${ONLY_SEED === null ? '60 matches' : `seed ${ONLY_SEED}`} of random intents / connection churn / time jumps`, (t) => {
   let n = 0;
-  for (let seed = 1; seed <= 60; seed++) n += fuzzOne(seed, { fake: true });
-  assert.ok(n > 10000, `${n} intents`);
+  for (let seed = ONLY_SEED ?? 1; seed <= (ONLY_SEED ?? 60); seed++) n += runFuzz(t, seed, true);
+  assert.ok(n > (ONLY_SEED === null ? 10000 : 0), `${n} intents`);
 });
 
-test('fuzz with the real simulation: 8 matches', () => {
-  for (let seed = 101; seed <= 108; seed++) fuzzOne(seed, { fake: false });
+test(`fuzz with the real simulation: ${ONLY_SEED === null ? '8 matches' : `seed ${ONLY_SEED}`}`, (t) => {
+  for (let seed = ONLY_SEED ?? 101; seed <= (ONLY_SEED ?? 108); seed++) runFuzz(t, seed, false);
 });
+
+test('every generated game intent has a valid protocol shape, including unequip', () => {
+  const rng = createRng(48);
+  for (const type of GAME) {
+    const forced = Object.assign(() => rng(), {
+      pick: (list) => list === GAME ? type : rng.pick(list),
+      int: (n) => rng.int(n),
+    });
+    const msg = randomIntent(forced, {}, null);
+    assert.equal(msg.t, type);
+    assert.equal(validateC2S(msg), null, JSON.stringify(msg));
+  }
+});
+
+for (const [fake, first, last] of [[true, 201, 212], [false, 301, 304]]) {
+  test(`fuzz with all four rules enabled: ${fake ? 'FakeBattle' : 'real simulation'}`, (t) => {
+    const rules = { shopBias: 'bondBias', prepLoadout: 'prep', morphPairing: 'plus', unequip: 'allow' };
+    for (let seed = ONLY_SEED ?? first; seed <= (ONLY_SEED ?? last); seed++) runFuzz(t, seed, fake, rules);
+  });
+}

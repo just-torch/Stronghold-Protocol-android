@@ -18,9 +18,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { unscaled } from '../helpers/uiSize.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const read = (p) => readFileSync(path.join(ROOT, p), 'utf8');
+const read = (p) => unscaled(readFileSync(path.join(ROOT, p), 'utf8'));
 
 const { GLYPHS, gearPath, GIcon } = await import('../../public/js/ui/gameComponents.js');
 const { hudBands, HUD_REM } = await import('../../public/js/ui/fieldHost.js');
@@ -109,11 +110,13 @@ describe('8: the settings gear is a clean, regular icon', () => {
 const remAt = (w, h) => Math.max(40, Math.min(w / 19.2, h / 10.8, 240));
 
 /** Run `fn` with a stubbed DOM: the root font size, and the HUD layer's top (safe-area inset). */
-function withDom(rem, hudTop, fn) {
+function withDom(rem, hudTop, fn, bondsBottom = 0) {
   const g = globalThis;
   const saved = { document: g.document, getComputedStyle: g.getComputedStyle };
   g.getComputedStyle = () => ({ fontSize: `${rem}px` });
-  g.document = { documentElement: {}, querySelector: (s) => (s === '.gm__hud' ? { getBoundingClientRect: () => ({ top: hudTop }) } : null) };
+  g.document = { documentElement: {}, querySelector: (s) => s === '.gm__hud'
+    ? { getBoundingClientRect: () => ({ top: hudTop }) }
+    : s === '.gm__bonds' && bondsBottom ? { getBoundingClientRect: () => ({ bottom: bondsBottom, height: 44 }) } : null };
   try { return fn(); } finally { g.document = saved.document; g.getComputedStyle = saved.getComputedStyle; }
 }
 
@@ -121,11 +124,10 @@ describe('9: the prep camera keeps the bench clear of the shop bar on phones in 
   test('HUD_REM mirrors the CSS it measures (bond strip bottom, shop bar top, the notched-phone rule)', () => {
     const game = read('public/css/screens/game.css');
     const shop = read('public/css/screens/game-shop.css');
-    // bond strip: the discs grew to .60rem with the count chip pushed out of them (§21.35, player report after 0.1.1) and
-    // to .68rem with the chip lifted ABOVE the tier ring (§21.38, "图标仍被激活人数挡住"). The strip's own box grew with
-    // them — `--bslot-disc + .02 + .15 × 1.1` = .865rem, not the `.52 + .05 + 1.5 × .14` box the original .52rem disc made
-    // — so §21.38 starts the strip .09rem higher (top 1.27rem) and the measured band is the 2.14rem it was; the constant
-    // stays the conservative 2.16rem fallback for a page without the strip. test/ui/playtest5-ui.e2e.test.js measures it.
+    // bond strip: the discs grew to .68rem with the count chip lifted ABOVE the tier ring (§21.38,
+    // "图标仍被激活人数挡住"). The strip's own box grew with them — `--bslot-disc + .02 + .15 × 1.1` = .865rem,
+    // not the `.52 + .05 + 1.5 × .14` box the original .52rem disc made; the fork starts it .09rem higher at
+    // 1.27rem (§21.36/§21.39, devices.css 1.30rem on phones) and #678's 44 px arrows can still raise the band.
     assert.match(game, /\.gm__bonds \{ position: absolute; left: 1\.56rem; top: 1\.27rem;/);
     assert.match(game, /\.bslot \{ position: relative; display: flex; flex-direction: column; align-items: center; width: \.86rem; --bslot-disc: \.68rem; \}/);
     assert.match(game, /\.bslot \.bond \{ --disc: var\(--bslot-disc\); gap: \.02rem; \}/);
@@ -134,6 +136,11 @@ describe('9: the prep camera keeps the bench clear of the shop bar on phones in 
     // edge sits on the disc's right edge (the slot's margin), so it belongs to the disc under it at any slot width
     assert.match(game, /\.bslot__count \{\n {2}position: absolute; bottom: calc\(100% \+ var\(--bslot-disc\) \* \.12\); right: calc\(\(100% - var\(--bslot-disc\)\) \/ 2\);/);
     assert.ok(!/\.bslot__count \{\n {2}position: absolute; top:/.test(game), 'the badge no longer hangs over the disc');
+    // #678: clip padding is offset by margins; the 44 px arrows can still raise the band on phones.
+    assert.match(game, /\.gm__bonds \.bstrip-scroll \.bstrip \{[^}]*padding: \.08rem 0; margin: -\.08rem 0;/);
+    assert.match(game, /\.gm__bonds \.bstrip-scroll__arrow \{[^}]*height: 44px;/);
+    assert.equal(HUD_REM.bondStripTop, 1.27);
+    assert.equal(HUD_REM.bondArrowPx, 44);
     assert.equal(HUD_REM.bondStripBottom, 2.16);
     // shop bar: bottom .2rem + row padding .1rem × 2 + the row's own content height (`--shopbar-row`: the cards and
     // the 晋升奖励 banner are one box, §21.32) + 2 px + 1 px borders
@@ -179,12 +186,19 @@ describe('9: the prep camera keeps the bench clear of the shop bar on phones in 
       for (const k of ['normal', 'unite', 'boss', 'hidden', 'pen']) assert.equal(hudBands(k, { width: 844, height: 390 }), null, k);
       for (const k of ['prep', 'bossPrep']) {
         const b = hudBands(k, { width: 844, height: 390 });
-        assert.ok(Math.abs(b.top - 86.4) < 1e-9 && Math.abs(b.bottom - 108.6) < 1e-9, `${k} ${JSON.stringify(b)}`);
+        // #678's 44 px arrows out-rank the 2.16rem constant at the phones' 40 px rem: 1.27rem + 44 px = 94.8 px
+        assert.ok(Math.abs(b.top - 94.8) < 1e-9 && Math.abs(b.bottom - 108.6) < 1e-9, `${k} ${JSON.stringify(b)}`);
       }
     });
     withDom(100, 0, () => assert.deepEqual(hudBands('prep', { width: 1920, height: 1080 }), { top: 216, bottom: 267 }));
-    withDom(40, 12, () => assert.ok(Math.abs(hudBands('prep', { width: 844, height: 390 }).top - 98.4) < 1e-9, 'top inset'));
-    withDom(40, 0, () => assert.deepEqual(hudBands('prep', { width: 640, height: 200 }), { top: 80, bottom: 80 }), 'clamped at 40 % of the height');
+    withDom(40, 12, () => assert.ok(Math.abs(hudBands('prep', { width: 844, height: 390 }).top - 106.8) < 1e-9, 'top inset'));
+    withDom(40, 0, () => assert.deepEqual(hudBands('prep', { width: 640, height: 200 }), { top: 80, bottom: 80 }, 'clamped at 40 % of the height'));
+  });
+
+  test('a taller measured scroller is kept clear; a collapsed strip keeps the minimum band', () => {
+    const size = { width: 844, height: 390 };
+    withDom(40, 12, () => assert.equal(hudBands('prep', size).top, 124), 124);
+    withDom(40, 12, () => assert.ok(Math.abs(hudBands('prep', size).top - 106.8) < 1e-9), 90);
   });
 
   test('wiring: the game hands hudBands to the view, the view to the prep cameras', () => {

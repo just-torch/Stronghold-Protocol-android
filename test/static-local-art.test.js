@@ -102,7 +102,9 @@ test('docs and messages say what falls back without the local art and how a serv
   assert.equal(localGaps({ enemySpines: true, tokenSpines: true }), '');
   assert.equal(localGaps({ enemySpines: true, tokenSpines: false }), '，缺少新版的自选召唤物模型');
   assert.equal(localGaps({ enemySpines: false, tokenSpines: false }), '，缺少新版的灼热/炽焰源石虫模型和自选召唤物模型');
-  assert.match(read('tools/setup.mjs'), /\$\{localGaps\(local\)\}（重新提取：--local）/);
+  // upstream 0.3.2 moved the repair hint into localArtDetail's `again` (0.3.3 keeps it): the row still names --local
+  assert.match(read('tools/setup.mjs'), /（重新提取：--local）/);
+  assert.match(read('tools/setup.mjs'), /export function localArtDetail/);
   const readme = read('README.md');
   assert.match(readme, /召唤物/);
   assert.match(readme, /表情和「玩法说明」的教程图随上面的素材一起从公开镜像下载/);

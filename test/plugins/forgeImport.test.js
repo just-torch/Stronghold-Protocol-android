@@ -219,7 +219,9 @@ test('mixed pack: cosmetic, content, ui and lang; refused pieces named with thei
     assert.match(report, /server logic/);
     assert.match(report, /HTTP 路由/);
     assert.match(report, /root\.overlays/);
-    assert.match(report, /对不上我们的界面插槽/);
+    // The mount is reported with the slot it can be rewritten for (0.3.1 manual-adaptation wording); the old
+    // "does not fit our slot" phrase is gone.
+    assert.match(report, /覆盖层」挂载点 root\.overlays 需要人工适配/);
     assert.match(report, /extra\/note\.png/);
     assert.match(report, /没有引用它/);
     assert.match(report, /kits\/boom\.js/);
@@ -283,7 +285,7 @@ test('a second import into the same folder is refused and leaves the first folde
   } finally { fs.rmSync(parent, { recursive: true, force: true }); }
 });
 
-test('malicious zip and directory input is refused and a script in the pack is not executed', async () => {
+test('malicious zip and directory input is refused and a script in the pack is not executed', async (t) => {
   fs.rmSync(BAIT, { force: true });
   const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-forge-'));
   const opts = { pluginsDir: parent, root: ROOT, dataDir: path.join(ROOT, 'data'), vanilla };
@@ -328,7 +330,14 @@ test('malicious zip and directory input is refused and a script in the pack is n
     const linked = path.join(parent, 'linked');
     fs.mkdirSync(linked);
     fs.writeFileSync(path.join(linked, 'pack.json'), '{"id":"rose-linked","name":"x","version":"1.0.0"}');
-    fs.symlinkSync('/tmp', path.join(linked, 'escape'));
+    try {
+      fs.symlinkSync('/tmp', path.join(linked, 'escape'));
+    } catch (e) {
+      // The directory-link case needs the privilege Windows only grants with Developer Mode or elevation. The rest
+      // of this test (zips, escapes, the bait script) has already run; only this case is skipped.
+      if (e.code === 'EPERM' || e.code === 'EACCES') { t.skip(`no symbolic links here (${e.code})`); return; }
+      throw e;
+    }
     const sym = await importForge(linked, opts);
     assert.equal(sym.issues[0].code, 'PLUGIN_FORGE_ZIP');
     assert.match(sym.issues[0].detail, /symbolic link/);
@@ -888,8 +897,11 @@ test('chess.json pairs become compact records: a shop piece and a 自选 piece; 
     const ace = ops.find((o) => o.charId === 'char_x_rose_chess_rose_ace');
     assert.equal(ops.length, 2, JSON.stringify(ops.map((o) => o.charId)));
     assert.equal(piece.as, 'chess');
-    assert.deepEqual(piece.chess, { tier: 2, bonds: ['deputShip'], price: 3, sellPrice: 1, garrisonIds: { normal: ['garrison_01_a'], golden: ['garrison_01_b'] }, identifier: 7, shopSortId: 3 });
-    assert.deepEqual(piece.art, { ref: 'char_102_texas' });
+    // A Forge pair becomes one compact operator with explicit normal/elite chess ids (client.md: "Explicit pair
+    // IDs drive upgrades"); the old expectation omitted the field and pinned the pre-0.3.1 shape.
+    assert.deepEqual(piece.chess, { tier: 2, bonds: ['deputShip'], price: 3, sellPrice: 1, garrisonIds: { normal: ['garrison_01_a'], golden: ['garrison_01_b'] }, identifier: 7, shopSortId: 3, ids: { normal: 'chess_x_rose_chess_rose_pair_a', elite: 'chess_x_rose_chess_rose_pair_b' } });
+    // art.ref stays for provenance; the exact installed art ids are copied beside it (DATA.md `art.assets`).
+    assert.deepEqual(piece.art, { ref: 'char_102_texas', assets: { avatar: 'char_102_texas', avatarGolden: 'char_102_texas' } });
     assert.equal(piece.kit, 'generic');
     const s = piece.forms.normal.skills[0];
     assert.match(s.skillId, /^skx_rose_chess_/);
@@ -1062,7 +1074,9 @@ test('a kit whose import does not map, that fails the script check, or uses synt
   kitPack(pack, {
     chess: { ...pairOf('rose_dir'), ...pairOf('rose_fs'), ...pairOf('rose_date'), ...pairOf('rose_async'), ...pairOf('rose_tier') },
     kits: {
-      'kits/chess_rose_dir_a.js': "import { dirVec } from '@sim/dir.js';\nexport default function kit() { return { skill: null, x: dirVec }; }\n",
+      // `@sim/dir.js` maps to sp:sdk@1 since 0.3.1 (`sdk.export.dir`), so an unmapped module name exercises the
+      // "no sp:sdk@1 equivalent" refusal.
+      'kits/chess_rose_dir_a.js': "import { dirVec } from '@sim/no-such-module.js';\nexport default function kit() { return { skill: null, x: dirVec }; }\n",
       'kits/chess_rose_fs_a.js': `import { writeFileSync } from 'node:fs';\nwriteFileSync('${BAIT}', 'executed\\n');\nexport default function kit() { return {}; }\n`,
       'kits/chess_rose_date_a.js': 'export default function kit() { return { skill: { kind: "passive", mods: { atkPct: Date.now() % 2 } } }; }\n',
       'kits/chess_rose_async_a.js': 'export default async function kit() { return {}; }\n',
@@ -1075,7 +1089,7 @@ test('a kit whose import does not map, that fails the script check, or uses synt
     assert.equal(got.ok, true, got.markdown);
     assert.deepEqual(dirsOf(parent).filter((n) => n !== 'pack'), ['rose-kit']);
     const reason = (file) => got.report.skipped.find((s) => s.path === file);
-    assert.match(reason('kits/chess_rose_dir_a.js').en, /"@sim\/dir\.js" on line 1 has no sp:sdk@1 equivalent/);
+    assert.match(reason('kits/chess_rose_dir_a.js').en, /"@sim\/no-such-module\.js" on line 1 has no sp:sdk@1 equivalent/);
     assert.match(reason('kits/chess_rose_fs_a.js').en, /"node:fs"/);
     assert.match(reason('kits/chess_rose_date_a.js').en, /fails the script check \(Date is not available in sp:sdk@1\)/);
     assert.match(reason('kits/chess_rose_async_a.js').en, /an async function/);

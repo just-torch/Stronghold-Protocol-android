@@ -384,7 +384,13 @@ function openValidationView({ root, dataDir, pluginsDir, stage }) {
       try { st = fs.statSync(abs); } catch { return; }
       if (!st.isDirectory()) return;
       if (!fs.existsSync(path.join(abs, PLUGIN_MANIFEST))) return;
-      fs.symlinkSync(abs, dest);
+      // The view only has to read the folder through the registry. A directory symlink needs
+      // SeCreateSymbolicLinkPrivilege on Windows (Developer Mode or an elevated shell); a junction does not, and
+      // the registry reads either one as the folder itself.
+      try { fs.symlinkSync(abs, dest); } catch (e) {
+        if (process.platform !== 'win32' || e.code !== 'EPERM') throw e;
+        fs.symlinkSync(abs, dest, 'junction');
+      }
     };
     if (pluginsDir && fs.existsSync(pluginsDir)) {
       for (const name of fs.readdirSync(pluginsDir)) take(name, path.join(pluginsDir, name));

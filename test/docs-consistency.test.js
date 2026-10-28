@@ -54,7 +54,7 @@ import * as SIM_CONST from '../server/sim/constants.js';
 import { MULTI_ROUND_BOUNTY_BATTLES } from '../server/match/choices.js';
 import { SELF_BOUND, PART_TRANSFER, BLADE_TRANSFER, DRONE_LINK_BASE } from '../server/sim/content/bosses.js';
 import * as BOARD from '../server/match/board.js';
-import * as DAMAGE from '../server/sim/damage.js';
+import * as DAMAGE from '../server/sim/attack.js';
 import { SUB } from '../server/sim/professions.js';
 import { ENEMY_REACH } from '../public/js/render/pick.js';
 import { BAND_TURN_SECONDS } from '../server/match/Match.js';
@@ -365,7 +365,7 @@ test('user playtest #4 (DESIGN §18): picking by tile, timers, 机变 two taps, 
   assert.match(DESIGN, /\*\*爆发冷却\*\*/);
   // player report F5 after 0.1.0 (DESIGN §21.24): the entries carry the tile the operator lies on
   assert.match(DESIGN, /`down: \[\[id, respawnAt \(game s\), respawnTime \(s\), state, row, col\]\]`/);
-  assert.match(SIM, /`burstLocked\(unit\)` in damage\.js/);
+  assert.match(SIM, /`burstLocked\(unit\)` in attack\.js/);
   assert.match(SIM, /损伤抵抗 = the target's data `epResistance`/);
   assert.ok(!/800 phys; no lock/.test(SIM), 'SIM §3: operators\' 侵蚀 locks too');
   assert.match(SIM, /`down: \[\[id, respawnAt, respawnTime, state, row, col\]\]`/);
@@ -509,7 +509,7 @@ test('user playtest #6 (DESIGN §20): summons, skill triggers, blocking, push fo
   assert.equal(ASPD_MIN, 20);
   assert.match(sec(5), /`aspd = clamp\(100 \+ Σaspd \+ base-100, 20, 600\)`/);
   assert.match(sec(5), /isolated \(孤立: no friendly selector picks it/);
-  assert.match(sec(5), /`battle\.push\(e, force, \{ from, dir, fixed, fixedAngle, inward, effect, keepDir \}\)`/);
+  assert.match(sec(5), /`battle\.push\(e, force, \{ from, dir, fixed, fixedAngle, inward, effect \}\)`/);
   assert.match(sec(19), /锏 S3 归于宁静 \(added by §20\.3\)/);
   // #5: the boss pool floor and the verdict (code = §5.5 = §14 = §6.1)
   assert.equal(BOSS_POOL_MIN_HP, 1);
@@ -631,7 +631,7 @@ test('playtest6b follow-up (DESIGN §20.10–§20.13): leader HP, 直接乘算, 
   const s63 = DESIGN.slice(DESIGN.indexOf('### 6.3'), DESIGN.indexOf('### 6.4'));
   assert.match(s52, /are 直接乘算 and go into `Σpct`/);
   assert.match(s53, /`Battle\.applyStrongest`/);
-  assert.match(s55, /\*\*限伤\*\*[^\n]*`ceil\(final\) ≥ 300000` is cancelled[^\n]*before HP shields/);
+  assert.match(s55, /\*\*限伤\*\*[^\n]*`ceil\(estimate\) ≥ 300000` is cancelled[^\n]*before the injury effects/);
   assert.match(s62, /elite onto the consumed deployed copy's tile, else to the hand \(§20\.11\)/);
   assert.ok(!/A merge's elite always goes to the hand/.test(DESIGN), '§6.2: the hand-first wording is gone');
   assert.match(s63, /`BOND_LAYER_CAP` = 999 layers \(the client's `MAX_GARRISON_STACK`/);
@@ -878,7 +878,7 @@ test('the deliberate trigger deviation (DESIGN §21.29): six 重装 skills DEFAU
   // the builder's table is per chess (灰毫 S1 is the generic skcom_atk_up[3]) and the data follows it
   const bd = doc('tools/build-data.mjs');
   assert.match(bd, /const TRIGGER_DEVIATIONS = Object\.freeze\(\{/);
-  for (const k of ["chess_char_1_04_a: { skchr_udflow_2: 'DEFAULT' }", "chess_char_1_20_a: { skchr_liskam_2: 'DEFAULT' }", "chess_char_2_18_a: { 'skcom_atk_up[3]': 'DEFAULT', skchr_ashlok_2: 'DEFAULT' }", "chess_char_5_08_a: { skchr_horn_2: 'DEFAULT', skchr_horn_3: 'DEFAULT' }"]) assert.ok(bd.includes(k), k);
+  for (const k of ["chess_char_1_04_a: { skchr_udflow_2: 'DEFAULT' },", "chess_char_1_20_a: { skchr_liskam_2: 'DEFAULT' },", "chess_char_2_18_a: { 'skcom_atk_up[3]': 'DEFAULT', skchr_ashlok_2: 'DEFAULT' },", "chess_char_5_08_a: { skchr_horn_2: 'DEFAULT', skchr_horn_3: 'DEFAULT' },", "chess_char_6_03_a: { skchr_yu_2: 'SKILL_RANGE' }"]) assert.ok(bd.includes(k), k);
   for (const id of ['chess_char_1_04_b', 'chess_char_2_18_b', 'chess_char_5_08_b']) {
     for (const s of DATA.chess[id].skills.filter((x) => x.trigger.rawRule === 'TAKE_DAMAGE' && x.trigger.rule === 'DEFAULT')) assert.ok(bd.includes(s.skillId), `${id} ${s.skillId}`);
   }

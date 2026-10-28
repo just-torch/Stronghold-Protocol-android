@@ -13,6 +13,7 @@ import { dataBound } from '../../shared/plugins/limits.js';
 import { officialBbMax, officialFieldMax } from '../../shared/plugins/officialBounds.js';
 import { validateSkillSpec, matchesSchema } from '../../shared/plugins/skillSpec.js';
 import { RECORDS_SCHEMA } from '../../shared/plugins/recordsSchema.js';
+import { TRAIT_RECORDS_SCHEMA } from '../../server/plugins/traitSchema.js';
 import { guard } from '../helpers/contentFixtures.js';
 import { diyRecord } from '../../shared/diy.js';
 const base = getData(), context = { pluginId: 'data-demo' };
@@ -72,13 +73,16 @@ test('SkillSpec exposes only the JSON subset, including nested attack fields and
   assert.deepEqual(validateSkillSpec({ kind: 'passive', mods: { atkPct: 0.5 }, attack: { hits: 2, onHitStatus: { key: 'stun', duration: 1 } } }), []);
   for (const s of [{ kind: 'passive', onStart: 'evil()' }, { kind: 'ammo', ammo: 1e9 }, { kind: 'passive', attack: { onHit: () => 1 } }, { kind: 'passive', mods: { unknown: 1 } }]) assert.ok(validateSkillSpec(s).some(p => p.code === 'PLUGIN_SKILL_SPEC'));
 });
-test('checked-in schema equals the runtime schema and accepts/rejects the same structural fixtures', () => {
+test('checked-in schema equals the author schema and its fixtures match the runtime schema', () => {
   const dest = path.join(os.tmpdir(), `records-schema-${process.pid}.json`);
   const run = spawnSync(process.execPath, ['tools/records-schema.mjs', dest], { encoding: 'utf8' });
   assert.equal(run.status, 0, run.stderr);
-  assert.deepEqual(JSON.parse(fs.readFileSync(dest, 'utf8')), RECORDS_SCHEMA);
+  // Since 0.3.1 the checked-in file is the author schema: the shared runtime RECORDS_SCHEMA extended with operator
+  // traits and FX (server/plugins/traitSchema.js). The generator and the file must still agree, and every structural
+  // fixture must also pass the runtime schema the content-set builder actually validates with.
+  assert.deepEqual(JSON.parse(fs.readFileSync(dest, 'utf8')), TRAIT_RECORDS_SCHEMA);
   fs.unlinkSync(dest);
-  assert.deepEqual(JSON.parse(fs.readFileSync('schemas/records.schema.json')), RECORDS_SCHEMA);
+  assert.deepEqual(JSON.parse(fs.readFileSync('schemas/records.schema.json')), TRAIT_RECORDS_SCHEMA);
   for (const r of [guard(), { ...guard(), as: 'bad' }, { ...guard(), forms: {} }, { file: 'modes', id: 'mode_x_data_demo_one', base: 'mode_single_normal' }]) {
     const valid = matchesSchema(r, RECORDS_SCHEMA);
     const problems = expandRecords(base, [r], context).problems;
