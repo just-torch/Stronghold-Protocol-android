@@ -288,7 +288,7 @@ not measurements of the official client.
 
 盟约栏支持「收起／展开盟约」（GitHub #142）：收起时隐藏完整列表并关闭由列表打开的浮层，让原图标区域的指针事件到达棋盘，只保留至少 44×44 CSS px 的恢复按钮。折叠状态在本局阶段变化、观看队友时保留；展开后仍按当前观看对象显示最新盟约。按钮支持 Enter / Space，聚焦按钮时 Space 不触发准备或暂停。
 
-A bond the mode never activates (标准: official `inactiveBondIdList`) reads 本局禁用 on shop / reward cards (struck through), detail chips and the popup — no 在场 count, no 当前效果 (§21.7); a strategy built around one carries a 本局禁用 tag and note in the strategy draft and stays selectable (bands.json `bondIds`, §21.26).
+A bond the mode never activates (标准: official `inactiveBondIdList`) reads 本局禁用 in the detail chips and the popup — no 在场 count, no 当前效果 (§21.7), and since §21.62 neither the in-game strip nor the shop / reward cards mark it at all (they read the ordinary count and name); a strategy built around one carries a 本局禁用 tag and note in the strategy draft and stays selectable (bands.json `bondIds`, §21.26).
 
 The strategy draft enables skip only on the viewer's turn, with quota left and another unpicked player to pass to.
 The order list retains finished players for display; they do not keep the last player's skip button enabled.

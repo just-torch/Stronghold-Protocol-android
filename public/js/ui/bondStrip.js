@@ -32,7 +32,7 @@
 
 import { html, BondDisc, Icon, MicroLabel, Tooltip } from './components.js';
 import { RichText, UnitThumb, BondGlyph, GIcon } from './gameComponents.js';
-import { sortBonds, bondMembers, nextThreshold, bondTier, harmonyMembers, HARMONY_BOND, memberHeadCount, briefingBondTip, diyGetter, diyRecordFor, memberStandIn, standInForText } from './gameLogic.js';
+import { sortBonds, bondMembers, nextThreshold, bondTier, harmonyMembers, HARMONY_BOND, memberHeadCount, diyGetter, diyRecordFor, memberStandIn, standInForText } from './gameLogic.js';
 import { formatBondEffect } from './richText.js';
 import { BondMilestones } from './bondMilestones.js';
 import { bondIconUrl } from './assetUrls.js';
@@ -71,19 +71,21 @@ export function BondStrip({ bonds, layersDisabled = false, onOpen, openId = null
       const rec = data.lookup('bonds', b.bondId);
       const th = Array.isArray(b.thresholds) && b.thresholds.length ? b.thresholds : rec?.thresholds || [];
       if (b.off) {
-        // A bond the mode never activates, with members: the briefing's grey ✕ disc, no member count, 本局禁用 under it.
-        // The LAYERS it holds are shown (local fix after 0.1.1, DESIGN §21.40): the traits and items whose text says
-        // 「无需激活盟约」 keep feeding a mode-off bond (灵知 +5 to 谢拉格 AND 灵巧, 随身身份牌 +3/+6, 锏 +8 …), the
-        // server sends them (offBondCounts → { count, layers }), and hiding the number made a player read 本局禁用 as
-        // "the layers I earned went missing" (community report: 谢拉格 paired with 灵巧, fewer layers than expected).
+        // A bond the mode never activates, with members: an ordinary disc in the strip (owner's request of 2026-10-30:
+        // no 本局禁用 marker, no ✕, no struck-through name — the popup still explains it). The LAYERS it holds stay
+        // visible (local fix after 0.1.1, DESIGN §21.40): the traits and items whose text says 「无需激活盟约」 keep
+        // feeding a mode-off bond (灵知 +5 to 谢拉格 AND 灵巧, 随身身份牌 +3/+6, 锏 +8 …), the server sends them
+        // (offBondCounts → { count, layers }), and hiding the number made a player read it as "the layers I earned went
+        // missing" (community report: 谢拉格 paired with 灵巧, fewer layers than expected). `data-off` stays for tests.
         const name = rec?.name || b.bondId;
         const layers = !rec?.noStack && Number.isFinite(b.layers) && b.layers > 0 ? b.layers : undefined;
+        const next = nextThreshold(b.count ?? 0, th);
         return html`<div key=${b.bondId} role="listitem" data-bond=${b.bondId} data-off="1"
-            class=${cx('bslot', 'is-off', openId === b.bondId && 'is-open')}>
+            class=${cx('bslot', openId === b.bondId && 'is-open')}>
           <${BondDisc} name=${name} icon=${bondIconUrl(m, b.bondId)} layers=${layers} members=${b.count ?? 0} goal=${th[th.length - 1] ?? null}
-            active=${false} disabled=${true} size="sm" showName=${true} layersDisabled=${layersDisabled} onClick=${() => onOpen(b.bondId)}
-            title=${`${t('{tip} · {n} 名成员', { tip: briefingBondTip(name, 'off'), n: b.count ?? 0 })}${layers ? t(' · {layers} 层', { layers }) : ''}`} />
-          <span class="bslot__count bslot__off">${t('本局禁用')}</span>
+            active=${false} size="sm" showName=${true} layersDisabled=${layersDisabled} onClick=${() => onOpen(b.bondId)}
+            title=${`${name} ${b.count ?? 0}/${next ?? th[th.length - 1] ?? '-'}${layers ? t(' · {layers} 层', { layers }) : ''}`} />
+          <span class=${cx('bslot__count', 'num', next == null && 'is-max')}>${b.count ?? 0}<small>/${next ?? th[th.length - 1] ?? '-'}</small></span>
         </div>`;
       }
       const next = nextThreshold(b.count ?? 0, th);

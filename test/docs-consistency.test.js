@@ -1217,14 +1217,17 @@ test('the after-0.1.1 follow-up report (DESIGN §21.39): the member-count badge 
   assert.match(doc('test/ui/playtest5-ui.e2e.test.js'), /the count badge leaves the disc, the glyph and the tier ring alone/);
 });
 
-test('a 本局禁用 disc keeps the layers it holds (DESIGN §21.40): code, doc and the sources agree', async () => {
+test('a mode-off disc keeps the layers it holds and no 本局禁用 marker (DESIGN §21.40 / §21.62): code, doc and the sources agree', async () => {
   const s = DESIGN.slice(DESIGN.indexOf('### 21.40 '), DESIGN.indexOf('## 22. '));
   for (const re of [/灵知/, /谢拉格.*灵巧/, /随身身份牌/, /offBondCounts/, /test\/match\/layer-sources\.test\.js/, /test\/ui\/feedback1b-bonds\.test\.js/]) assert.match(s, re);
   const strip = doc('public/js/ui/bondStrip.js');
   assert.match(strip, /if \(b\.off\) \{/);
   assert.match(strip, /const layers = !rec\?\.noStack && Number\.isFinite\(b\.layers\) && b\.layers > 0 \? b\.layers : undefined;/);
   assert.match(strip, /layers=\$\{layers\} members=\$\{b\.count \?\? 0\} goal=\$\{th\[th\.length - 1\] \?\? null\}/);
-  assert.match(strip, /<span class="bslot__count bslot__off">\$\{t\('本局禁用'\)\}<\/span>/);
+  // §21.62 (2026-10-30): the off disc reads like any other — no ✕, no 本局禁用 label, an ordinary count badge
+  assert.ok(!/bslot__off/.test(strip), 'the 本局禁用 label left the strip');
+  assert.ok(!/disabled=\$\{true\}/.test(strip), 'no ✕ badge on an off disc');
+  assert.match(strip, /<span class=\$\{cx\('bslot__count', 'num', next == null && 'is-max'\)\}>/);
   // the layer note is a translated msgid since 0.2.0 (its msgid keeps the fork's leading space)
   assert.match(strip, /\$\{layers \? t\(' · \{layers\} 层', \{ layers \}\) : ''\}/);
   // the popup already showed them (`层数 N`) — the strip is the one that hid the number

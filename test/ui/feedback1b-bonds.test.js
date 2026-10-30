@@ -84,17 +84,18 @@ test('a real 标准 match: 奥术 operators are buyable, three on the board neve
   m.dispose();
 });
 
-test('shop / reward card: a mode-disabled bond tag is struck through with the 本局禁用 title; others unchanged', () => {
+test("shop / reward card: bond tags carry no 本局禁用 marker (the owner's request, 2026-10-30)", () => {
   const id = 'chess_char_1_17_a'; // 深靛: 奥术 / 精准
   const slot = { kind: 'chess', id, price: 1, basePrice: 1 };
-  const tags = (offBonds) => [...walk(ChessCard({ slot, idx: 0, priv: { funds: 9, hand: [], board: [], temp: [] }, onBuy() {}, onDetail() {}, offBonds }))].filter((v) => hasClass(v, 'scard__bond'));
-  const on = tags(modeOffBonds(getMode('mode_single_funny')));
+  const tags = () => [...walk(ChessCard({ slot, idx: 0, priv: { funds: 9, hand: [], board: [], temp: [] }, onBuy() {}, onDetail() {} }))].filter((v) => hasClass(v, 'scard__bond'));
+  const on = tags();
   assert.equal(on.length, 2);
-  assert.ok(hasClass(on[0], 'is-off'), '奥术 struck');
-  assert.equal(on[0].props.title, '奥术：本局禁用（该盟约不会激活）');
-  assert.ok(!hasClass(on[1], 'is-off'), '精准 enabled');
-  assert.ok(tags(modeOffBonds(getMode('mode_single_normal'))).every((v) => !hasClass(v, 'is-off')), '险境: nothing off');
-  assert.ok(tags(null).every((v) => !hasClass(v, 'is-off')), 'no set: as before');
+  for (const tag of on) {
+    assert.ok(!hasClass(tag, 'is-off'), 'no struck/disabled look');
+    assert.equal(tag.props.title, undefined, 'no 本局禁用 tooltip');
+  }
+  assert.match(textOf(on[0]), /奥术/);
+  assert.match(textOf(on[1]), /精准/);
 });
 
 test('bond popup: 本局禁用 instead of 未激活, a note, and no misleading member count or 当前效果 numbers', () => {
@@ -113,12 +114,13 @@ test('bond popup: 本局禁用 instead of 未激活, a note, and no misleading m
   assert.match(plain, /当前效果/, 'an enabled bond keeps its current-effect block');
 });
 
-test('the game screen hands the mode-disabled set to the shop bar, the detail card and the bond popup', () => {
+test('the game screen hands the mode-disabled set to the detail card and the bond popup (§21.62: not the shop bar)', () => {
   const src = read('public/js/screens/game.js');
   assert.match(src, /const offBonds = modeOffBonds\(getMode\(pub\?\.modeId\)\)/);
-  assert.match(src, /<\$\{ShopBar\}[\s\S]*?offBonds=\$\{offBonds\}/);
   assert.match(src, /<\$\{DetailPanel\}[\s\S]*?offBonds=\$\{offBonds\}/);
   assert.match(src, /<\$\{BondPopup\}[\s\S]*?off=\$\{offBonds\.has\(bondPop\.bondId\)\}/);
+  // the shop bar drew no 本局禁用 marker since §21.62, so it no longer takes the set
+  assert.equal(src.match(/offBonds=/g).length, 1, 'only the detail panel takes offBonds=');
 });
 
 test('the bond popup closes on outside presses, while its own region and toggle triggers handle themselves', () => {
@@ -149,19 +151,21 @@ test('hidden-layer bonds show activation and tiers without a stack badge or laye
   assert.equal(disc.props.layers, 12, 'stacking bonds keep their badge');
 });
 
-test('a 本局禁用 disc shows the layers it holds, still without its member count (local fix, DESIGN §21.40)', () => {
+test('a mode-off bond is an ordinary disc: layers kept, no 本局禁用 marker (DESIGN §21.40 / §21.62)', () => {
   // 灵巧 is on 标准模拟's inactive list, yet 「无需激活盟约」 sources keep feeding it (灵知 +5, 随身身份牌 +3/+6 …) and the
-  // server sends them (offBondCounts { count, layers }). The strip used to hide the number, so a player pairing 谢拉格
-  // with 灵巧 read the grey disc as "my layers went missing" (community report).
+  // server sends them (offBondCounts { count, layers }). §21.40 made the layers visible; §21.62 (2026-10-30) dropped
+  // the ✕ and the 本局禁用 label, so the disc reads like any other — its popup still explains the state.
   const entry = { bondId: 'skillfulShip', active: false, tier: 0, count: 2, layers: 13, off: true };
   const strip = BondStrip({ bonds: [entry], onOpen() {} });
   const slot = [...walk(strip)].find((v) => v.props?.['data-off'] === '1');
-  assert.ok(slot, 'the grey 本局禁用 disc');
-  assert.equal(textOf(slot), '本局禁用', 'no member count on it');
+  assert.ok(slot, 'the off bond keeps its slot');
+  assert.match(textOf(slot), /^2\/\d+$/, 'an ordinary count badge, no 本局禁用 label');
+  assert.ok(!/本局禁用/.test(textOf(slot)));
   const disc = [...walk(strip)].find((v) => v.props?.name === DATA.bonds.skillfulShip.name);
   assert.equal(disc.props.layers, 13, 'the layers the traits and items granted are visible');
-  assert.match(disc.props.title, /本局禁用/);
-  assert.match(disc.props.title, /2 名成员/);
+  assert.ok(!disc.props.disabled, 'no ✕ badge');
+  assert.doesNotMatch(disc.props.title, /本局禁用/);
+  assert.match(disc.props.title, /2\/\d+/);
   assert.match(disc.props.title, /13 层/);
   // nothing earned: no badge; hidden-layer bonds (noStack) never show one, off or not
   const none = [...walk(BondStrip({ bonds: [{ ...entry, layers: 0 }], onOpen() {} }))]

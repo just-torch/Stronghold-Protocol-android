@@ -1992,7 +1992,7 @@ function MatchScreen() {
       </div>` : null}
 
       ${showShop ? html`<${ShopBar} priv=${priv} editable=${editable} collapsed=${barCollapsed} refreshBusy=${refreshBusy} onCollapse=${setCollapsed}
-        barRef=${barRef} offBonds=${offBonds}
+        barRef=${barRef}
         onBuy=${buy} onLevel=${() => actions.levelUp()} onRefresh=${() => actions.refresh()} onFreeze=${() => actions.freeze()}
         onDetail=${(id, kind, hint) => setDetail({ kind: kind === 'item' ? 'item' : 'chess', id, hint: hint || null, tap: ++cardTap.current })}
         onDetailClose=${() => setDetail((d) => (d?.kind === 'chess' || d?.kind === 'item' ? null : d))}
@@ -2001,7 +2001,7 @@ function MatchScreen() {
         onReward=${(i) => actions.reward(i)} onRewardLater=${() => setRewardMin(true)} onArm=${setArmedCard} />` : null}
 
       ${scoutShop ? html`<${ShopBar} priv=${scoutPriv} editable=${false} collapsed=${scoutBarCollapsed} refreshBusy=${false}
-        onCollapse=${setScoutBarCollapsed} offBonds=${offBonds}
+        onCollapse=${setScoutBarCollapsed}
         onBuy=${() => {}} onLevel=${() => {}} onRefresh=${() => {}} onFreeze=${() => {}}
         badge=${html`<${GIcon} name="eye" /><span>${t('正在查看 {name} 的调度中心（只读）', { name: watchedName || t('队友') })}</span>`}
         onDetail=${(id, kind, hint) => setDetail({ kind: kind === 'item' ? 'item' : 'chess', id, hint: hint || null, tap: ++cardTap.current })}

@@ -63,7 +63,7 @@ S→C:
   temp:  [ Piece | null ],   // length >= 5: visible slots 0..4, queued overflow at 5+; render only the first five
   board: [ Piece & { row, col, dir } ],   // dir ∈ UP|RIGHT|DOWN|LEFT (§3; bench pieces carry none)
   deployCap, deployCount,
-  bonds: [ { bondId, count, active, tier, layers, harmony? /* 调和's +1 is in count, §21.26 */, thresholds, countsHand } ],   // sorted: active first, then layers desc; an `off` entry (a bond the mode never activates, with members: count only, never active — the strip's grey 本局禁用 disc, bondsMeta.offBondCounts) comes last
+  bonds: [ { bondId, count, active, tier, layers, harmony? /* 调和's +1 is in count, §21.26 */, thresholds, countsHand } ],   // sorted: active first, then layers desc; an `off` entry (a bond the mode never activates, with members: count and layers, never active — its strip disc is an ordinary one since §21.62, bondsMeta.offBondCounts) comes last
   effects: [ { id, name, desc, iconKind: 'band'|'choice'|'team'|'item'|'garrison', iconId, counter?, counterText? /* a bounty: 还剩 N 场作战, §20.6 */ } ],
   nextEnemies: [ { enemyKey, count, tag, start? } ],   // preview of the upcoming round's wave (after waves.js generation); `start` = a leader's spawn tile [row, col] on the boss field (the boss-field prep shows it standing there, community report #12)
   loadout: { [baseChessId]: { skill, module } },   // §16: the effective loadout (chess not listed: defaults)
