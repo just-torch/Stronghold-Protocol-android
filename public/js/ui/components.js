@@ -213,13 +213,22 @@ export function TierChip({ tier, golden = false, size = 'md', class: cls }) {
 }
 
 /**
- * Bond disc: round glyph disc with segmented tier ring, stack count and name.
+ * Bond disc: round glyph disc, stack count and name.
+ *
+ * The ring has two readings. Without `goal` it is the segmented tier ring (one segment per threshold, lit up to the
+ * reached tier — the briefing's 本局信息 uses it: which bonds the mode has). With `goal` it is the in-game member
+ * progress ring: one arc, `members / goal` of the circle filled, `goal` being the bond's last (满档) threshold — a
+ * player asked for the count in the ring instead of the activation state (2026-10-30), since 在场 n/next is what the
+ * numbers under the disc already say.
+ *
  * @param {{ name?: string, icon?: string, count?: number, layers?: number, tier?: number, maxTier?: number,
+ *   members?: number|null, goal?: number|null,
  *   active?: boolean, disabled?: boolean, layersDisabled?: boolean, size?: 'sm'|'md'|'lg', showName?: boolean,
  *   onClick?: Function, class?: string, title?: string }} props
  */
 export function BondDisc({
-  name = '', icon, count, layers, tier = 0, maxTier = 3, active = false, disabled = false, layersDisabled = false,
+  name = '', icon, count, layers, tier = 0, maxTier = 3, members = null, goal = null,
+  active = false, disabled = false, layersDisabled = false,
   size = 'md', showName = true, onClick, class: cls, title,
 }) {
   // Remember which URL failed (a per-URL flag can't race a reset effect).
@@ -231,6 +240,9 @@ export function BondDisc({
   const C = 2 * Math.PI * R;
   const gap = n > 1 ? 5 : 0;
   const seg = C / n - gap;
+  // member progress: a finite goal > 0 switches the ring from tiers to 在场人数 / 满档阈值
+  const ratio = Number.isFinite(goal) && goal > 0 && Number.isFinite(members)
+    ? Math.max(0, Math.min(1, members / goal)) : null;
   const stack = layers ?? count;
   const glyph = (name || '?').trim().charAt(0) || '?';
   const Tag = onClick ? 'button' : 'div';
@@ -238,10 +250,14 @@ export function BondDisc({
       class=${cx('bond', `bond--${size}`, active && 'is-active', disabled && 'is-disabled', layersDisabled && 'is-frozen', onClick && 'is-clickable', cls)}
       onClick=${onClick} title=${title || name}>
     <span class="bond__disc">
-      <svg class="bond__ring" viewBox="-50 -50 100 100" aria-hidden="true">
-        ${Array.from({ length: n }, (_, i) => html`<circle key=${i} r=${R}
-          class=${i < filled ? 'on' : 'off'} stroke-dasharray=${`${seg} ${C - seg}`}
-          stroke-dashoffset=${-(i * C) / n - gap / 2} transform="rotate(-90)" />`)}
+      <svg class=${cx('bond__ring', ratio != null && 'bond__ring--members')} viewBox="-50 -50 100 100" aria-hidden="true"
+          data-members=${ratio != null ? members : null} data-goal=${ratio != null ? goal : null}>
+        ${ratio != null
+          ? html`<circle class="track" r=${R} /><circle class="arc" r=${R}
+              stroke-dasharray=${C} stroke-dashoffset=${C * (1 - ratio)} transform="rotate(-90)" />`
+          : Array.from({ length: n }, (_, i) => html`<circle key=${i} r=${R}
+              class=${i < filled ? 'on' : 'off'} stroke-dasharray=${`${seg} ${C - seg}`}
+              stroke-dashoffset=${-(i * C) / n - gap / 2} transform="rotate(-90)" />`)}
       </svg>
       <span class="bond__core">
         ${imgOk

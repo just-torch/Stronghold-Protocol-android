@@ -284,15 +284,28 @@ export function EmoteWheel({ onSend, open, onToggle, disabled = false, cooldownM
     const edge = (off > 0 && live.current.page === 0) || (off < 0 && live.current.page === EMOTE_THEMES.length - 1);
     setDx(edge ? off / 3 : off); // rubber band at the first / last page
   };
+  /** The emote id under a client point, else null (the tap send below; never throws off-DOM). */
+  const emoteAt = (x, y) => {
+    try {
+      const el = document.elementFromPoint(x, y);
+      const cell = el && typeof el.closest === 'function' ? el.closest('.ewheel__item') : null;
+      return cell && cell.dataset ? cell.dataset.emote || null : null;
+    } catch { return null; }
+  };
   const endDrag = (e, cancelled) => {
     const d = drag.current;
     if (!d || d.id !== e.pointerId) return;
     drag.current = null;
-    if (!d.moved) return;
-    swallowClick.current = true;               // the click that follows a drag is not a send
+    if (!d.moved) return;                      // a plain tap: the browser's own click sends it
+    const step = cancelled ? 0 : swipeStep(e.clientX - d.x0);
+    // A finger that drifted past the slop but never turned a page is still a tap — and on touch Chrome fires no click
+    // for it at all, so waiting for the click dropped the emote (owner's report 2026-10-30, 同盟局内表情点了没反应).
+    // Send BEFORE arming the click swallow: send() itself returns early while that flag is set.
+    const id = (cancelled || step) ? null : emoteAt(e.clientX, e.clientY);
+    if (id) send(id); else swallowClick.current = true; // a real swipe (or a cancelled press): the click is not a send
     setTimeout(() => { swallowClick.current = false; }, 0);
     setDx(0);
-    if (!cancelled) { const step = swipeStep(e.clientX - d.x0); if (step) go(live.current.page + step); }
+    if (step) go(live.current.page + step);
   };
   const onWheel = (e) => {
     const d = wheelDelta(e, e.currentTarget?.clientWidth || 300);

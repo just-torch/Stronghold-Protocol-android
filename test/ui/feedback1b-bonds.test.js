@@ -140,7 +140,9 @@ test('hidden-layer bonds show activation and tiers without a stack badge or laye
     assert.ok(disc);
     assert.equal(disc.props.layers, undefined);
     assert.equal(disc.props.active, true);
-    assert.equal(disc.props.tier, 1);
+    // the ring is the member progress now (DESIGN §21.62): 在场人数 over the bond's 满档 threshold, not the tier
+    assert.equal(disc.props.members, 2);
+    assert.equal(disc.props.goal, DATA.bonds[bondId].thresholds.at(-1));
   }
   const disc = [...walk(BondStrip({ bonds: [{ bondId: 'yanShip', active: true, layers: 12 }], onOpen() {} }))]
     .find((v) => v.props?.name === DATA.bonds.yanShip.name);

@@ -1223,7 +1223,7 @@ test('a 本局禁用 disc keeps the layers it holds (DESIGN §21.40): code, doc 
   const strip = doc('public/js/ui/bondStrip.js');
   assert.match(strip, /if \(b\.off\) \{/);
   assert.match(strip, /const layers = !rec\?\.noStack && Number\.isFinite\(b\.layers\) && b\.layers > 0 \? b\.layers : undefined;/);
-  assert.match(strip, /layers=\$\{layers\} tier=\$\{0\}/);
+  assert.match(strip, /layers=\$\{layers\} members=\$\{b\.count \?\? 0\} goal=\$\{th\[th\.length - 1\] \?\? null\}/);
   assert.match(strip, /<span class="bslot__count bslot__off">\$\{t\('本局禁用'\)\}<\/span>/);
   // the layer note is a translated msgid since 0.2.0 (its msgid keeps the fork's leading space)
   assert.match(strip, /\$\{layers \? t\(' · \{layers\} 层', \{ layers \}\) : ''\}/);

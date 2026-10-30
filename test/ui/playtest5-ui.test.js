@@ -124,10 +124,10 @@ describe('9: the prep camera keeps the bench clear of the shop bar on phones in 
   test('HUD_REM mirrors the CSS it measures (bond strip bottom, shop bar top, the notched-phone rule)', () => {
     const game = read('public/css/screens/game.css');
     const shop = read('public/css/screens/game-shop.css');
-    // bond strip: the discs grew to .68rem with the count chip lifted ABOVE the tier ring (§21.38,
+    // bond strip: the discs grew to .68rem with the count chip lifted ABOVE the ring (§21.38,
     // "图标仍被激活人数挡住"). The strip's own box grew with them — `--bslot-disc + .02 + .15 × 1.1` = .865rem,
     // not the `.52 + .05 + 1.5 × .14` box the original .52rem disc made; the fork starts it .09rem higher at
-    // 1.27rem (§21.36/§21.39, devices.css 1.30rem on phones) and #678's 44 px arrows can still raise the band.
+    // 1.27rem (§21.36/§21.39, devices.css 1.30rem on phones) and the 44 px floor keeps the band above the discs.
     assert.match(game, /\.gm__bonds \{ position: absolute; left: 1\.56rem; top: 1\.27rem;/);
     assert.match(game, /\.bslot \{ position: relative; display: flex; flex-direction: column; align-items: center; width: \.86rem; --bslot-disc: \.68rem; \}/);
     assert.match(game, /\.bslot \.bond \{ --disc: var\(--bslot-disc\); gap: \.02rem; \}/);
@@ -136,9 +136,10 @@ describe('9: the prep camera keeps the bench clear of the shop bar on phones in 
     // edge sits on the disc's right edge (the slot's margin), so it belongs to the disc under it at any slot width
     assert.match(game, /\.bslot__count \{\n {2}position: absolute; bottom: calc\(100% \+ var\(--bslot-disc\) \* \.12\); right: calc\(\(100% - var\(--bslot-disc\)\) \/ 2\);/);
     assert.ok(!/\.bslot__count \{\n {2}position: absolute; top:/.test(game), 'the badge no longer hangs over the disc');
-    // #678: clip padding is offset by margins; the 44 px arrows can still raise the band on phones.
-    assert.match(game, /\.gm__bonds \.bstrip-scroll \.bstrip \{[^}]*padding: \.08rem 0; margin: -\.08rem 0;/);
-    assert.match(game, /\.gm__bonds \.bstrip-scroll__arrow \{[^}]*height: 44px;/);
+    // #678's scroller and its 44 px arrows are gone (the strip is capped with +N); the 44 px floor stays in HUD_REM as
+    // the slot's own minimum on phones, where `.68rem` is only 27 px.
+    assert.match(game, /\.gm__bonds \.bstrip \{[^}]*padding: \.08rem 0; margin: -\.08rem 0;/);
+    assert.ok(!/bstrip-scroll__arrow/.test(game), 'no scroll arrows in the strip');
     assert.equal(HUD_REM.bondStripTop, 1.27);
     assert.equal(HUD_REM.bondArrowPx, 44);
     assert.equal(HUD_REM.bondStripBottom, 2.16);

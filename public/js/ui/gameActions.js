@@ -40,7 +40,7 @@ export function onRefreshBusy(fn) { refreshBusyListeners.add(fn); try { fn(refre
  * Send an intent. Resolves true on `ok`, false on error (already toasted).
  * @param {string} t
  * @param {object} [fields]
- * @param {{ sfx?: string|false, quiet?: boolean }} [opts]
+ * @param {{ sfx?: string|false, quiet?: boolean|'cooldown' }} [opts] `quiet: 'cooldown'` mutes only a RATE refusal
  * @returns {Promise<boolean>}
  */
 export async function act(t, fields = {}, opts = {}) {
@@ -52,7 +52,10 @@ export async function act(t, fields = {}, opts = {}) {
     if (s) audio.sfx(s);
     return true;
   } catch (err) {
-    if (!opts.quiet) {
+    // quiet: true hides the toast; 'cooldown' hides it for a RATE refusal only (an emote inside its 1 s chatCD is
+    // expected, any other refusal stays visible — a real failure must not look like a click that did nothing)
+    const quiet = opts.quiet === 'cooldown' ? err?.code === 'RATE' : !!opts.quiet;
+    if (!quiet) {
       toastError(err);
       audio.sfx('error', { volume: 0.6 });
     }
@@ -93,7 +96,7 @@ export const actions = {
   offer: (offer, idx, refresh = false, cardId) => act(refresh ? 'g.offerRefresh' : 'g.offer', { offerId: offer.id, pluginId: offer.pluginId, seq: offer.seq, idx, cardId }),
   choice: (idx, choiceId) => act('g.choice', choiceId === undefined ? { idx } : { idx, choiceId }),
   ready: (ready) => act('g.ready', { ready }, { sfx: ready ? 'ready' : 'back' }),
-  emote: (id) => act('g.emote', { id }, { quiet: true }),
+  emote: (id) => act('g.emote', { id }, { quiet: 'cooldown' }),
   // `playerId`: the player tapped in the team panel (a shared field shows two) — what an eliminated viewer follows
   watch: (fieldId, playerId = null) => act('g.watch', typeof playerId === 'string' && playerId ? { fieldId, playerId } : { fieldId }, { sfx: 'tab' }),
   autoplay: (on) => act('g.autoplay', { on }),
