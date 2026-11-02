@@ -63,10 +63,20 @@ export class MatchIntents {
   }
 
   emote(ps, id) {
-    if (!EMOTES.includes(id)) return fail(ERR.BAD_MSG, 'unknown emote');
+    // One info line per attempt (a player action, not a cycle): the server log is the only place that can tell "the
+    // client never sent it" from "the server refused it" when a player reports that emotes do nothing (2026-11-02).
+    const tag = `[match ${this.roomCode}] emote ${ps.playerId}`;
+    if (!EMOTES.includes(id)) {
+      this.log.info?.(`${tag} refused: unknown id ${String(id).slice(0, 40)}`);
+      return fail(ERR.BAD_MSG, 'unknown emote');
+    }
     const now = this.sched.now();
-    if (now - ps.lastEmoteAt < EMOTE_COOLDOWN_MS) return fail(ERR.RATE);
+    if (now - ps.lastEmoteAt < EMOTE_COOLDOWN_MS) {
+      this.log.info?.(`${tag} refused: cooldown ${now - ps.lastEmoteAt} ms`);
+      return fail(ERR.RATE);
+    }
     ps.lastEmoteAt = now;
+    this.log.info?.(`${tag} ${id} (${this.phase})`);
     this.broadcast({ t: 'm.emote', playerId: ps.playerId, id });
     // an AI teammate can react to a human's emote (enabled by default: server/match/botEmotes.js, SP_BOT_EMOTES=0 silences it)
     onHumanEmote(this, ps.playerId, id);

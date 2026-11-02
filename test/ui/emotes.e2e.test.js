@@ -339,12 +339,17 @@ describe('official emotes in the browser', { skip: !ENABLED && 'set SP_E2E=1 (an
         beside: b.left >= a.right && b.left - row.right >= 0 && b.left - row.right <= 24, // just right of the sender's row
         centred: Math.abs((b.top + b.bottom) / 2 - (a.top + a.bottom) / 2) <= 14,     // at the avatar's height
         absolute: getComputedStyle(bubble).position === 'absolute',                     // does not push the row
+        // the team panel is a scroll container that clips overflow-x (the avatar rings): the bubble lives in a fixed
+        // wrapper, or it would be clipped away and never seen (found 2026-11-02 — every emote was sent, no bubble)
+        floating: getComputedStyle(bubble.parentElement).position === 'fixed',
+        visible: typeof bubble.checkVisibility === 'function'
+          ? bubble.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) : true,
         text: bubble.textContent.trim(),
         img: [...r.querySelectorAll('.team__bubble img')].some((i) => i.complete && i.naturalWidth > 0),
       };
     }));
     assert.ok(geo.length >= 1, 'a teammate bubble is shown');
-    for (const g of geo) assert.deepEqual(g, { beside: true, centred: true, absolute: true, text: '', img: true });
+    for (const g of geo) assert.deepEqual(g, { beside: true, centred: true, absolute: true, floating: true, visible: true, text: '', img: true });
     await page.screenshot({ path: path.join(OUT, 'emotes-mock-1920.png') });
     // send from the wheel → own bubble
     await page.click('.ewheel__item:nth-child(3)');

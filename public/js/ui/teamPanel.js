@@ -18,7 +18,7 @@
 // the player watches, so the number moves with the kills on screen), else m.public players[].uniteLeft (the authority's
 // report, ~1 Hz).
 
-import { useEffect, useRef, useState } from '../../vendor/hooks.module.js';
+import { useEffect, useLayoutEffect, useRef, useState } from '../../vendor/hooks.module.js';
 import { PHASE } from '../../../shared/constants.js';
 import { html, Icon, Tooltip } from './components.js';
 import { PlayerAvatar, LpTower, GIcon, LocalSprite } from './gameComponents.js';
@@ -29,6 +29,46 @@ import { localAsset } from '../data.js';
 import { t } from '../../../shared/i18n.js';
 
 const cx = (...p) => p.flat().filter(Boolean).join(' ');
+
+/**
+ * An emote bubble pinned to the right of its row.
+ *
+ * The team panel is a scroll container (8-seat rooms) and clips horizontally (`.team` overflow-x: clip, since the avatar
+ * rings must not be cut), so a bubble laid out inside the row's box was invisible: every emote was sent — the button
+ * greys, the panel closes — and no bubble ever appeared (owner's report 2026-11-02). The wrapper is `position: fixed`,
+ * placed from the row's own rect (its right edge + .06rem, vertically centred) and kept there on scroll / resize, so the
+ * panel's clip no longer applies. `.team__bubble` then sits at the wrapper's origin.
+ */
+function RowBubble({ id }) {
+  const wrap = useRef(null);
+  const [at, setAt] = useState(null);
+  useLayoutEffect(() => {
+    const row = wrap.current?.parentElement;
+    if (!row) return undefined;
+    let frame = 0;
+    const place = () => {
+      frame = 0;
+      const r = row.getBoundingClientRect();
+      const left = Math.round(r.right + 6);
+      const top = Math.round(r.top + r.height / 2);
+      setAt((old) => (old && old.left === left && old.top === top ? old : { left, top }));
+    };
+    place();
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (!frame) frame = requestAnimationFrame(place); }) : null;
+    ro?.observe(row);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      ro?.disconnect();
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, []);
+  return html`<span ref=${wrap} class="team__bubwrap" style=${at ? `left:${at.left}px; top:${at.top}px` : 'display:none'}>
+    <${EmoteBubble} id=${id} class="team__bubble" />
+  </span>`;
+}
 
 /** Official status glyphs (ui/battle) per m.public players[].status; CSS glyph fallback. */
 const STATUS_SPRITE = { ready: 'icon_ready', deciding: 'icon_waiting', done: 'icon_complete', dead: 'icon_dead' };
@@ -198,7 +238,7 @@ export function TeamPanel({ pub, myId, watching, bubbles, onWatch, compact = fal
           ${back ? html`<button type="button" class="btn btn--secondary btn--sm team__back"
             onClick=${() => observe.onBack()}><span class="btn__label">${t('返回战场')}</span></button>` : null}
         </div>
-        ${bubble ? html`<${EmoteBubble} key=${bubble.seq} id=${bubble.id} class="team__bubble" />` : null}
+        ${bubble ? html`<${RowBubble} key=${bubble.seq} id=${bubble.id} />` : null}
       </div>`;
     })}
   </aside>`;
